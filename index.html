@@ -1232,6 +1232,119 @@ Pedro Oliveira,10/02/2023,Financeiro,Empresa A
             window.URL.revokeObjectURL(url);
         }
 
+        // Função melhorada para validar e converter data
+        function parseAndValidateDate(dateValue) {
+            if (!dateValue && dateValue !== 0) return { valid: false, error: 'Data não preenchida' };
+            
+            // Se for número (Excel armazena data como número de dias desde 1900)
+            if (typeof dateValue === 'number') {
+                try {
+                    // Excel date to JavaScript date
+                    // Excel usa 1/1/1900 como dia 1, mas tem um bug com o ano 1900
+                    const excelEpoch = new Date(1900, 0, 1);
+                    const jsDate = new Date(excelEpoch.getTime() + (dateValue - 1) * 24 * 60 * 60 * 1000);
+                    
+                    if (!isNaN(jsDate.getTime())) {
+                        const day = String(jsDate.getDate()).padStart(2, '0');
+                        const month = String(jsDate.getMonth() + 1).padStart(2, '0');
+                        const year = jsDate.getFullYear();
+                        return { 
+                            valid: true, 
+                            value: `${day}/${month}/${year}`,
+                            formatted: `${day}/${month}/${year}`
+                        };
+                    }
+                } catch (e) {
+                    return { valid: false, error: 'Data inválida (formato Excel)' };
+                }
+            }
+            
+            // Converter para string e remover espaços
+            const dateStr = String(dateValue).trim();
+            
+            // Tentar diferentes formatos de data
+            
+            // Formato DD/MM/AAAA ou DD-MM-AAAA
+            const regex1 = /^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/;
+            let match = dateStr.match(regex1);
+            if (match) {
+                const day = parseInt(match[1]);
+                const month = parseInt(match[2]);
+                const year = parseInt(match[3]);
+                
+                if (day >= 1 && day <= 31 && month >= 1 && month <= 12) {
+                    const testDate = new Date(year, month - 1, day);
+                    if (testDate.getDate() === day && testDate.getMonth() === month - 1) {
+                        const formattedDay = String(day).padStart(2, '0');
+                        const formattedMonth = String(month).padStart(2, '0');
+                        return { 
+                            valid: true, 
+                            value: `${formattedDay}/${formattedMonth}/${year}`,
+                            formatted: `${formattedDay}/${formattedMonth}/${year}`
+                        };
+                    }
+                }
+                return { valid: false, error: 'Data inválida' };
+            }
+            
+            // Formato DD/MM/YY ou DD-MM-YY
+            const regex2 = /^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2})$/;
+            match = dateStr.match(regex2);
+            if (match) {
+                const day = parseInt(match[1]);
+                const month = parseInt(match[2]);
+                let year = parseInt(match[3]);
+                
+                // Assumir que anos entre 0-69 são 2000-2069 e 70-99 são 1970-1999
+                year = year < 70 ? 2000 + year : 1900 + year;
+                
+                if (day >= 1 && day <= 31 && month >= 1 && month <= 12) {
+                    const testDate = new Date(year, month - 1, day);
+                    if (testDate.getDate() === day && testDate.getMonth() === month - 1) {
+                        const formattedDay = String(day).padStart(2, '0');
+                        const formattedMonth = String(month).padStart(2, '0');
+                        return { 
+                            valid: true, 
+                            value: `${formattedDay}/${formattedMonth}/${year}`,
+                            formatted: `${formattedDay}/${formattedMonth}/${year}`
+                        };
+                    }
+                }
+                return { valid: false, error: 'Data inválida' };
+            }
+            
+            // Tentar formato ISO (YYYY-MM-DD)
+            const regex3 = /^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/;
+            match = dateStr.match(regex3);
+            if (match) {
+                const year = parseInt(match[1]);
+                const month = parseInt(match[2]);
+                const day = parseInt(match[3]);
+                
+                if (day >= 1 && day <= 31 && month >= 1 && month <= 12) {
+                    const testDate = new Date(year, month - 1, day);
+                    if (testDate.getDate() === day && testDate.getMonth() === month - 1) {
+                        const formattedDay = String(day).padStart(2, '0');
+                        const formattedMonth = String(month).padStart(2, '0');
+                        return { 
+                            valid: true, 
+                            value: `${formattedDay}/${formattedMonth}/${year}`,
+                            formatted: `${formattedDay}/${formattedMonth}/${year}`
+                        };
+                    }
+                }
+                return { valid: false, error: 'Data inválida' };
+            }
+            
+            return { valid: false, error: 'Formato inválido (use DD/MM/AAAA)' };
+        }
+
+        // Função para validar data no formato DD/MM/AAAA (para uso em formulários)
+        function isValidDate(dateStr) {
+            const result = parseAndValidateDate(dateStr);
+            return result.valid;
+        }
+
         // Funções para upload de arquivo
         function handleDragOver(event) {
             event.preventDefault();
@@ -1316,14 +1429,19 @@ Pedro Oliveira,10/02/2023,Financeiro,Empresa A
             
             // Filtrar linhas vazias
             const validRows = data.filter(row => {
-                return row.some(cell => cell && cell.toString().trim() !== '');
+                return row && row.some && row.some(cell => cell && cell.toString().trim() !== '');
             });
             
             // Converter para formato padronizado
             importedData = validRows.map(row => {
+                // Garantir que temos pelo menos 4 colunas
+                while (row.length < 4) {
+                    row.push('');
+                }
+                
                 return {
                     nome: row[0] ? row[0].toString().trim() : '',
-                    dataAdmissao: row[1] ? row[1].toString().trim() : '',
+                    dataAdmissao: row[1], // Manter original para validação
                     departamento: row[2] ? row[2].toString().trim() : '',
                     empresa: row[3] ? row[3].toString().trim() : ''
                 };
@@ -1344,17 +1462,19 @@ Pedro Oliveira,10/02/2023,Financeiro,Empresa A
             importedData.forEach((item, index) => {
                 const errors = [];
                 const warnings = [];
+                let dataAdmissaoFormatada = item.dataAdmissao;
                 
                 // Validar nome
                 if (!item.nome) {
                     errors.push('Nome não preenchido');
                 }
                 
-                // Validar data
-                if (!item.dataAdmissao) {
-                    errors.push('Data não preenchida');
-                } else if (!isValidDate(item.dataAdmissao)) {
-                    errors.push('Data inválida (use DD/MM/AAAA)');
+                // Validar data com a função melhorada
+                const dataResult = parseAndValidateDate(item.dataAdmissao);
+                if (!dataResult.valid) {
+                    errors.push(`Data: ${dataResult.error}`);
+                } else {
+                    dataAdmissaoFormatada = dataResult.value;
                 }
                 
                 // Validar departamento
@@ -1373,7 +1493,10 @@ Pedro Oliveira,10/02/2023,Financeiro,Empresa A
                 
                 importValidation.push({
                     linha: index + 1,
-                    dados: item,
+                    dados: {
+                        ...item,
+                        dataAdmissao: dataAdmissaoFormatada
+                    },
                     errors: errors,
                     warnings: warnings,
                     valid: errors.length === 0
@@ -1624,16 +1747,6 @@ Pedro Oliveira,10/02/2023,Financeiro,Empresa A
             colaboradores.sort((a, b) => a.nome.localeCompare(b.nome)).forEach(colab => {
                 select.innerHTML += `<option value="${colab.id}">${colab.nome}</option>`;
             });
-        }
-
-        // Validar data
-        function isValidDate(dateStr) {
-            const regex = /^\d{2}\/\d{2}\/\d{4}$/;
-            if (!regex.test(dateStr)) return false;
-            
-            const [day, month, year] = dateStr.split('/').map(Number);
-            const date = new Date(year, month - 1, day);
-            return date.getDate() === day && date.getMonth() === month - 1 && date.getFullYear() === year;
         }
 
         // Salvar empresa
@@ -1893,10 +2006,11 @@ Pedro Oliveira,10/02/2023,Financeiro,Empresa A
                                 continue;
                             }
                             
-                            if (isValidDate(dataAdmissao)) {
+                            const dataResult = parseAndValidateDate(dataAdmissao);
+                            if (dataResult.valid) {
                                 await db.collection('colaboradores').add({
                                     nome,
-                                    dataAdmissao,
+                                    dataAdmissao: dataResult.value,
                                     departamento,
                                     empresa,
                                     horasPositivas: 0,
@@ -1906,7 +2020,7 @@ Pedro Oliveira,10/02/2023,Financeiro,Empresa A
                                 imported++;
                             } else {
                                 errors++;
-                                errorsList.push(`Linha ${i + 1}: Data inválida (${dataAdmissao})`);
+                                errorsList.push(`Linha ${i + 1}: Data inválida (${dataAdmissao}) - ${dataResult.error}`);
                             }
                         } else {
                             errors++;
