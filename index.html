@@ -263,6 +263,17 @@
             border-color: #3498db;
         }
 
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .checkbox-group input[type="checkbox"] {
+            width: auto;
+            margin-right: 5px;
+        }
+
         .modal-actions {
             display: flex;
             justify-content: flex-end;
@@ -304,6 +315,33 @@
         .status-negative {
             color: #e74c3c;
             font-weight: bold;
+        }
+
+        .status-inativo {
+            color: #7f8c8d;
+            font-style: italic;
+        }
+
+        .status-ativo {
+            font-weight: normal;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: bold;
+        }
+
+        .badge-ativo {
+            background-color: #d4edda;
+            color: #155724;
+        }
+
+        .badge-inativo {
+            background-color: #f8d7da;
+            color: #721c24;
         }
 
         .tab-content {
@@ -446,40 +484,6 @@
             background-color: #ecf0f1;
         }
 
-        .firebase-status {
-            padding: 10px;
-            margin-bottom: 20px;
-            border-radius: 4px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .status-connected {
-            background-color: #d4edda;
-            color: #155724;
-        }
-
-        .status-disconnected {
-            background-color: #f8d7da;
-            color: #721c24;
-        }
-
-        .status-icon {
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            display: inline-block;
-        }
-
-        .icon-connected {
-            background-color: #28a745;
-        }
-
-        .icon-disconnected {
-            background-color: #dc3545;
-        }
-
         .empty-state {
             text-align: center;
             padding: 40px;
@@ -611,12 +615,6 @@
 
         <!-- Main Content -->
         <div class="main-content">
-            <!-- Status do Firebase -->
-            <div id="firebaseStatus" class="firebase-status status-disconnected">
-                <span class="status-icon icon-disconnected"></span>
-                <span id="statusMessage">Verificando conexão com Firebase...</span>
-            </div>
-
             <!-- Dashboard Tab -->
             <div id="dashboard" class="tab-content">
                 <h2>Dashboard</h2>
@@ -663,6 +661,11 @@
 
                 <div class="search-box">
                     <input type="text" id="searchColaborador" placeholder="Buscar por nome, departamento ou empresa..." onkeyup="filterColaboradores()">
+                    <select id="filterStatus" onchange="filterColaboradores()">
+                        <option value="ativos">Ativos</option>
+                        <option value="todos">Todos</option>
+                        <option value="inativos">Inativos</option>
+                    </select>
                     <select id="filterDepartamento" onchange="filterColaboradores()">
                         <option value="">Todos Departamentos</option>
                     </select>
@@ -680,9 +683,8 @@
                             <th onclick="sortColaboradores('dataAdmissao')" style="cursor: pointer;">Data de Admissão 📊</th>
                             <th onclick="sortColaboradores('departamento')" style="cursor: pointer;">Departamento 📊</th>
                             <th onclick="sortColaboradores('empresa')" style="cursor: pointer;">Empresa 📊</th>
-                            <th>Horas Positivas</th>
-                            <th>Horas Negativas</th>
                             <th>Saldo de Horas</th>
+                            <th>Status</th>
                             <th>Ações</th>
                         </tr>
                     </thead>
@@ -794,6 +796,10 @@
                     <select id="colaboradorEmpresa" required>
                         <option value="">Selecione...</option>
                     </select>
+                </div>
+                <div class="form-group checkbox-group">
+                    <input type="checkbox" id="colaboradorAtivo" checked>
+                    <label for="colaboradorAtivo">Colaborador Ativo</label>
                 </div>
                 <div class="modal-actions">
                     <button type="button" class="btn btn-danger" onclick="hideModal('colaboradorModal')">Cancelar</button>
@@ -984,34 +990,15 @@ Pedro Oliveira,10/02/2023,Financeiro,Empresa A
             db.collection('test').limit(1).get()
                 .then(() => {
                     firebaseConnected = true;
-                    updateFirebaseStatus(true, 'Conectado ao Firebase');
                     loadData(); // Carregar dados após conectar
                 })
                 .catch((error) => {
                     console.error('Erro ao testar conexão:', error);
                     firebaseConnected = false;
-                    updateFirebaseStatus(false, 'Erro de conexão: ' + error.message);
                 });
         } catch (error) {
             console.error('Erro ao inicializar Firebase:', error);
             firebaseConnected = false;
-            updateFirebaseStatus(false, 'Erro ao inicializar: ' + error.message);
-        }
-
-        // Função para atualizar status do Firebase
-        function updateFirebaseStatus(connected, message) {
-            const statusDiv = document.getElementById('firebaseStatus');
-            const statusMessage = document.getElementById('statusMessage');
-            
-            if (connected) {
-                statusDiv.className = 'firebase-status status-connected';
-                document.querySelector('.status-icon').className = 'status-icon icon-connected';
-                statusMessage.textContent = message || 'Conectado ao Firebase';
-            } else {
-                statusDiv.className = 'firebase-status status-disconnected';
-                document.querySelector('.status-icon').className = 'status-icon icon-disconnected';
-                statusMessage.textContent = message || 'Desconectado do Firebase';
-            }
         }
 
         // Variáveis globais
@@ -1081,11 +1068,13 @@ Pedro Oliveira,10/02/2023,Financeiro,Empresa A
                     document.getElementById('colaboradorData').value = colab.dataAdmissao;
                     document.getElementById('colaboradorDepartamento').value = colab.departamento;
                     document.getElementById('colaboradorEmpresa').value = colab.empresa;
+                    document.getElementById('colaboradorAtivo').checked = colab.ativo !== false;
                 }
             } else {
                 document.getElementById('colaboradorModalTitle').textContent = 'Novo Colaborador';
                 document.getElementById('colaboradorId').value = '';
                 document.getElementById('colaboradorForm').reset();
+                document.getElementById('colaboradorAtivo').checked = true;
             }
         }
 
@@ -1576,6 +1565,7 @@ Pedro Oliveira,10/02/2023,Financeiro,Empresa A
                             empresa: item.empresa,
                             horasPositivas: 0,
                             horasNegativas: 0,
+                            ativo: true,
                             createdAt: new Date().toISOString()
                         });
                         imported++;
@@ -1692,9 +1682,9 @@ Pedro Oliveira,10/02/2023,Financeiro,Empresa A
             } catch (error) {
                 console.error('Erro geral ao carregar dados:', error);
                 if (error.code === 'permission-denied') {
-                    updateFirebaseStatus(false, 'Permissão negada! Configure as regras do Firebase.');
+                    alert('Permissão negada! Configure as regras do Firebase.');
                 } else {
-                    updateFirebaseStatus(false, 'Erro ao carregar dados: ' + error.message);
+                    alert('Erro ao carregar dados: ' + error.message);
                 }
             } finally {
                 showLoading(false);
@@ -1744,9 +1734,12 @@ Pedro Oliveira,10/02/2023,Financeiro,Empresa A
         function loadColaboradoresSelect() {
             const select = document.getElementById('lancamentoColaborador');
             select.innerHTML = '<option value="">Selecione...</option>';
-            colaboradores.sort((a, b) => a.nome.localeCompare(b.nome)).forEach(colab => {
-                select.innerHTML += `<option value="${colab.id}">${colab.nome}</option>`;
-            });
+            colaboradores
+                .filter(c => c.ativo !== false)
+                .sort((a, b) => a.nome.localeCompare(b.nome))
+                .forEach(colab => {
+                    select.innerHTML += `<option value="${colab.id}">${colab.nome}</option>`;
+                });
         }
 
         // Salvar empresa
@@ -1883,6 +1876,7 @@ Pedro Oliveira,10/02/2023,Financeiro,Empresa A
             const data = document.getElementById('colaboradorData').value;
             const departamento = document.getElementById('colaboradorDepartamento').value;
             const empresa = document.getElementById('colaboradorEmpresa').value;
+            const ativo = document.getElementById('colaboradorAtivo').checked;
 
             if (!isValidDate(data)) {
                 alert('Data inválida! Use o formato DD/MM/AAAA');
@@ -1898,6 +1892,7 @@ Pedro Oliveira,10/02/2023,Financeiro,Empresa A
                     empresa,
                     horasPositivas: 0,
                     horasNegativas: 0,
+                    ativo: ativo,
                     updatedAt: new Date().toISOString()
                 };
 
@@ -1946,11 +1941,20 @@ Pedro Oliveira,10/02/2023,Financeiro,Empresa A
                 return;
             }
 
+            const colaborador = colaboradores.find(c => c.id === colaboradorId);
+            if (!colaborador) return;
+
+            if (colaborador.ativo === false) {
+                if (!confirm('Este colaborador está inativo. Deseja continuar com o lançamento?')) {
+                    return;
+                }
+            }
+
             showLoading(true);
             try {
                 const lancamentoData = {
                     colaboradorId,
-                    colaboradorNome: colaboradores.find(c => c.id === colaboradorId).nome,
+                    colaboradorNome: colaborador.nome,
                     data,
                     tipo,
                     horas,
@@ -2015,6 +2019,7 @@ Pedro Oliveira,10/02/2023,Financeiro,Empresa A
                                     empresa,
                                     horasPositivas: 0,
                                     horasNegativas: 0,
+                                    ativo: true,
                                     createdAt: new Date().toISOString()
                                 });
                                 imported++;
@@ -2058,6 +2063,7 @@ Pedro Oliveira,10/02/2023,Financeiro,Empresa A
         // Funções de filtro e ordenação
         function filterColaboradores() {
             const searchTerm = document.getElementById('searchColaborador').value.toLowerCase();
+            const statusFilter = document.getElementById('filterStatus').value;
             const deptoFilter = document.getElementById('filterDepartamento').value;
             const empresaFilter = document.getElementById('filterEmpresa').value;
 
@@ -2068,7 +2074,15 @@ Pedro Oliveira,10/02/2023,Financeiro,Empresa A
                 const matchDepto = !deptoFilter || colab.departamento === deptoFilter;
                 const matchEmpresa = !empresaFilter || colab.empresa === empresaFilter;
                 
-                return matchSearch && matchDepto && matchEmpresa;
+                // Filtro de status
+                let matchStatus = true;
+                if (statusFilter === 'ativos') {
+                    matchStatus = colab.ativo !== false;
+                } else if (statusFilter === 'inativos') {
+                    matchStatus = colab.ativo === false;
+                }
+                
+                return matchSearch && matchDepto && matchEmpresa && matchStatus;
             });
 
             sortColaboradores(sortField);
@@ -2094,8 +2108,8 @@ Pedro Oliveira,10/02/2023,Financeiro,Empresa A
                     valA = new Date(yA, mA - 1, dA);
                     valB = new Date(yB, mB - 1, dB);
                 } else {
-                    valA = String(valA).toLowerCase();
-                    valB = String(valB).toLowerCase();
+                    valA = String(valA || '').toLowerCase();
+                    valB = String(valB || '').toLowerCase();
                 }
                 
                 if (valA < valB) return sortDirection === 'asc' ? -1 : 1;
@@ -2109,7 +2123,7 @@ Pedro Oliveira,10/02/2023,Financeiro,Empresa A
         // Atualizar todas as tabelas
         function updateAllTables() {
             updateFilterOptions();
-            colaboradoresFiltrados = [...colaboradores];
+            colaboradoresFiltrados = [...colaboradores].filter(c => c.ativo !== false);
             sortColaboradores('nome');
             updateLancamentosTable();
             updateEmpresasTable();
@@ -2145,7 +2159,7 @@ Pedro Oliveira,10/02/2023,Financeiro,Empresa A
             tbody.innerHTML = '';
 
             if (colaboradoresFiltrados.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 40px;">Nenhum colaborador encontrado. Clique em "Novo Colaborador" para começar.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 40px;">Nenhum colaborador encontrado. Clique em "Novo Colaborador" para começar.</td></tr>';
                 updatePagination();
                 return;
             }
@@ -2153,6 +2167,9 @@ Pedro Oliveira,10/02/2023,Financeiro,Empresa A
             paginatedColabs.forEach(colab => {
                 const saldo = (colab.horasPositivas || 0) - (colab.horasNegativas || 0);
                 const statusClass = saldo >= 0 ? 'status-positive' : 'status-negative';
+                const statusText = colab.ativo !== false ? 
+                    '<span class="badge badge-ativo">Ativo</span>' : 
+                    '<span class="badge badge-inativo">Inativo</span>';
                 
                 tbody.innerHTML += `
                     <tr>
@@ -2160,9 +2177,8 @@ Pedro Oliveira,10/02/2023,Financeiro,Empresa A
                         <td>${colab.dataAdmissao}</td>
                         <td>${colab.departamento}</td>
                         <td>${colab.empresa}</td>
-                        <td class="status-positive">${colab.horasPositivas || 0} h</td>
-                        <td class="status-negative">${colab.horasNegativas || 0} h</td>
                         <td class="${statusClass}">${saldo} h</td>
+                        <td>${statusText}</td>
                         <td>
                             <div class="action-buttons">
                                 <button class="btn btn-primary btn-small" onclick="showColaboradorModal('${colab.id}')">Editar</button>
@@ -2209,10 +2225,12 @@ Pedro Oliveira,10/02/2023,Financeiro,Empresa A
             lancamentos.slice(0, 20).forEach(lanc => {
                 const tipoClass = lanc.tipo === 'positiva' ? 'status-positive' : 'status-negative';
                 const tipoText = lanc.tipo === 'positiva' ? 'Hora Extra' : 'Débito';
+                const colaborador = colaboradores.find(c => c.id === lanc.colaboradorId);
+                const statusClass = colaborador && colaborador.ativo === false ? 'status-inativo' : '';
                 
                 tbody.innerHTML += `
-                    <tr>
-                        <td>${lanc.colaboradorNome}</td>
+                    <tr class="${statusClass}">
+                        <td>${lanc.colaboradorNome} ${colaborador && colaborador.ativo === false ? '(Inativo)' : ''}</td>
                         <td>${lanc.data}</td>
                         <td class="${tipoClass}">${tipoText}</td>
                         <td>${lanc.horas} h</td>
@@ -2407,7 +2425,7 @@ Pedro Oliveira,10/02/2023,Financeiro,Empresa A
 
         // Atualizar Dashboard
         function updateDashboard() {
-            document.getElementById('totalColaboradores').textContent = colaboradores.length;
+            document.getElementById('totalColaboradores').textContent = colaboradores.filter(c => c.ativo !== false).length;
             
             let totalPositivas = colaboradores.reduce((sum, colab) => sum + (colab.horasPositivas || 0), 0);
             let totalNegativas = colaboradores.reduce((sum, colab) => sum + (colab.horasNegativas || 0), 0);
@@ -2423,12 +2441,16 @@ Pedro Oliveira,10/02/2023,Financeiro,Empresa A
                 return;
             }
 
-            activities.innerHTML = lancamentos.slice(0, 10).map(lanc => `
-                <div class="activity-item">
-                    <span><strong>${lanc.colaboradorNome}</strong> - ${lanc.tipo === 'positiva' ? '+' : '-'}${lanc.horas}h</span>
-                    <span>${lanc.data}</span>
-                </div>
-            `).join('');
+            activities.innerHTML = lancamentos.slice(0, 10).map(lanc => {
+                const colaborador = colaboradores.find(c => c.id === lanc.colaboradorId);
+                const statusClass = colaborador && colaborador.ativo === false ? 'status-inativo' : '';
+                return `
+                    <div class="activity-item ${statusClass}">
+                        <span><strong>${lanc.colaboradorNome}</strong> ${colaborador && colaborador.ativo === false ? '(Inativo)' : ''} - ${lanc.tipo === 'positiva' ? '+' : '-'}${lanc.horas}h</span>
+                        <span>${lanc.data}</span>
+                    </div>
+                `;
+            }).join('');
         }
 
         // Inicialização
