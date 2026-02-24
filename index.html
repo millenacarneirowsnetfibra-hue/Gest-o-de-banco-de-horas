@@ -327,6 +327,12 @@
             border: 1px solid #f5c6cb;
         }
 
+        .alert-info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+
         .action-buttons {
             display: flex;
             gap: 5px;
@@ -455,7 +461,8 @@
                             <h3>Empresas</h3>
                             <button class="btn btn-primary" onclick="showEmpresaModal()">Nova Empresa</button>
                         </div>
-                        <table>
+                        <div id="empresasAlert" class="alert alert-info hidden">Nenhuma empresa cadastrada</div>
+                        <table id="empresasTable">
                             <thead>
                                 <tr>
                                     <th>Nome</th>
@@ -474,7 +481,8 @@
                             <h3>Departamentos</h3>
                             <button class="btn btn-primary" onclick="showDepartamentoModal()">Novo Departamento</button>
                         </div>
-                        <table>
+                        <div id="departamentosAlert" class="alert alert-info hidden">Nenhum departamento cadastrado</div>
+                        <table id="departamentosTable">
                             <thead>
                                 <tr>
                                     <th>Nome</th>
@@ -634,6 +642,10 @@
         const app = firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
 
+        // Configurar Firestore para usar timestamps
+        const settings = { timestampsInSnapshots: true };
+        db.settings(settings);
+
         // Variáveis globais
         let colaboradores = [];
         let lancamentos = [];
@@ -660,6 +672,7 @@
 
         // Funções para modais
         function showColaboradorModal(editId = null) {
+            loadSelects();
             document.getElementById('colaboradorModal').style.display = 'block';
             if (editId) {
                 document.getElementById('colaboradorModalTitle').textContent = 'Editar Colaborador';
@@ -676,10 +689,13 @@
                 document.getElementById('colaboradorId').value = '';
                 document.getElementById('colaboradorForm').reset();
             }
-            loadSelects();
         }
 
         function showLancamentoModal() {
+            if (colaboradores.length === 0) {
+                alert('Cadastre pelo menos um colaborador antes de fazer lançamentos!');
+                return;
+            }
             document.getElementById('lancamentoModal').style.display = 'block';
             loadColaboradoresSelect();
         }
@@ -712,38 +728,101 @@
             }
         }
 
+        // Inicializar dados padrão se não existirem
+        async function initializeDefaultData() {
+            try {
+                // Verificar se existem empresas
+                const empresasSnapshot = await db.collection('empresas').limit(1).get();
+                if (empresasSnapshot.empty) {
+                    console.log('Criando empresas padrão...');
+                    const defaultEmpresas = ['Empresa A', 'Empresa B'];
+                    for (const empresa of defaultEmpresas) {
+                        await db.collection('empresas').add({ 
+                            nome: empresa,
+                            createdAt: new Date().toISOString()
+                        });
+                    }
+                }
+
+                // Verificar se existem departamentos
+                const deptosSnapshot = await db.collection('departamentos').limit(1).get();
+                if (deptosSnapshot.empty) {
+                    console.log('Criando departamentos padrão...');
+                    const defaultDeptos = ['TI', 'RH', 'Financeiro', 'Marketing', 'Comercial'];
+                    for (const depto of defaultDeptos) {
+                        await db.collection('departamentos').add({ 
+                            nome: depto,
+                            createdAt: new Date().toISOString()
+                        });
+                    }
+                }
+            } catch (error) {
+                console.error('Erro ao inicializar dados padrão:', error);
+            }
+        }
+
         // Carregar dados do Firebase
         async function loadData() {
             showLoading(true);
             try {
+                console.log('Carregando dados do Firebase...');
+                
+                // Inicializar dados padrão se necessário
+                await initializeDefaultData();
+
                 // Carregar colaboradores
-                const colaboradoresSnapshot = await db.collection('colaboradores').get();
-                colaboradores = colaboradoresSnapshot.docs.map(doc => ({
-                    id: doc.id,
-                    ...doc.data()
-                }));
+                try {
+                    const colaboradoresSnapshot = await db.collection('colaboradores').get();
+                    colaboradores = colaboradoresSnapshot.docs.map(doc => ({
+                        id: doc.id,
+                        ...doc.data()
+                    }));
+                    console.log('Colaboradores carregados:', colaboradores.length);
+                } catch (error) {
+                    console.error('Erro ao carregar colaboradores:', error);
+                    colaboradores = [];
+                }
 
                 // Carregar lançamentos
-                const lancamentosSnapshot = await db.collection('lancamentos').orderBy('data', 'desc').get();
-                lancamentos = lancamentosSnapshot.docs.map(doc => ({
-                    id: doc.id,
-                    ...doc.data()
-                }));
+                try {
+                    const lancamentosSnapshot = await db.collection('lancamentos').orderBy('data', 'desc').get();
+                    lancamentos = lancamentosSnapshot.docs.map(doc => ({
+                        id: doc.id,
+                        ...doc.data()
+                    }));
+                    console.log('Lançamentos carregados:', lancamentos.length);
+                } catch (error) {
+                    console.error('Erro ao carregar lançamentos:', error);
+                    lancamentos = [];
+                }
 
                 // Carregar empresas
-                const empresasSnapshot = await db.collection('empresas').get();
-                empresas = empresasSnapshot.docs.map(doc => doc.data().nome);
+                try {
+                    const empresasSnapshot = await db.collection('empresas').get();
+                    empresas = empresasSnapshot.docs.map(doc => doc.data().nome);
+                    console.log('Empresas carregadas:', empresas.length);
+                } catch (error) {
+                    console.error('Erro ao carregar empresas:', error);
+                    empresas = [];
+                }
 
                 // Carregar departamentos
-                const departamentosSnapshot = await db.collection('departamentos').get();
-                departamentos = departamentosSnapshot.docs.map(doc => doc.data().nome);
+                try {
+                    const departamentosSnapshot = await db.collection('departamentos').get();
+                    departamentos = departamentosSnapshot.docs.map(doc => doc.data().nome);
+                    console.log('Departamentos carregados:', departamentos.length);
+                } catch (error) {
+                    console.error('Erro ao carregar departamentos:', error);
+                    departamentos = [];
+                }
 
                 updateAllTables();
             } catch (error) {
-                console.error('Erro ao carregar dados:', error);
-                alert('Erro ao carregar dados do Firebase!');
+                console.error('Erro geral ao carregar dados:', error);
+                alert('Erro ao carregar dados do Firebase! Verifique o console para mais detalhes.');
+            } finally {
+                showLoading(false);
             }
-            showLoading(false);
         }
 
         // Carregar selects
@@ -754,13 +833,17 @@
             deptoSelect.innerHTML = '<option value="">Selecione...</option>';
             empresaSelect.innerHTML = '<option value="">Selecione...</option>';
             
-            departamentos.forEach(depto => {
-                deptoSelect.innerHTML += `<option value="${depto}">${depto}</option>`;
-            });
+            if (departamentos.length > 0) {
+                departamentos.forEach(depto => {
+                    deptoSelect.innerHTML += `<option value="${depto}">${depto}</option>`;
+                });
+            }
             
-            empresas.forEach(empresa => {
-                empresaSelect.innerHTML += `<option value="${empresa}">${empresa}</option>`;
-            });
+            if (empresas.length > 0) {
+                empresas.forEach(empresa => {
+                    empresaSelect.innerHTML += `<option value="${empresa}">${empresa}</option>`;
+                });
+            }
         }
 
         function loadColaboradoresSelect() {
@@ -817,7 +900,7 @@
                 hideModal('colaboradorModal');
             } catch (error) {
                 console.error('Erro ao salvar colaborador:', error);
-                alert('Erro ao salvar no Firebase!');
+                alert('Erro ao salvar no Firebase: ' + error.message);
             }
             showLoading(false);
         }
@@ -864,7 +947,7 @@
                 hideModal('lancamentoModal');
             } catch (error) {
                 console.error('Erro ao salvar lançamento:', error);
-                alert('Erro ao salvar no Firebase!');
+                alert('Erro ao salvar no Firebase: ' + error.message);
             }
             showLoading(false);
         }
@@ -872,7 +955,7 @@
         // Salvar empresa
         async function saveEmpresa() {
             const nome = document.getElementById('empresaNome').value;
-            if (nome && !empresas.includes(nome)) {
+            if (nome) {
                 showLoading(true);
                 try {
                     await db.collection('empresas').add({ 
@@ -883,7 +966,7 @@
                     hideModal('empresaModal');
                 } catch (error) {
                     console.error('Erro ao salvar empresa:', error);
-                    alert('Erro ao salvar no Firebase!');
+                    alert('Erro ao salvar no Firebase: ' + error.message);
                 }
                 showLoading(false);
             }
@@ -892,7 +975,7 @@
         // Salvar departamento
         async function saveDepartamento() {
             const nome = document.getElementById('departamentoNome').value;
-            if (nome && !departamentos.includes(nome)) {
+            if (nome) {
                 showLoading(true);
                 try {
                     await db.collection('departamentos').add({ 
@@ -903,7 +986,7 @@
                     hideModal('departamentoModal');
                 } catch (error) {
                     console.error('Erro ao salvar departamento:', error);
-                    alert('Erro ao salvar no Firebase!');
+                    alert('Erro ao salvar no Firebase: ' + error.message);
                 }
                 showLoading(false);
             }
@@ -951,7 +1034,7 @@
                 }, 2000);
             } catch (error) {
                 console.error('Erro ao importar:', error);
-                alert('Erro ao importar para o Firebase!');
+                alert('Erro ao importar para o Firebase: ' + error.message);
             }
             showLoading(false);
         }
@@ -965,7 +1048,7 @@
                     await loadData();
                 } catch (error) {
                     console.error('Erro ao deletar:', error);
-                    alert('Erro ao deletar do Firebase!');
+                    alert('Erro ao deletar do Firebase: ' + error.message);
                 }
                 showLoading(false);
             }
@@ -976,13 +1059,15 @@
                 showLoading(true);
                 try {
                     const snapshot = await db.collection('empresas').where('nome', '==', empresas[index]).get();
-                    snapshot.forEach(async (doc) => {
-                        await doc.ref.delete();
+                    const batch = db.batch();
+                    snapshot.forEach((doc) => {
+                        batch.delete(doc.ref);
                     });
+                    await batch.commit();
                     await loadData();
                 } catch (error) {
                     console.error('Erro ao deletar:', error);
-                    alert('Erro ao deletar do Firebase!');
+                    alert('Erro ao deletar do Firebase: ' + error.message);
                 }
                 showLoading(false);
             }
@@ -993,13 +1078,15 @@
                 showLoading(true);
                 try {
                     const snapshot = await db.collection('departamentos').where('nome', '==', departamentos[index]).get();
-                    snapshot.forEach(async (doc) => {
-                        await doc.ref.delete();
+                    const batch = db.batch();
+                    snapshot.forEach((doc) => {
+                        batch.delete(doc.ref);
                     });
+                    await batch.commit();
                     await loadData();
                 } catch (error) {
                     console.error('Erro ao deletar:', error);
-                    alert('Erro ao deletar do Firebase!');
+                    alert('Erro ao deletar do Firebase: ' + error.message);
                 }
                 showLoading(false);
             }
@@ -1028,7 +1115,7 @@
                     }
                 } catch (error) {
                     console.error('Erro ao deletar:', error);
-                    alert('Erro ao deletar do Firebase!');
+                    alert('Erro ao deletar do Firebase: ' + error.message);
                 }
                 showLoading(false);
             }
@@ -1047,6 +1134,11 @@
         function updateColaboradoresTable() {
             const tbody = document.getElementById('colaboradoresList');
             tbody.innerHTML = '';
+
+            if (colaboradores.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align: center;">Nenhum colaborador cadastrado</td></tr>';
+                return;
+            }
 
             colaboradores.forEach(colab => {
                 const saldo = (colab.horasPositivas || 0) - (colab.horasNegativas || 0);
@@ -1074,6 +1166,11 @@
             const tbody = document.getElementById('lancamentosList');
             tbody.innerHTML = '';
 
+            if (lancamentos.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align: center;">Nenhum lançamento registrado</td></tr>';
+                return;
+            }
+
             lancamentos.slice(0, 20).forEach(lanc => {
                 const tipoClass = lanc.tipo === 'positiva' ? 'status-positive' : 'status-negative';
                 const tipoText = lanc.tipo === 'positiva' ? 'Hora Extra' : 'Débito';
@@ -1095,8 +1192,16 @@
 
         function updateEmpresasTable() {
             const tbody = document.getElementById('empresasList');
+            const alert = document.getElementById('empresasAlert');
+            
             tbody.innerHTML = '';
 
+            if (empresas.length === 0) {
+                alert.classList.remove('hidden');
+                return;
+            }
+
+            alert.classList.add('hidden');
             empresas.forEach((empresa, index) => {
                 tbody.innerHTML += `
                     <tr>
@@ -1111,8 +1216,16 @@
 
         function updateDepartamentosTable() {
             const tbody = document.getElementById('departamentosList');
+            const alert = document.getElementById('departamentosAlert');
+            
             tbody.innerHTML = '';
 
+            if (departamentos.length === 0) {
+                alert.classList.remove('hidden');
+                return;
+            }
+
+            alert.classList.add('hidden');
             departamentos.forEach((depto, index) => {
                 tbody.innerHTML += `
                     <tr>
@@ -1138,20 +1251,25 @@
 
             // Atividades recentes
             const activities = document.getElementById('recentActivities');
+            
+            if (lancamentos.length === 0) {
+                activities.innerHTML = '<div class="activity-item">Nenhum lançamento recente</div>';
+                return;
+            }
+
             activities.innerHTML = lancamentos.slice(0, 10).map(lanc => `
                 <div class="activity-item">
                     <span><strong>${lanc.colaboradorNome}</strong> - ${lanc.tipo === 'positiva' ? '+' : '-'}${lanc.horas}h</span>
                     <span>${lanc.data}</span>
                 </div>
             `).join('');
-
-            if (lancamentos.length === 0) {
-                activities.innerHTML = '<div class="activity-item">Nenhum lançamento recente</div>';
-            }
         }
 
         // Inicialização
-        loadData();
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('Iniciando aplicação...');
+            loadData();
+        });
 
         // Fechar modais ao clicar fora
         window.onclick = function(event) {
