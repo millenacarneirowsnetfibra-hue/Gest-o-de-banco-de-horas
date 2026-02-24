@@ -333,6 +333,12 @@
             border: 1px solid #bee5eb;
         }
 
+        .alert-warning {
+            background-color: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeeba;
+        }
+
         .action-buttons {
             display: flex;
             gap: 5px;
@@ -374,6 +380,7 @@
             cursor: pointer;
             font-size: 0.8rem;
             margin-top: 5px;
+            margin-right: 5px;
         }
 
         .copy-btn:hover {
@@ -418,6 +425,40 @@
         .pagination button:hover {
             background-color: #ecf0f1;
         }
+
+        .firebase-status {
+            padding: 10px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .status-connected {
+            background-color: #d4edda;
+            color: #155724;
+        }
+
+        .status-disconnected {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+
+        .status-icon {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        .icon-connected {
+            background-color: #28a745;
+        }
+
+        .icon-disconnected {
+            background-color: #dc3545;
+        }
     </style>
 </head>
 <body>
@@ -439,6 +480,12 @@
 
         <!-- Main Content -->
         <div class="main-content">
+            <!-- Status do Firebase -->
+            <div id="firebaseStatus" class="firebase-status status-disconnected">
+                <span class="status-icon icon-disconnected"></span>
+                <span id="statusMessage">Verificando conexão com Firebase...</span>
+            </div>
+
             <!-- Dashboard Tab -->
             <div id="dashboard" class="tab-content">
                 <h2>Dashboard</h2>
@@ -746,12 +793,50 @@
         };
 
         // Initialize Firebase
-        const app = firebase.initializeApp(firebaseConfig);
-        const db = firebase.firestore();
+        let app;
+        let db;
+        let firebaseConnected = false;
 
-        // Configurar Firestore para usar timestamps
-        const settings = { timestampsInSnapshots: true };
-        db.settings(settings);
+        try {
+            app = firebase.initializeApp(firebaseConfig);
+            db = firebase.firestore();
+            
+            // Configurar Firestore para usar timestamps
+            const settings = { timestampsInSnapshots: true };
+            db.settings(settings);
+            
+            // Testar conexão
+            db.collection('test').limit(1).get()
+                .then(() => {
+                    firebaseConnected = true;
+                    updateFirebaseStatus(true, 'Conectado ao Firebase');
+                })
+                .catch((error) => {
+                    console.error('Erro ao testar conexão:', error);
+                    firebaseConnected = false;
+                    updateFirebaseStatus(false, 'Erro de conexão: ' + error.message);
+                });
+        } catch (error) {
+            console.error('Erro ao inicializar Firebase:', error);
+            firebaseConnected = false;
+            updateFirebaseStatus(false, 'Erro ao inicializar: ' + error.message);
+        }
+
+        // Função para atualizar status do Firebase
+        function updateFirebaseStatus(connected, message) {
+            const statusDiv = document.getElementById('firebaseStatus');
+            const statusMessage = document.getElementById('statusMessage');
+            
+            if (connected) {
+                statusDiv.className = 'firebase-status status-connected';
+                document.querySelector('.status-icon').className = 'status-icon icon-connected';
+                statusMessage.textContent = message || 'Conectado ao Firebase';
+            } else {
+                statusDiv.className = 'firebase-status status-disconnected';
+                document.querySelector('.status-icon').className = 'status-icon icon-disconnected';
+                statusMessage.textContent = message || 'Desconectado do Firebase';
+            }
+        }
 
         // Variáveis globais
         let colaboradores = [];
@@ -786,6 +871,10 @@
 
         // Funções para modais
         function showColaboradorModal(editId = null) {
+            if (!firebaseConnected) {
+                alert('Sem conexão com o Firebase. Verifique sua internet e as configurações.');
+                return;
+            }
             loadSelects();
             document.getElementById('colaboradorModal').style.display = 'block';
             if (editId) {
@@ -806,6 +895,10 @@
         }
 
         function showLancamentoModal() {
+            if (!firebaseConnected) {
+                alert('Sem conexão com o Firebase. Verifique sua internet e as configurações.');
+                return;
+            }
             if (colaboradores.length === 0) {
                 alert('Cadastre pelo menos um colaborador antes de fazer lançamentos!');
                 return;
@@ -815,14 +908,26 @@
         }
 
         function showEmpresaModal() {
+            if (!firebaseConnected) {
+                alert('Sem conexão com o Firebase. Verifique sua internet e as configurações.');
+                return;
+            }
             document.getElementById('empresaModal').style.display = 'block';
         }
 
         function showDepartamentoModal() {
+            if (!firebaseConnected) {
+                alert('Sem conexão com o Firebase. Verifique sua internet e as configurações.');
+                return;
+            }
             document.getElementById('departamentoModal').style.display = 'block';
         }
 
         function showImportModal() {
+            if (!firebaseConnected) {
+                alert('Sem conexão com o Firebase. Verifique sua internet e as configurações.');
+                return;
+            }
             document.getElementById('importModal').style.display = 'block';
         }
 
@@ -863,6 +968,8 @@
 
         // Inicializar dados padrão se não existirem
         async function initializeDefaultData() {
+            if (!firebaseConnected) return;
+            
             try {
                 // Verificar se existem empresas
                 const empresasSnapshot = await db.collection('empresas').limit(1).get();
@@ -891,11 +998,20 @@
                 }
             } catch (error) {
                 console.error('Erro ao inicializar dados padrão:', error);
+                if (error.code === 'permission-denied') {
+                    updateFirebaseStatus(false, 'Permissão negada! Configure as regras do Firebase.');
+                    alert('Erro de permissão no Firebase. Por favor, configure as regras conforme instruções.');
+                }
             }
         }
 
         // Carregar dados do Firebase
         async function loadData() {
+            if (!firebaseConnected) {
+                showLoading(false);
+                return;
+            }
+            
             showLoading(true);
             try {
                 console.log('Carregando dados do Firebase...');
@@ -955,7 +1071,11 @@
                 updateAllTables();
             } catch (error) {
                 console.error('Erro geral ao carregar dados:', error);
-                alert('Erro ao carregar dados do Firebase! Verifique o console para mais detalhes.');
+                if (error.code === 'permission-denied') {
+                    updateFirebaseStatus(false, 'Permissão negada! Configure as regras do Firebase.');
+                } else {
+                    updateFirebaseStatus(false, 'Erro ao carregar dados: ' + error.message);
+                }
             } finally {
                 showLoading(false);
             }
@@ -1023,6 +1143,11 @@
 
         // Salvar colaborador
         async function saveColaborador() {
+            if (!firebaseConnected) {
+                alert('Sem conexão com o Firebase. Verifique sua internet e as configurações.');
+                return;
+            }
+
             const id = document.getElementById('colaboradorId').value;
             const nome = document.getElementById('colaboradorNome').value;
             const data = document.getElementById('colaboradorData').value;
@@ -1057,13 +1182,22 @@
                 hideModal('colaboradorModal');
             } catch (error) {
                 console.error('Erro ao salvar colaborador:', error);
-                alert('Erro ao salvar no Firebase: ' + error.message);
+                if (error.code === 'permission-denied') {
+                    alert('Erro de permissão! Configure as regras do Firebase conforme instruções.');
+                } else {
+                    alert('Erro ao salvar no Firebase: ' + error.message);
+                }
             }
             showLoading(false);
         }
 
         // Salvar lançamento
         async function saveLancamento() {
+            if (!firebaseConnected) {
+                alert('Sem conexão com o Firebase. Verifique sua internet e as configurações.');
+                return;
+            }
+
             const colaboradorId = document.getElementById('lancamentoColaborador').value;
             const data = document.getElementById('lancamentoData').value;
             const tipo = document.getElementById('lancamentoTipo').value;
@@ -1093,13 +1227,22 @@
                 hideModal('lancamentoModal');
             } catch (error) {
                 console.error('Erro ao salvar lançamento:', error);
-                alert('Erro ao salvar no Firebase: ' + error.message);
+                if (error.code === 'permission-denied') {
+                    alert('Erro de permissão! Configure as regras do Firebase conforme instruções.');
+                } else {
+                    alert('Erro ao salvar no Firebase: ' + error.message);
+                }
             }
             showLoading(false);
         }
 
         // Salvar empresa
         async function saveEmpresa() {
+            if (!firebaseConnected) {
+                alert('Sem conexão com o Firebase. Verifique sua internet e as configurações.');
+                return;
+            }
+
             const nome = document.getElementById('empresaNome').value;
             if (nome) {
                 showLoading(true);
@@ -1112,7 +1255,11 @@
                     hideModal('empresaModal');
                 } catch (error) {
                     console.error('Erro ao salvar empresa:', error);
-                    alert('Erro ao salvar no Firebase: ' + error.message);
+                    if (error.code === 'permission-denied') {
+                        alert('Erro de permissão! Configure as regras do Firebase conforme instruções.');
+                    } else {
+                        alert('Erro ao salvar no Firebase: ' + error.message);
+                    }
                 }
                 showLoading(false);
             }
@@ -1120,6 +1267,11 @@
 
         // Salvar departamento
         async function saveDepartamento() {
+            if (!firebaseConnected) {
+                alert('Sem conexão com o Firebase. Verifique sua internet e as configurações.');
+                return;
+            }
+
             const nome = document.getElementById('departamentoNome').value;
             if (nome) {
                 showLoading(true);
@@ -1132,7 +1284,11 @@
                     hideModal('departamentoModal');
                 } catch (error) {
                     console.error('Erro ao salvar departamento:', error);
-                    alert('Erro ao salvar no Firebase: ' + error.message);
+                    if (error.code === 'permission-denied') {
+                        alert('Erro de permissão! Configure as regras do Firebase conforme instruções.');
+                    } else {
+                        alert('Erro ao salvar no Firebase: ' + error.message);
+                    }
                 }
                 showLoading(false);
             }
@@ -1140,6 +1296,11 @@
 
         // Importar colaboradores
         async function importColaboradores() {
+            if (!firebaseConnected) {
+                alert('Sem conexão com o Firebase. Verifique sua internet e as configurações.');
+                return;
+            }
+
             const data = document.getElementById('importData').value;
             const lines = data.split('\n');
             let imported = 0;
@@ -1193,7 +1354,11 @@
                 }, 5000);
             } catch (error) {
                 console.error('Erro ao importar:', error);
-                alert('Erro ao importar para o Firebase: ' + error.message);
+                if (error.code === 'permission-denied') {
+                    alert('Erro de permissão! Configure as regras do Firebase conforme instruções.');
+                } else {
+                    alert('Erro ao importar para o Firebase: ' + error.message);
+                }
             }
             showLoading(false);
         }
@@ -1415,6 +1580,11 @@
 
         // Deletar funções
         async function deleteColaborador(id) {
+            if (!firebaseConnected) {
+                alert('Sem conexão com o Firebase. Verifique sua internet e as configurações.');
+                return;
+            }
+
             if (confirm('Tem certeza que deseja excluir este colaborador? Todos os lançamentos relacionados também serão excluídos.')) {
                 showLoading(true);
                 try {
@@ -1428,13 +1598,22 @@
                     await loadData();
                 } catch (error) {
                     console.error('Erro ao deletar:', error);
-                    alert('Erro ao deletar do Firebase: ' + error.message);
+                    if (error.code === 'permission-denied') {
+                        alert('Erro de permissão! Configure as regras do Firebase conforme instruções.');
+                    } else {
+                        alert('Erro ao deletar do Firebase: ' + error.message);
+                    }
                 }
                 showLoading(false);
             }
         }
 
         async function deleteEmpresa(index) {
+            if (!firebaseConnected) {
+                alert('Sem conexão com o Firebase. Verifique sua internet e as configurações.');
+                return;
+            }
+
             if (confirm('Tem certeza que deseja excluir esta empresa?')) {
                 showLoading(true);
                 try {
@@ -1447,13 +1626,22 @@
                     await loadData();
                 } catch (error) {
                     console.error('Erro ao deletar:', error);
-                    alert('Erro ao deletar do Firebase: ' + error.message);
+                    if (error.code === 'permission-denied') {
+                        alert('Erro de permissão! Configure as regras do Firebase conforme instruções.');
+                    } else {
+                        alert('Erro ao deletar do Firebase: ' + error.message);
+                    }
                 }
                 showLoading(false);
             }
         }
 
         async function deleteDepartamento(index) {
+            if (!firebaseConnected) {
+                alert('Sem conexão com o Firebase. Verifique sua internet e as configurações.');
+                return;
+            }
+
             if (confirm('Tem certeza que deseja excluir este departamento?')) {
                 showLoading(true);
                 try {
@@ -1466,13 +1654,22 @@
                     await loadData();
                 } catch (error) {
                     console.error('Erro ao deletar:', error);
-                    alert('Erro ao deletar do Firebase: ' + error.message);
+                    if (error.code === 'permission-denied') {
+                        alert('Erro de permissão! Configure as regras do Firebase conforme instruções.');
+                    } else {
+                        alert('Erro ao deletar do Firebase: ' + error.message);
+                    }
                 }
                 showLoading(false);
             }
         }
 
         async function deleteLancamento(id) {
+            if (!firebaseConnected) {
+                alert('Sem conexão com o Firebase. Verifique sua internet e as configurações.');
+                return;
+            }
+
             if (confirm('Tem certeza que deseja excluir este lançamento?')) {
                 showLoading(true);
                 try {
@@ -1480,7 +1677,11 @@
                     await loadData();
                 } catch (error) {
                     console.error('Erro ao deletar:', error);
-                    alert('Erro ao deletar do Firebase: ' + error.message);
+                    if (error.code === 'permission-denied') {
+                        alert('Erro de permissão! Configure as regras do Firebase conforme instruções.');
+                    } else {
+                        alert('Erro ao deletar do Firebase: ' + error.message);
+                    }
                 }
                 showLoading(false);
             }
@@ -1516,7 +1717,9 @@
         // Inicialização
         document.addEventListener('DOMContentLoaded', function() {
             console.log('Iniciando aplicação...');
-            loadData();
+            if (firebaseConnected) {
+                loadData();
+            }
         });
 
         // Fechar modais ao clicar fora
