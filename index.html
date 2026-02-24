@@ -191,6 +191,15 @@
             background-color: #c0392b;
         }
 
+        .btn-warning {
+            background-color: #f39c12;
+            color: white;
+        }
+
+        .btn-warning:hover {
+            background-color: #e67e22;
+        }
+
         .btn-info {
             background-color: #3498db;
             color: white;
@@ -734,8 +743,10 @@
     <!-- Modal Empresa -->
     <div id="empresaModal" class="modal">
         <div class="modal-content">
-            <h3>Nova Empresa</h3>
+            <h3 id="empresaModalTitle">Nova Empresa</h3>
             <form id="empresaForm" onsubmit="event.preventDefault(); saveEmpresa();">
+                <input type="hidden" id="empresaId">
+                <input type="hidden" id="empresaNomeOriginal">
                 <div class="form-group">
                     <label>Nome da Empresa:</label>
                     <input type="text" id="empresaNome" required>
@@ -751,8 +762,10 @@
     <!-- Modal Departamento -->
     <div id="departamentoModal" class="modal">
         <div class="modal-content">
-            <h3>Novo Departamento</h3>
+            <h3 id="departamentoModalTitle">Novo Departamento</h3>
             <form id="departamentoForm" onsubmit="event.preventDefault(); saveDepartamento();">
+                <input type="hidden" id="departamentoId">
+                <input type="hidden" id="departamentoNomeOriginal">
                 <div class="form-group">
                     <label>Nome do Departamento:</label>
                     <input type="text" id="departamentoNome" required>
@@ -866,7 +879,9 @@
         let colaboradores = [];
         let lancamentos = [];
         let empresas = [];
+        let empresasDocs = []; // Guardar referências dos documentos
         let departamentos = [];
+        let departamentosDocs = []; // Guardar referências dos documentos
         
         // Variáveis para filtros e paginação
         let colaboradoresFiltrados = [];
@@ -946,20 +961,56 @@
             loadColaboradoresSelect();
         }
 
-        function showEmpresaModal() {
+        function showEmpresaModal(editNome = null) {
             if (!firebaseConnected) {
                 alert('Sem conexão com o Firebase. Verifique sua internet e as configurações.');
                 return;
             }
+            
             document.getElementById('empresaModal').style.display = 'block';
+            
+            if (editNome) {
+                document.getElementById('empresaModalTitle').textContent = 'Editar Empresa';
+                document.getElementById('empresaNome').value = editNome;
+                document.getElementById('empresaNomeOriginal').value = editNome;
+                
+                // Buscar o ID do documento
+                const empresaDoc = empresasDocs.find(doc => doc.nome === editNome);
+                if (empresaDoc) {
+                    document.getElementById('empresaId').value = empresaDoc.id;
+                }
+            } else {
+                document.getElementById('empresaModalTitle').textContent = 'Nova Empresa';
+                document.getElementById('empresaId').value = '';
+                document.getElementById('empresaNomeOriginal').value = '';
+                document.getElementById('empresaNome').value = '';
+            }
         }
 
-        function showDepartamentoModal() {
+        function showDepartamentoModal(editNome = null) {
             if (!firebaseConnected) {
                 alert('Sem conexão com o Firebase. Verifique sua internet e as configurações.');
                 return;
             }
+            
             document.getElementById('departamentoModal').style.display = 'block';
+            
+            if (editNome) {
+                document.getElementById('departamentoModalTitle').textContent = 'Editar Departamento';
+                document.getElementById('departamentoNome').value = editNome;
+                document.getElementById('departamentoNomeOriginal').value = editNome;
+                
+                // Buscar o ID do documento
+                const deptoDoc = departamentosDocs.find(doc => doc.nome === editNome);
+                if (deptoDoc) {
+                    document.getElementById('departamentoId').value = deptoDoc.id;
+                }
+            } else {
+                document.getElementById('departamentoModalTitle').textContent = 'Novo Departamento';
+                document.getElementById('departamentoId').value = '';
+                document.getElementById('departamentoNomeOriginal').value = '';
+                document.getElementById('departamentoNome').value = '';
+            }
         }
 
         function showImportModal() {
@@ -1033,21 +1084,31 @@
                 // Carregar empresas
                 try {
                     const empresasSnapshot = await db.collection('empresas').get();
-                    empresas = empresasSnapshot.docs.map(doc => doc.data().nome);
+                    empresasDocs = empresasSnapshot.docs.map(doc => ({
+                        id: doc.id,
+                        nome: doc.data().nome
+                    }));
+                    empresas = empresasDocs.map(doc => doc.nome);
                     console.log('Empresas carregadas:', empresas.length);
                 } catch (error) {
                     console.error('Erro ao carregar empresas:', error);
                     empresas = [];
+                    empresasDocs = [];
                 }
 
                 // Carregar departamentos
                 try {
                     const departamentosSnapshot = await db.collection('departamentos').get();
-                    departamentos = departamentosSnapshot.docs.map(doc => doc.data().nome);
+                    departamentosDocs = departamentosSnapshot.docs.map(doc => ({
+                        id: doc.id,
+                        nome: doc.data().nome
+                    }));
+                    departamentos = departamentosDocs.map(doc => doc.nome);
                     console.log('Departamentos carregados:', departamentos.length);
                 } catch (error) {
                     console.error('Erro ao carregar departamentos:', error);
                     departamentos = [];
+                    departamentosDocs = [];
                 }
 
                 // Carregar colaboradores
@@ -1159,27 +1220,53 @@
                 return;
             }
 
+            const id = document.getElementById('empresaId').value;
             const nome = document.getElementById('empresaNome').value.trim();
+            const nomeOriginal = document.getElementById('empresaNomeOriginal').value;
+
             if (!nome) {
                 alert('Digite um nome para a empresa');
                 return;
             }
 
-            // Verificar se já existe
-            if (empresas.includes(nome)) {
+            // Verificar se já existe (apenas se for novo ou se o nome mudou)
+            if ((!id || nome !== nomeOriginal) && empresas.includes(nome)) {
                 alert('Esta empresa já está cadastrada!');
                 return;
             }
 
             showLoading(true);
             try {
-                await db.collection('empresas').add({ 
-                    nome,
-                    createdAt: new Date().toISOString()
-                });
+                if (id) {
+                    // Editar
+                    await db.collection('empresas').doc(id).update({ 
+                        nome,
+                        updatedAt: new Date().toISOString()
+                    });
+                    
+                    // Atualizar colaboradores que usam esta empresa
+                    if (nome !== nomeOriginal) {
+                        const colaboradoresEmpresa = colaboradores.filter(c => c.empresa === nomeOriginal);
+                        for (const colab of colaboradoresEmpresa) {
+                            await db.collection('colaboradores').doc(colab.id).update({
+                                empresa: nome,
+                                updatedAt: new Date().toISOString()
+                            });
+                        }
+                    }
+                    
+                    alert('Empresa atualizada com sucesso!');
+                } else {
+                    // Novo
+                    await db.collection('empresas').add({ 
+                        nome,
+                        createdAt: new Date().toISOString()
+                    });
+                    alert('Empresa cadastrada com sucesso!');
+                }
+                
                 await loadData();
                 hideModal('empresaModal');
-                alert('Empresa cadastrada com sucesso!');
             } catch (error) {
                 console.error('Erro ao salvar empresa:', error);
                 if (error.code === 'permission-denied') {
@@ -1198,27 +1285,53 @@
                 return;
             }
 
+            const id = document.getElementById('departamentoId').value;
             const nome = document.getElementById('departamentoNome').value.trim();
+            const nomeOriginal = document.getElementById('departamentoNomeOriginal').value;
+
             if (!nome) {
                 alert('Digite um nome para o departamento');
                 return;
             }
 
-            // Verificar se já existe
-            if (departamentos.includes(nome)) {
+            // Verificar se já existe (apenas se for novo ou se o nome mudou)
+            if ((!id || nome !== nomeOriginal) && departamentos.includes(nome)) {
                 alert('Este departamento já está cadastrado!');
                 return;
             }
 
             showLoading(true);
             try {
-                await db.collection('departamentos').add({ 
-                    nome,
-                    createdAt: new Date().toISOString()
-                });
+                if (id) {
+                    // Editar
+                    await db.collection('departamentos').doc(id).update({ 
+                        nome,
+                        updatedAt: new Date().toISOString()
+                    });
+                    
+                    // Atualizar colaboradores que usam este departamento
+                    if (nome !== nomeOriginal) {
+                        const colaboradoresDepto = colaboradores.filter(c => c.departamento === nomeOriginal);
+                        for (const colab of colaboradoresDepto) {
+                            await db.collection('colaboradores').doc(colab.id).update({
+                                departamento: nome,
+                                updatedAt: new Date().toISOString()
+                            });
+                        }
+                    }
+                    
+                    alert('Departamento atualizado com sucesso!');
+                } else {
+                    // Novo
+                    await db.collection('departamentos').add({ 
+                        nome,
+                        createdAt: new Date().toISOString()
+                    });
+                    alert('Departamento cadastrado com sucesso!');
+                }
+                
                 await loadData();
                 hideModal('departamentoModal');
-                alert('Departamento cadastrado com sucesso!');
             } catch (error) {
                 console.error('Erro ao salvar departamento:', error);
                 if (error.code === 'permission-denied') {
@@ -1604,12 +1717,15 @@
             }
 
             alert.classList.add('hidden');
-            empresas.sort().forEach((empresa, index) => {
+            empresas.sort().forEach(empresa => {
                 tbody.innerHTML += `
                     <tr>
                         <td>${empresa}</td>
                         <td>
-                            <button class="btn btn-danger btn-small" onclick="deleteEmpresa('${empresa}')">Excluir</button>
+                            <div class="action-buttons">
+                                <button class="btn btn-warning btn-small" onclick="showEmpresaModal('${empresa}')">Editar</button>
+                                <button class="btn btn-danger btn-small" onclick="deleteEmpresa('${empresa}')">Excluir</button>
+                            </div>
                         </td>
                     </tr>
                 `;
@@ -1628,12 +1744,15 @@
             }
 
             alert.classList.add('hidden');
-            departamentos.sort().forEach((depto, index) => {
+            departamentos.sort().forEach(depto => {
                 tbody.innerHTML += `
                     <tr>
                         <td>${depto}</td>
                         <td>
-                            <button class="btn btn-danger btn-small" onclick="deleteDepartamento('${depto}')">Excluir</button>
+                            <div class="action-buttons">
+                                <button class="btn btn-warning btn-small" onclick="showDepartamentoModal('${depto}')">Editar</button>
+                                <button class="btn btn-danger btn-small" onclick="deleteDepartamento('${depto}')">Excluir</button>
+                            </div>
                         </td>
                     </tr>
                 `;
@@ -1690,14 +1809,12 @@
             if (confirm(`Tem certeza que deseja excluir a empresa "${nome}"?`)) {
                 showLoading(true);
                 try {
-                    const snapshot = await db.collection('empresas').where('nome', '==', nome).get();
-                    const batch = db.batch();
-                    snapshot.forEach((doc) => {
-                        batch.delete(doc.ref);
-                    });
-                    await batch.commit();
-                    await loadData();
-                    alert('Empresa excluída com sucesso!');
+                    const empresaDoc = empresasDocs.find(doc => doc.nome === nome);
+                    if (empresaDoc) {
+                        await db.collection('empresas').doc(empresaDoc.id).delete();
+                        await loadData();
+                        alert('Empresa excluída com sucesso!');
+                    }
                 } catch (error) {
                     console.error('Erro ao deletar:', error);
                     if (error.code === 'permission-denied') {
@@ -1726,14 +1843,12 @@
             if (confirm(`Tem certeza que deseja excluir o departamento "${nome}"?`)) {
                 showLoading(true);
                 try {
-                    const snapshot = await db.collection('departamentos').where('nome', '==', nome).get();
-                    const batch = db.batch();
-                    snapshot.forEach((doc) => {
-                        batch.delete(doc.ref);
-                    });
-                    await batch.commit();
-                    await loadData();
-                    alert('Departamento excluído com sucesso!');
+                    const deptoDoc = departamentosDocs.find(doc => doc.nome === nome);
+                    if (deptoDoc) {
+                        await db.collection('departamentos').doc(deptoDoc.id).delete();
+                        await loadData();
+                        alert('Departamento excluído com sucesso!');
+                    }
                 } catch (error) {
                     console.error('Erro ao deletar:', error);
                     if (error.code === 'permission-denied') {
