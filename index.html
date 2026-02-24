@@ -322,10 +322,6 @@
             font-style: italic;
         }
 
-        .status-ativo {
-            font-weight: normal;
-        }
-
         .badge {
             display: inline-block;
             padding: 3px 8px;
@@ -591,8 +587,93 @@
             color: #e74c3c;
         }
 
-        .validation-item.warning {
-            color: #f39c12;
+        .lancamento-filters {
+            background-color: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            align-items: flex-end;
+        }
+
+        .filter-group {
+            flex: 1;
+            min-width: 200px;
+        }
+
+        .filter-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: #34495e;
+            font-size: 0.9rem;
+            font-weight: bold;
+        }
+
+        .month-year-picker {
+            display: flex;
+            gap: 10px;
+        }
+
+        .month-year-picker select {
+            flex: 1;
+            padding: 8px;
+            border: 1px solid #bdc3c7;
+            border-radius: 4px;
+        }
+
+        .resumo-mensal {
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+
+        .resumo-item {
+            flex: 1;
+            min-width: 150px;
+            text-align: center;
+            padding: 10px;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .resumo-item .label {
+            font-size: 0.8rem;
+            color: #7f8c8d;
+            margin-bottom: 5px;
+        }
+
+        .resumo-item .value {
+            font-size: 1.5rem;
+            font-weight: bold;
+        }
+
+        .resumo-item.positivo .value {
+            color: #27ae60;
+        }
+
+        .resumo-item.negativo .value {
+            color: #e74c3c;
+        }
+
+        .resumo-item.saldo .value {
+            color: #3498db;
+        }
+
+        .info-box {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            text-align: center;
         }
     </style>
 </head>
@@ -608,7 +689,7 @@
             <ul>
                 <li onclick="showTab('dashboard')">Dashboard</li>
                 <li class="active" onclick="showTab('colaboradores')">Colaboradores</li>
-                <li onclick="showTab('lancamentos')">Lançamentos</li>
+                <li onclick="showTab('lancamentos')">Banco de Horas</li>
                 <li onclick="showTab('configuracoes')">Configurações</li>
             </ul>
         </div>
@@ -650,7 +731,7 @@
             </div>
 
             <!-- Colaboradores Tab -->
-            <div id="colaboradores" class="tab-content active">
+            <div id="colaboradores" class="tab-content">
                 <div class="header-actions">
                     <h2>Colaboradores</h2>
                     <div>
@@ -698,28 +779,84 @@
                 </div>
             </div>
 
-            <!-- Lançamentos Tab -->
+            <!-- Banco de Horas / Lançamentos Tab -->
             <div id="lancamentos" class="tab-content">
                 <div class="header-actions">
-                    <h2>Lançamentos de Horas</h2>
+                    <h2>Banco de Horas</h2>
                     <button class="btn btn-primary" onclick="showLancamentoModal()">Novo Lançamento</button>
                 </div>
 
-                <table id="lancamentosTable">
-                    <thead>
-                        <tr>
-                            <th>Colaborador</th>
-                            <th>Data</th>
-                            <th>Tipo</th>
-                            <th>Quantidade</th>
-                            <th>Descrição</th>
-                            <th>Ações</th>
-                        </tr>
-                    </thead>
-                    <tbody id="lancamentosList">
-                        <!-- Lançamentos serão inseridos aqui via JavaScript -->
-                    </tbody>
-                </table>
+                <!-- Filtros -->
+                <div class="lancamento-filters">
+                    <div class="filter-group">
+                        <label>Selecione o Colaborador:</label>
+                        <select id="filtroColaborador" onchange="filtrarLancamentos()">
+                            <option value="">-- Selecione um colaborador --</option>
+                        </select>
+                    </div>
+                    
+                    <div class="filter-group">
+                        <label>Período (Mês/Ano):</label>
+                        <div class="month-year-picker">
+                            <select id="filtroMes" onchange="filtrarLancamentos()">
+                                <option value="01">Janeiro</option>
+                                <option value="02">Fevereiro</option>
+                                <option value="03">Março</option>
+                                <option value="04">Abril</option>
+                                <option value="05">Maio</option>
+                                <option value="06">Junho</option>
+                                <option value="07">Julho</option>
+                                <option value="08">Agosto</option>
+                                <option value="09">Setembro</option>
+                                <option value="10">Outubro</option>
+                                <option value="11">Novembro</option>
+                                <option value="12">Dezembro</option>
+                            </select>
+                            <select id="filtroAno" onchange="filtrarLancamentos()">
+                                <!-- Anos serão preenchidos via JavaScript -->
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <button class="btn btn-info" onclick="limparFiltros()">Limpar Filtros</button>
+                </div>
+
+                <!-- Resumo do mês -->
+                <div id="resumoMensal" class="resumo-mensal" style="display: none;">
+                    <div class="resumo-item positivo">
+                        <div class="label">Horas Positivas</div>
+                        <div class="value" id="resumoPositivas">0</div>
+                    </div>
+                    <div class="resumo-item negativo">
+                        <div class="label">Horas Negativas</div>
+                        <div class="value" id="resumoNegativas">0</div>
+                    </div>
+                    <div class="resumo-item saldo">
+                        <div class="label">Saldo do Mês</div>
+                        <div class="value" id="resumoSaldo">0</div>
+                    </div>
+                </div>
+
+                <!-- Tabela de lançamentos -->
+                <div id="lancamentosContainer">
+                    <div class="info-box" id="semSelecaoMsg">
+                        👆 Selecione um colaborador e período para visualizar os lançamentos
+                    </div>
+                    <table id="lancamentosTable" style="display: none;">
+                        <thead>
+                            <tr>
+                                <th>Data</th>
+                                <th>Tipo</th>
+                                <th>Quantidade</th>
+                                <th>Descrição</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="lancamentosList">
+                            <!-- Lançamentos serão inseridos aqui via JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
             </div>
 
             <!-- Configurações Tab -->
@@ -821,8 +958,26 @@
                     </select>
                 </div>
                 <div class="form-group">
-                    <label>Data do Lançamento:</label>
-                    <input type="text" id="lancamentoData" placeholder="DD/MM/AAAA" required>
+                    <label>Mês/Ano:</label>
+                    <div class="month-year-picker">
+                        <select id="lancamentoMes" required>
+                            <option value="01">Janeiro</option>
+                            <option value="02">Fevereiro</option>
+                            <option value="03">Março</option>
+                            <option value="04">Abril</option>
+                            <option value="05">Maio</option>
+                            <option value="06">Junho</option>
+                            <option value="07">Julho</option>
+                            <option value="08">Agosto</option>
+                            <option value="09">Setembro</option>
+                            <option value="10">Outubro</option>
+                            <option value="11">Novembro</option>
+                            <option value="12">Dezembro</option>
+                        </select>
+                        <select id="lancamentoAno" required>
+                            <!-- Anos serão preenchidos via JavaScript -->
+                        </select>
+                    </div>
                 </div>
                 <div class="form-group">
                     <label>Tipo:</label>
@@ -1020,6 +1175,30 @@ Pedro Oliveira,10/02/2023,Financeiro,Empresa A
         let sortField = 'nome';
         let sortDirection = 'asc';
 
+        // Preencher anos nos selects
+        function preencherAnos() {
+            const anoAtual = new Date().getFullYear();
+            const anos = [];
+            for (let i = anoAtual - 5; i <= anoAtual + 1; i++) {
+                anos.push(i);
+            }
+            
+            const selects = ['filtroAno', 'lancamentoAno'];
+            selects.forEach(selectId => {
+                const select = document.getElementById(selectId);
+                if (select) {
+                    select.innerHTML = '';
+                    anos.forEach(ano => {
+                        const option = document.createElement('option');
+                        option.value = ano;
+                        option.textContent = ano;
+                        if (ano === anoAtual) option.selected = true;
+                        select.appendChild(option);
+                    });
+                }
+            });
+        }
+
         // Função para mostrar/esconder loading
         function showLoading(show) {
             document.getElementById('loadingOverlay').style.display = show ? 'flex' : 'none';
@@ -1036,6 +1215,10 @@ Pedro Oliveira,10/02/2023,Financeiro,Empresa A
                 item.classList.remove('active');
             });
             event.target.classList.add('active');
+            
+            if (tabName === 'lancamentos') {
+                atualizarSelectColaboradores();
+            }
         }
 
         // Funções para modais
@@ -1656,6 +1839,8 @@ Pedro Oliveira,10/02/2023,Financeiro,Empresa A
                         id: doc.id,
                         ...doc.data()
                     }));
+                    // Ordenar colaboradores em ordem alfabética
+                    colaboradores.sort((a, b) => a.nome.localeCompare(b.nome));
                     console.log('Colaboradores carregados:', colaboradores.length);
                 } catch (error) {
                     console.error('Erro ao carregar colaboradores:', error);
@@ -1736,10 +1921,119 @@ Pedro Oliveira,10/02/2023,Financeiro,Empresa A
             select.innerHTML = '<option value="">Selecione...</option>';
             colaboradores
                 .filter(c => c.ativo !== false)
-                .sort((a, b) => a.nome.localeCompare(b.nome))
                 .forEach(colab => {
                     select.innerHTML += `<option value="${colab.id}">${colab.nome}</option>`;
                 });
+        }
+
+        function atualizarSelectColaboradores() {
+            const select = document.getElementById('filtroColaborador');
+            select.innerHTML = '<option value="">-- Selecione um colaborador --</option>';
+            colaboradores
+                .filter(c => c.ativo !== false)
+                .forEach(colab => {
+                    select.innerHTML += `<option value="${colab.id}">${colab.nome}</option>`;
+                });
+        }
+
+        // Funções para filtro de lançamentos
+        function filtrarLancamentos() {
+            const colaboradorId = document.getElementById('filtroColaborador').value;
+            const mes = document.getElementById('filtroMes').value;
+            const ano = document.getElementById('filtroAno').value;
+            
+            const resumoDiv = document.getElementById('resumoMensal');
+            const tabela = document.getElementById('lancamentosTable');
+            const semSelecaoMsg = document.getElementById('semSelecaoMsg');
+            
+            if (!colaboradorId) {
+                resumoDiv.style.display = 'none';
+                tabela.style.display = 'none';
+                semSelecaoMsg.style.display = 'block';
+                return;
+            }
+            
+            // Filtrar lançamentos do colaborador no mês/ano selecionado
+            const lancamentosFiltrados = lancamentos.filter(lanc => {
+                if (lanc.colaboradorId !== colaboradorId) return false;
+                
+                // Extrair mês e ano da data (formato DD/MM/AAAA)
+                const partes = lanc.data.split('/');
+                if (partes.length !== 3) return false;
+                
+                const lancMes = partes[1];
+                const lancAno = partes[2];
+                
+                return lancMes === mes && lancAno === ano;
+            });
+            
+            // Calcular resumo
+            let totalPositivas = 0;
+            let totalNegativas = 0;
+            
+            lancamentosFiltrados.forEach(lanc => {
+                if (lanc.tipo === 'positiva') {
+                    totalPositivas += lanc.horas;
+                } else {
+                    totalNegativas += lanc.horas;
+                }
+            });
+            
+            const saldo = totalPositivas - totalNegativas;
+            
+            // Atualizar resumo
+            document.getElementById('resumoPositivas').textContent = totalPositivas.toFixed(1);
+            document.getElementById('resumoNegativas').textContent = totalNegativas.toFixed(1);
+            document.getElementById('resumoSaldo').textContent = saldo.toFixed(1);
+            
+            // Atualizar tabela
+            const tbody = document.getElementById('lancamentosList');
+            tbody.innerHTML = '';
+            
+            if (lancamentosFiltrados.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 20px;">Nenhum lançamento encontrado para este período.</td></tr>';
+            } else {
+                lancamentosFiltrados.sort((a, b) => {
+                    // Ordenar por data (considerando formato DD/MM/AAAA)
+                    const [dA, mA, yA] = a.data.split('/');
+                    const [dB, mB, yB] = b.data.split('/');
+                    const dataA = new Date(yA, mA - 1, dA);
+                    const dataB = new Date(yB, mB - 1, dB);
+                    return dataB - dataA; // Mais recentes primeiro
+                });
+                
+                lancamentosFiltrados.forEach(lanc => {
+                    const tipoClass = lanc.tipo === 'positiva' ? 'status-positive' : 'status-negative';
+                    const tipoText = lanc.tipo === 'positiva' ? 'Hora Extra' : 'Débito';
+                    
+                    tbody.innerHTML += `
+                        <tr>
+                            <td>${lanc.data}</td>
+                            <td class="${tipoClass}">${tipoText}</td>
+                            <td>${lanc.horas} h</td>
+                            <td>${lanc.descricao || '-'}</td>
+                            <td>
+                                <button class="btn btn-danger btn-small" onclick="deleteLancamento('${lanc.id}')">Excluir</button>
+                            </td>
+                        </tr>
+                    `;
+                });
+            }
+            
+            resumoDiv.style.display = 'flex';
+            tabela.style.display = 'table';
+            semSelecaoMsg.style.display = 'none';
+        }
+
+        function limparFiltros() {
+            document.getElementById('filtroColaborador').value = '';
+            const anoAtual = new Date().getFullYear().toString();
+            document.getElementById('filtroMes').value = '01';
+            document.getElementById('filtroAno').value = anoAtual;
+            
+            document.getElementById('resumoMensal').style.display = 'none';
+            document.getElementById('lancamentosTable').style.display = 'none';
+            document.getElementById('semSelecaoMsg').style.display = 'block';
         }
 
         // Salvar empresa
@@ -1926,12 +2220,13 @@ Pedro Oliveira,10/02/2023,Financeiro,Empresa A
             }
 
             const colaboradorId = document.getElementById('lancamentoColaborador').value;
-            const data = document.getElementById('lancamentoData').value;
+            const mes = document.getElementById('lancamentoMes').value;
+            const ano = document.getElementById('lancamentoAno').value;
             const tipo = document.getElementById('lancamentoTipo').value;
             const horas = parseFloat(document.getElementById('lancamentoHoras').value);
             const descricao = document.getElementById('lancamentoDescricao').value.trim();
 
-            if (!colaboradorId || !isValidDate(data) || !horas) {
+            if (!colaboradorId || !mes || !ano || !horas) {
                 alert('Preencha todos os campos corretamente!');
                 return;
             }
@@ -1950,12 +2245,17 @@ Pedro Oliveira,10/02/2023,Financeiro,Empresa A
                 }
             }
 
+            // Criar data no formato DD/MM/AAAA (usando o primeiro dia do mês)
+            const data = `01/${mes}/${ano}`;
+
             showLoading(true);
             try {
                 const lancamentoData = {
                     colaboradorId,
                     colaboradorNome: colaborador.nome,
                     data,
+                    mes,
+                    ano,
                     tipo,
                     horas,
                     descricao: descricao || 'Sem descrição',
@@ -1965,6 +2265,16 @@ Pedro Oliveira,10/02/2023,Financeiro,Empresa A
                 await db.collection('lancamentos').add(lancamentoData);
                 await loadData();
                 hideModal('lancamentoModal');
+                
+                // Atualizar visualização se o filtro estiver no mesmo colaborador/período
+                const filtroColab = document.getElementById('filtroColaborador').value;
+                const filtroMes = document.getElementById('filtroMes').value;
+                const filtroAno = document.getElementById('filtroAno').value;
+                
+                if (filtroColab === colaboradorId && filtroMes === mes && filtroAno === ano) {
+                    filtrarLancamentos();
+                }
+                
                 alert('Lançamento realizado com sucesso!');
             } catch (error) {
                 console.error('Erro ao salvar lançamento:', error);
@@ -2060,7 +2370,7 @@ Pedro Oliveira,10/02/2023,Financeiro,Empresa A
             showLoading(false);
         }
 
-        // Funções de filtro e ordenação
+        // Funções de filtro e ordenação para colaboradores
         function filterColaboradores() {
             const searchTerm = document.getElementById('searchColaborador').value.toLowerCase();
             const statusFilter = document.getElementById('filterStatus').value;
@@ -2130,6 +2440,8 @@ Pedro Oliveira,10/02/2023,Financeiro,Empresa A
             updateDepartamentosTable();
             updateDashboard();
             loadColaboradoresSelect();
+            atualizarSelectColaboradores();
+            preencherAnos();
         }
 
         function updateFilterOptions() {
@@ -2214,33 +2526,8 @@ Pedro Oliveira,10/02/2023,Financeiro,Empresa A
         }
 
         function updateLancamentosTable() {
-            const tbody = document.getElementById('lancamentosList');
-            tbody.innerHTML = '';
-
-            if (lancamentos.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 40px;">Nenhum lançamento registrado. Clique em "Novo Lançamento" para começar.</td></tr>';
-                return;
-            }
-
-            lancamentos.slice(0, 20).forEach(lanc => {
-                const tipoClass = lanc.tipo === 'positiva' ? 'status-positive' : 'status-negative';
-                const tipoText = lanc.tipo === 'positiva' ? 'Hora Extra' : 'Débito';
-                const colaborador = colaboradores.find(c => c.id === lanc.colaboradorId);
-                const statusClass = colaborador && colaborador.ativo === false ? 'status-inativo' : '';
-                
-                tbody.innerHTML += `
-                    <tr class="${statusClass}">
-                        <td>${lanc.colaboradorNome} ${colaborador && colaborador.ativo === false ? '(Inativo)' : ''}</td>
-                        <td>${lanc.data}</td>
-                        <td class="${tipoClass}">${tipoText}</td>
-                        <td>${lanc.horas} h</td>
-                        <td>${lanc.descricao || '-'}</td>
-                        <td>
-                            <button class="btn btn-danger btn-small" onclick="deleteLancamento('${lanc.id}')">Excluir</button>
-                        </td>
-                    </tr>
-                `;
-            });
+            // Esta função mantida para compatibilidade, mas não é mais usada diretamente
+            // Os lançamentos agora são filtrados por colaborador/período
         }
 
         function updateEmpresasTable() {
@@ -2410,6 +2697,16 @@ Pedro Oliveira,10/02/2023,Financeiro,Empresa A
                 try {
                     await db.collection('lancamentos').doc(id).delete();
                     await loadData();
+                    
+                    // Atualizar visualização se necessário
+                    const filtroColab = document.getElementById('filtroColaborador').value;
+                    const filtroMes = document.getElementById('filtroMes').value;
+                    const filtroAno = document.getElementById('filtroAno').value;
+                    
+                    if (filtroColab && filtroMes && filtroAno) {
+                        filtrarLancamentos();
+                    }
+                    
                     alert('Lançamento excluído com sucesso!');
                 } catch (error) {
                     console.error('Erro ao deletar:', error);
@@ -2456,6 +2753,7 @@ Pedro Oliveira,10/02/2023,Financeiro,Empresa A
         // Inicialização
         document.addEventListener('DOMContentLoaded', function() {
             console.log('Iniciando aplicação...');
+            preencherAnos();
         });
 
         // Fechar modais ao clicar fora
