@@ -244,11 +244,6 @@
             color: white;
         }
 
-        .btn-info {
-            background: linear-gradient(135deg, #3b82f6, #2563eb);
-            color: white;
-        }
-
         .btn-small {
             padding: 6px 12px;
             font-size: 0.85rem;
@@ -964,7 +959,7 @@
                                 <th>Vencimento</th>
                                 <th>Status</th>
                                 <th>Saldo Restante</th>
-                                <th>Falta Compensar</th>
+                                <th>Compensações</th>
                                 <th>Ações</th>
                             </tr>
                         </thead>
@@ -2284,11 +2279,10 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 const quantidadeIcon = lanc.tipo === 'positiva' ? '➕' : '➖';
                 const saldoRestanteFormatado = decimalParaHora(lanc.saldoRestante || lanc.horas);
                 
-                // Ajuste solicitado: mostrar horas que faltam compensar ou "Completo"
-                const horasFaltantes = lanc.saldoRestante || 0;
-                const compensacoesText = horasFaltantes > 0 ? 
-                    `<span class="badge badge-warning">Falta ${decimalParaHora(horasFaltantes)}</span>` : 
-                    `<span class="badge badge-success">Completo</span>`;
+                const numCompensacoes = lanc.compensacoes ? lanc.compensacoes.length : 0;
+                const compensacoesText = numCompensacoes > 0 ? 
+                    `<button class="btn btn-info btn-small" onclick="showVisualizarCompensacoesModal('${lanc.id}')">Ver ${numCompensacoes}</button>` : 
+                    '-';
 
                 tbody.innerHTML += `
                     <tr>
