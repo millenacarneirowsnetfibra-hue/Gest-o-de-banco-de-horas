@@ -381,6 +381,12 @@
             text-transform: uppercase;
             letter-spacing: 0.5px;
             border-bottom: 2px solid #e2e8f0;
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+
+        th:hover {
+            color: #3b82f6;
         }
 
         td {
@@ -581,6 +587,14 @@
 
         .resumo-value.positivo { color: #16a34a; }
         .resumo-value.negativo { color: #dc2626; }
+
+        /* Pagination */
+        .pagination {
+            margin-top: 20px;
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+        }
     </style>
 </head>
 <body>
@@ -731,7 +745,7 @@
                         </tbody>
                     </table>
 
-                    <div class="pagination" id="pagination" style="margin-top: 20px; display: flex; justify-content: center; gap: 8px;">
+                    <div class="pagination" id="pagination">
                         <!-- Paginação -->
                     </div>
                 </div>
@@ -873,12 +887,11 @@
                         <thead>
                             <tr>
                                 <th>Colaborador</th>
-                                <th>Competência</th>
-                                <th>Tipo</th>
                                 <th>Quantidade</th>
+                                <th>Competência</th>
                                 <th>Vencimento</th>
                                 <th>Status</th>
-                                <th>Saldo Acumulado</th>
+                                <th>Saldo Após</th>
                                 <th>Ações</th>
                             </tr>
                         </thead>
@@ -1207,7 +1220,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             // Carregar colaboradores no select
             const select = document.getElementById('editLancamentoColaborador');
             select.innerHTML = '<option value="">Selecione...</option>';
-            colaboradores.forEach(colab => {
+            colaboradores.sort((a, b) => a.nome.localeCompare(b.nome)).forEach(colab => {
                 select.innerHTML += `<option value="${colab.id}">${colab.nome}</option>`;
             });
 
@@ -1322,8 +1335,8 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
             if (diffDays < 0) return { texto: 'Vencido', classe: 'badge-danger' };
-            if (diffDays <= 30) return { texto: 'À vencer em 30 dias', classe: 'badge-warning' };
-            if (diffDays <= 60) return { texto: 'À vencer em 60 dias', classe: 'badge-info' };
+            if (diffDays <= 30) return { texto: 'À vencer - 30 dias', classe: 'badge-warning' };
+            if (diffDays <= 60) return { texto: 'À vencer - 60 dias', classe: 'badge-info' };
             return { texto: 'Em dia', classe: 'badge-success' };
         }
 
@@ -1916,12 +1929,10 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 // Status
                 const status = calcularStatus(vencimento);
                 
-                // Tipo
-                const tipoClass = lanc.tipo === 'positiva' ? 'badge-success' : 'badge-danger';
-                const tipoText = lanc.tipo === 'positiva' ? '➕ Positiva' : '➖ Negativa';
-                
-                // Quantidade formatada
+                // Quantidade formatada com cor
                 const quantidade = decimalParaHora(lanc.horas);
+                const quantidadeClass = lanc.tipo === 'positiva' ? 'badge-success' : 'badge-danger';
+                const quantidadeIcon = lanc.tipo === 'positiva' ? '➕' : '➖';
                 
                 // Calcular saldo acumulado até esta data
                 const [dia, mes, ano] = lanc.data.split('/');
@@ -1931,9 +1942,8 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 tbody.innerHTML += `
                     <tr>
                         <td><strong>${colaborador.nome}</strong><br><small style="color: #64748b;">${colaborador.departamento}</small></td>
+                        <td><span class="badge ${quantidadeClass}">${quantidadeIcon} ${quantidade}</span></td>
                         <td>${competencia}</td>
-                        <td><span class="badge ${tipoClass}">${tipoText}</span></td>
-                        <td>${quantidade}</td>
                         <td>${vencimento}</td>
                         <td><span class="badge ${status.classe}">${status.texto}</span></td>
                         <td><span class="badge badge-purple">${decimalParaHora(saldoAteData)}</span></td>
