@@ -460,6 +460,12 @@
             border-left: 3px solid #dc2626;
         }
 
+        .badge-zero {
+            background: #e2e8f0;
+            color: #475569;
+            border-left: 3px solid #64748b;
+        }
+
         /* Lançamento Card */
         .lancamento-card {
             background: white;
@@ -847,7 +853,8 @@
 
                             <div class="lancamento-field">
                                 <label>Quantidade (HH:MM) *</label>
-                                <input type="text" id="lancamentoHoras" placeholder="08:30" required>
+                                <input type="text" id="lancamentoHoras" placeholder="08:30" value="00:00" required>
+                                <small style="color: #64748b; margin-top: 4px;">Use 00:00 para lançamentos sem efeito no saldo</small>
                             </div>
 
                             <div class="lancamento-field">
@@ -938,6 +945,7 @@
                             <option value="pendente">Pendente</option>
                             <option value="compensada">Compensada</option>
                             <option value="vencida">Vencida</option>
+                            <option value="zero">Horas Zero</option>
                         </select>
                     </div>
                 </div>
@@ -1478,7 +1486,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
 
         function limparFormulario() {
             document.getElementById('lancamentoForm').reset();
-            document.getElementById('lancamentoHoras').value = '';
+            document.getElementById('lancamentoHoras').value = '00:00';
         }
 
         // Funções de conversão de horas
@@ -1532,6 +1540,11 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
 
         // Função para calcular status do lançamento baseado nas regras
         function calcularStatus(lancamento) {
+            // Se for horas zero, sempre compensado
+            if (lancamento.horas === 0) {
+                return { texto: 'Compensada (Zero)', classe: 'badge-zero' };
+            }
+            
             // Se já foi completamente compensado
             if (lancamento.saldoRestante === 0) {
                 return { texto: 'Compensada', classe: 'badge-compensada' };
@@ -1562,18 +1575,26 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             
             // Resetar saldos restantes e compensações
             lancamentos.forEach(lanc => {
-                lanc.saldoRestante = lanc.horas;
-                lanc.compensacoes = lanc.compensacoes || [];
-                // Manter apenas compensações existentes que ainda são válidas
-                if (lanc.compensacoes.length > 0) {
-                    let totalCompensado = lanc.compensacoes.reduce((sum, comp) => sum + comp.quantidade, 0);
-                    lanc.saldoRestante = lanc.horas - totalCompensado;
+                // Se for horas zero, já começa com saldo zero e compensado
+                if (lanc.horas === 0) {
+                    lanc.saldoRestante = 0;
+                    lanc.compensacoes = lanc.compensacoes || [];
+                } else {
+                    lanc.saldoRestante = lanc.horas;
+                    lanc.compensacoes = lanc.compensacoes || [];
+                    // Manter apenas compensações existentes que ainda são válidas
+                    if (lanc.compensacoes.length > 0) {
+                        let totalCompensado = lanc.compensacoes.reduce((sum, comp) => sum + comp.quantidade, 0);
+                        lanc.saldoRestante = lanc.horas - totalCompensado;
+                    }
                 }
             });
 
-            // Agrupar lançamentos por colaborador
+            // Agrupar lançamentos por colaborador (excluindo horas zero)
             const lancamentosPorColaborador = {};
             lancamentos.forEach(lanc => {
+                if (lanc.horas === 0) return; // Ignorar horas zero na compensação
+                
                 if (!lancamentosPorColaborador[lanc.colaboradorId]) {
                     lancamentosPorColaborador[lanc.colaboradorId] = [];
                 }
@@ -1680,7 +1701,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 tipo: data.tipo || data.type || 'positiva',
                 horas: typeof data.horas === 'number' ? data.horas : (typeof data.hours === 'number' ? data.hours : 0),
                 compensacoes: data.compensacoes || [],
-                saldoRestante: data.saldoRestante || data.horas || 0
+                saldoRestante: data.saldoRestante !== undefined ? data.saldoRestante : (data.horas || 0)
             };
             
             if (!lancamento.mes || !lancamento.ano) {
@@ -1782,7 +1803,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                     const docRef = db.collection('lancamentos').doc(lanc.id);
                     batch.update(docRef, {
                         compensacoes: lanc.compensacoes || [],
-                        saldoRestante: lanc.saldoRestante || lanc.horas
+                        saldoRestante: lanc.saldoRestante !== undefined ? lanc.saldoRestante : lanc.horas
                     });
                     updatesCount++;
                     
@@ -2054,10 +2075,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             }
 
             const horas = horaParaDecimal(horaStr);
-            if (horas <= 0) {
-                alert('A quantidade de horas deve ser maior que zero!');
-                return;
-            }
+            // Removida a validação de horas > 0 para permitir 00:00
 
             const colaborador = colaboradores.find(c => c.id === colaboradorId);
             if (!colaborador) {
@@ -2080,7 +2098,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                     ano: ano,
                     tipo: tipo,
                     horas: horas,
-                    saldoRestante: horas,
+                    saldoRestante: horas, // Será ajustado para 0 se horas = 0 no processamento
                     compensacoes: [],
                     createdAt: new Date().toISOString()
                 };
@@ -2090,7 +2108,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 
                 await loadData();
                 
-                document.getElementById('lancamentoHoras').value = '';
+                document.getElementById('lancamentoHoras').value = '00:00';
                 document.getElementById('lancamentoColaborador').value = '';
                 
                 aplicarFiltros();
@@ -2268,9 +2286,10 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             if (statusLancamento) {
                 lancamentosFiltrados = lancamentosFiltrados.filter(l => {
                     const statusInfo = calcularStatus(l);
-                    if (statusLancamento === 'pendente') return statusInfo.texto !== 'Compensada';
-                    if (statusLancamento === 'compensada') return statusInfo.texto === 'Compensada';
+                    if (statusLancamento === 'pendente') return l.horas > 0 && statusInfo.texto !== 'Compensada' && statusInfo.texto !== 'Compensada (Zero)';
+                    if (statusLancamento === 'compensada') return statusInfo.texto === 'Compensada' || statusInfo.texto === 'Compensada (Zero)';
                     if (statusLancamento === 'vencida') return statusInfo.texto === 'Vencida';
+                    if (statusLancamento === 'zero') return l.horas === 0;
                     return true;
                 });
             }
