@@ -1406,7 +1406,13 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                     id: doc.id,
                     ...doc.data()
                 }));
-                colaboradores.sort((a, b) => a.nome.localeCompare(b.nome));
+                
+                // ORDENAÇÃO ALFABÉTICA - AQUI É O PONTO CRÍTICO
+                colaboradores.sort((a, b) => {
+                    const nomeA = (a.nome || '').toLowerCase();
+                    const nomeB = (b.nome || '').toLowerCase();
+                    return nomeA.localeCompare(nomeB);
+                });
 
                 // Carregar lançamentos
                 const lancamentosSnapshot = await db.collection('lancamentos').orderBy('data', 'desc').get();
@@ -2007,7 +2013,15 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 return matchSearch && matchDepto && matchEmpresa && matchStatus;
             });
 
-            sortColaboradores(sortField);
+            // GARANTIR ORDENAÇÃO ALFABÉTICA APÓS FILTRO
+            colaboradoresFiltrados.sort((a, b) => {
+                const nomeA = (a.nome || '').toLowerCase();
+                const nomeB = (b.nome || '').toLowerCase();
+                return nomeA.localeCompare(nomeB);
+            });
+
+            sortField = 'nome';
+            sortDirection = 'asc';
             currentPage = 1;
             updateColaboradoresTable();
         }
@@ -2266,7 +2280,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             updateDashboard();
             carregarFiltros();
             aplicarFiltros();
-            filterColaboradores();
+            filterColaboradores(); // Isso já aplica a ordenação alfabética
         }
 
         // Fechar modais ao clicar fora
