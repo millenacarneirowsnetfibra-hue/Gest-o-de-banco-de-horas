@@ -595,6 +595,25 @@
             justify-content: center;
             gap: 8px;
         }
+
+        /* Botão de recarregar */
+        .btn-refresh {
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: white;
+            margin-left: 16px;
+        }
+
+        .btn-refresh:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(16, 185, 129, 0.4);
+        }
+
+        .header-with-refresh {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
     </style>
 </head>
 <body>
@@ -861,6 +880,12 @@
                             </select>
                         </div>
                     </div>
+                    
+                    <div class="filter-group" style="justify-content: flex-end;">
+                        <button class="btn btn-refresh" onclick="recarregarDados()" style="margin-top: 24px;">
+                            🔄 Recarregar Dados
+                        </button>
+                    </div>
                 </div>
 
                 <!-- Resumo do Saldo do Colaborador Selecionado -->
@@ -877,7 +902,12 @@
 
                 <!-- Tabela de Histórico de Lançamentos -->
                 <div class="table-container">
-                    <h3 style="margin-bottom: 20px;">📋 Histórico de Lançamentos</h3>
+                    <div class="header-with-refresh">
+                        <h3 style="margin-bottom: 0;">📋 Histórico de Lançamentos</h3>
+                        <div>
+                            <span id="contadorLancamentos" style="color: #64748b; margin-right: 16px;">0 lançamentos</span>
+                        </div>
+                    </div>
                     
                     <div id="semResultadosMsg" style="text-align: center; padding: 40px; color: #64748b; display: none;">
                         Nenhum lançamento encontrado com os filtros selecionados.
@@ -1186,6 +1216,15 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             document.getElementById(modalId).style.display = 'none';
         }
 
+        // Função para recarregar dados manualmente
+        function recarregarDados() {
+            if (firebaseConnected) {
+                loadData();
+            } else {
+                alert('Sem conexão com o Firebase.');
+            }
+        }
+
         // Funções para modais
         function showColaboradorModal(editId = null) {
             if (!firebaseConnected) {
@@ -1414,12 +1453,19 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                     return nomeA.localeCompare(nomeB);
                 });
 
-                // Carregar lançamentos
-                const lancamentosSnapshot = await db.collection('lancamentos').orderBy('data', 'desc').get();
+                // Carregar lançamentos - sem orderBy para evitar erros de índice
+                const lancamentosSnapshot = await db.collection('lancamentos').get();
                 lancamentos = lancamentosSnapshot.docs.map(doc => ({
                     id: doc.id,
                     ...doc.data()
                 }));
+
+                // Ordenar por data manualmente (mais recentes primeiro)
+                lancamentos.sort((a, b) => {
+                    const [dA, mA, yA] = a.data.split('/');
+                    const [dB, mB, yB] = b.data.split('/');
+                    return new Date(yB, mB - 1, dB) - new Date(yA, mA - 1, dA);
+                });
 
                 console.log('Dados carregados:', {
                     colaboradores: colaboradores.length,
@@ -1428,8 +1474,14 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                     departamentos: departamentos.length
                 });
 
-                // Log para debug dos lançamentos
-                console.log('Lançamentos carregados:', lancamentos);
+                // Log detalhado dos lançamentos
+                console.log('Lançamentos carregados:', lancamentos.map(l => ({
+                    id: l.id,
+                    colaborador: l.colaboradorNome,
+                    tipo: l.tipo,
+                    horas: l.horas,
+                    data: l.data
+                })));
 
                 updateAllTables();
             } catch (error) {
@@ -1724,7 +1776,11 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                     createdAt: new Date().toISOString()
                 };
 
+                console.log('Salvando lançamento:', lancamentoData);
+
                 await db.collection('lancamentos').add(lancamentoData);
+                
+                // Recarregar dados imediatamente
                 await loadData();
                 
                 // Limpar formulário
@@ -1907,12 +1963,8 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
 
             console.log('Lançamentos após filtro:', lancamentosFiltrados.length);
 
-            // Ordenar por data (mais recentes primeiro)
-            lancamentosFiltrados.sort((a, b) => {
-                const [dA, mA, yA] = a.data.split('/');
-                const [dB, mB, yB] = b.data.split('/');
-                return new Date(yB, mB - 1, dB) - new Date(yA, mA - 1, dA);
-            });
+            // Atualizar contador
+            document.getElementById('contadorLancamentos').textContent = `${lancamentosFiltrados.length} lançamentos`;
 
             // Atualizar resumo do colaborador selecionado
             const resumoContainer = document.getElementById('resumoSaldoContainer');
