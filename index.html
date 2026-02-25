@@ -454,12 +454,6 @@
             color: #065f46;
         }
 
-        .badge-vencido {
-            background: #fee2e2;
-            color: #991b1b;
-            border-left: 3px solid #dc2626;
-        }
-
         /* Lançamento Card */
         .lancamento-card {
             background: white;
@@ -1523,13 +1517,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             return `${meses[dataVencimento.getMonth()]}/${dataVencimento.getFullYear()}`;
         }
 
-        // Função para verificar se um lançamento está vencido
-        function isVencido(mes, ano) {
-            const hoje = new Date();
-            const dataVencimento = new Date(parseInt(ano) + 1, parseInt(mes) - 1, 1);
-            return hoje > dataVencimento;
-        }
-
         // Função para calcular status do lançamento baseado nas regras
         function calcularStatus(lancamento) {
             // Se já foi completamente compensado
@@ -1539,13 +1526,13 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
 
             const hoje = new Date();
             const [mes, ano] = [lancamento.mes, lancamento.ano];
-            const dataVencimento = new Date(parseInt(ano) + 1, parseInt(mes) - 1, 1);
+            const vencimento = new Date(parseInt(ano) + 1, parseInt(mes) - 1, 1);
             
-            const diffTime = dataVencimento - hoje;
+            const diffTime = vencimento - hoje;
             const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
             if (diffDays < 0) {
-                return { texto: 'Vencida', classe: 'badge-vencido' };
+                return { texto: 'Vencida', classe: 'badge-danger' };
             }
             if (diffDays <= 30) {
                 return { texto: 'À vencer em 30 dias', classe: 'badge-warning' };
@@ -1560,17 +1547,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
         function processarCompensacoes() {
             addDebugLog('Iniciando processamento de compensações');
             
-            // Resetar saldos restantes e compensações
-            lancamentos.forEach(lanc => {
-                lanc.saldoRestante = lanc.horas;
-                lanc.compensacoes = lanc.compensacoes || [];
-                // Manter apenas compensações existentes que ainda são válidas
-                if (lanc.compensacoes.length > 0) {
-                    let totalCompensado = lanc.compensacoes.reduce((sum, comp) => sum + comp.quantidade, 0);
-                    lanc.saldoRestante = lanc.horas - totalCompensado;
-                }
-            });
-
             // Agrupar lançamentos por colaborador
             const lancamentosPorColaborador = {};
             lancamentos.forEach(lanc => {
@@ -1584,25 +1560,28 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             Object.keys(lancamentosPorColaborador).forEach(colaboradorId => {
                 const lancamentosColab = lancamentosPorColaborador[colaboradorId];
                 
-                // Separar lançamentos vencidos e não vencidos
-                const lancamentosNaoVencidos = lancamentosColab.filter(l => !isVencido(l.mes, l.ano));
-                const lancamentosVencidos = lancamentosColab.filter(l => isVencido(l.mes, l.ano));
-                
-                // Ordenar lançamentos não vencidos por data (mais antigos primeiro)
-                lancamentosNaoVencidos.sort((a, b) => {
+                // Ordenar por data (mais antigos primeiro)
+                lancamentosColab.sort((a, b) => {
                     const [dA, mA, yA] = a.data.split('/');
                     const [dB, mB, yB] = b.data.split('/');
                     return new Date(yA, mA - 1, dA) - new Date(yB, mB - 1, dB);
                 });
 
-                addDebugLog(`Processando colaborador ${colaboradorId}`, {
-                    naoVencidos: lancamentosNaoVencidos.length,
-                    vencidos: lancamentosVencidos.length
+                // Inicializar saldos restantes
+                lancamentosColab.forEach(lanc => {
+                    lanc.saldoRestante = lanc.horas;
+                    lanc.compensacoes = lanc.compensacoes || [];
+                    
+                    // Se já tem compensações, recalcular saldo restante
+                    if (lanc.compensacoes.length > 0) {
+                        let totalCompensado = lanc.compensacoes.reduce((sum, comp) => sum + comp.quantidade, 0);
+                        lanc.saldoRestante = lanc.horas - totalCompensado;
+                    }
                 });
 
-                // Processar compensações apenas entre lançamentos não vencidos
-                for (let i = 0; i < lancamentosNaoVencidos.length; i++) {
-                    const lancAtual = lancamentosNaoVencidos[i];
+                // Processar compensações
+                for (let i = 0; i < lancamentosColab.length; i++) {
+                    const lancAtual = lancamentosColab[i];
                     
                     // Se já está totalmente compensado, pular
                     if (lancAtual.saldoRestante === 0) continue;
@@ -1610,11 +1589,23 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                     // Buscar lançamentos de tipo oposto para compensar
                     const tipoOposto = lancAtual.tipo === 'positiva' ? 'negativa' : 'positiva';
                     
-                    for (let j = i + 1; j < lancamentosNaoVencidos.length; j++) {
-                        const lancOposto = lancamentosNaoVencidos[j];
+                    for (let j = i + 1; j < lancamentosColab.length; j++) {
+                        const lancOposto = lancamentosColab[j];
                         
                         // Verificar se é do tipo oposto e se tem saldo
                         if (lancOposto.tipo !== tipoOposto || lancOposto.saldoRestante === 0) continue;
+
+                        // Verificar se o lançamento oposto está dentro do prazo (até 1 ano após o atual)
+                        const [d1, m1, y1] = lancAtual.data.split('/');
+                        const [d2, m2, y2] = lancOposto.data.split('/');
+                        const dataAtual = new Date(y1, m1 - 1, d1);
+                        const dataOposto = new Date(y2, m2 - 1, d2);
+                        
+                        // Se o lançamento oposto for mais de 1 ano após o atual, pular
+                        const diffYears = dataOposto.getFullYear() - dataAtual.getFullYear();
+                        if (diffYears > 1 || (diffYears === 1 && dataOposto.getMonth() > dataAtual.getMonth())) {
+                            continue;
+                        }
 
                         // Calcular quantidade a compensar
                         const quantidadeCompensar = Math.min(lancAtual.saldoRestante, lancOposto.saldoRestante);
@@ -1632,6 +1623,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                             
                             // Atualizar saldo do lançamento oposto
                             lancOposto.saldoRestante -= quantidadeCompensar;
+                            lancOposto.compensacoes = lancOposto.compensacoes || [];
                             lancOposto.compensacoes.push({
                                 lancamentoId: lancAtual.id,
                                 quantidade: quantidadeCompensar,
@@ -1649,16 +1641,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                         }
                     }
                 }
-
-                // Log dos lançamentos vencidos
-                lancamentosVencidos.forEach(lanc => {
-                    addDebugLog('Lançamento vencido ignorado na compensação', {
-                        id: lanc.id,
-                        competencia: `${lanc.mes}/${lanc.ano}`,
-                        horas: lanc.horas,
-                        saldoRestante: lanc.saldoRestante
-                    });
-                });
             });
 
             addDebugLog('Processamento de compensações concluído');
@@ -1775,28 +1757,12 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             if (!firebaseConnected) return;
             
             try {
-                const batch = db.batch();
-                let updatesCount = 0;
-                
                 for (const lanc of lancamentos) {
-                    const docRef = db.collection('lancamentos').doc(lanc.id);
-                    batch.update(docRef, {
+                    await db.collection('lancamentos').doc(lanc.id).update({
                         compensacoes: lanc.compensacoes || [],
                         saldoRestante: lanc.saldoRestante || lanc.horas
                     });
-                    updatesCount++;
-                    
-                    // Firebase tem limite de 500 operações por batch
-                    if (updatesCount >= 400) {
-                        await batch.commit();
-                        updatesCount = 0;
-                    }
                 }
-                
-                if (updatesCount > 0) {
-                    await batch.commit();
-                }
-                
                 addDebugLog('Compensações salvas no Firebase');
             } catch (error) {
                 console.error('Erro ao salvar compensações:', error);
