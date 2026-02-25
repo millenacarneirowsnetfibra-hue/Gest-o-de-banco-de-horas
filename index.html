@@ -1497,10 +1497,20 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
 
         function decimalParaHora(decimal) {
             if (decimal === undefined || decimal === null) return '00:00';
-            const sinal = decimal < 0 ? '-' : '';
-            const absDecimal = Math.abs(decimal);
+            
+            // Arredondar para evitar problemas de precisão
+            const roundedDecimal = Math.round(decimal * 60) / 60;
+            
+            const sinal = roundedDecimal < 0 ? '-' : '';
+            const absDecimal = Math.abs(roundedDecimal);
             const horas = Math.floor(absDecimal);
             const minutos = Math.round((absDecimal - horas) * 60);
+            
+            // Ajuste para quando minutos arredondam para 60
+            if (minutos === 60) {
+                return `${sinal}${(horas + 1).toString().padStart(2, '0')}:00`;
+            }
+            
             return `${sinal}${horas.toString().padStart(2, '0')}:${minutos.toString().padStart(2, '0')}`;
         }
 
@@ -1713,6 +1723,33 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             }
             
             return lancamento;
+        }
+
+        // Função para calcular saldo total acumulado corretamente
+        function calcularSaldoTotal(lancamentosDoColaborador) {
+            // Ordenar por data (mais antigos primeiro)
+            const lancamentosOrdenados = [...lancamentosDoColaborador].sort((a, b) => {
+                try {
+                    const [dA, mA, yA] = a.data.split('/');
+                    const [dB, mB, yB] = b.data.split('/');
+                    return new Date(yA, mA - 1, dA) - new Date(yB, mB - 1, dB);
+                } catch (e) {
+                    return 0;
+                }
+            });
+
+            let saldoAcumulado = 0;
+            
+            lancamentosOrdenados.forEach(lanc => {
+                // Usar horas originais para cálculo do saldo total histórico
+                if (lanc.tipo === 'positiva') {
+                    saldoAcumulado += lanc.horas;
+                } else {
+                    saldoAcumulado -= lanc.horas;
+                }
+            });
+            
+            return saldoAcumulado;
         }
 
         // Carregar dados do Firebase
@@ -2302,11 +2339,8 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 if (colaborador) {
                     document.getElementById('resumoColaboradorNome').textContent = colaborador.nome;
                     
-                    const saldoTotal = lancamentosFiltrados
-                        .filter(l => l.colaboradorId === colaboradorId)
-                        .reduce((sum, l) => {
-                            return l.tipo === 'positiva' ? sum + l.saldoRestante : sum - l.saldoRestante;
-                        }, 0);
+                    const lancamentosDoColaborador = lancamentos.filter(l => l.colaboradorId === colaboradorId);
+                    const saldoTotal = calcularSaldoTotal(lancamentosDoColaborador);
                     
                     document.getElementById('resumoSaldoTotal').textContent = decimalParaHora(saldoTotal);
                     
@@ -2336,32 +2370,19 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
 
             tbody.innerHTML = '';
 
-            // Ordenar por data (mais antigos primeiro) para calcular saldo acumulado
-            const lancamentosOrdenados = [...lancamentosFiltrados].sort((a, b) => {
-                try {
-                    const [dA, mA, yA] = a.data.split('/');
-                    const [dB, mB, yB] = b.data.split('/');
-                    return new Date(yA, mA - 1, dA) - new Date(yB, mB - 1, dB);
-                } catch (e) {
-                    return 0;
+            // Agrupar lançamentos por colaborador para calcular saldo total
+            const lancamentosPorColaborador = {};
+            lancamentosFiltrados.forEach(lanc => {
+                if (!lancamentosPorColaborador[lanc.colaboradorId]) {
+                    lancamentosPorColaborador[lanc.colaboradorId] = [];
                 }
+                lancamentosPorColaborador[lanc.colaboradorId].push(lanc);
             });
 
-            // Calcular saldo total acumulado por colaborador
-            const saldoAcumulado = {};
-            
-            lancamentosOrdenados.forEach(lanc => {
-                const colaborador = colaboradores.find(c => c.id === lanc.colaboradorId);
-                if (!colaborador) return;
-
-                // Inicializar saldo do colaborador se não existir
-                if (!saldoAcumulado[lanc.colaboradorId]) {
-                    saldoAcumulado[lanc.colaboradorId] = 0;
-                }
-
-                // Calcular saldo total considerando horas originais (não saldo restante) para acumular histórico
-                saldoAcumulado[lanc.colaboradorId] += lanc.tipo === 'positiva' ? lanc.horas : -lanc.horas;
-                lanc.saldoTotal = saldoAcumulado[lanc.colaboradorId];
+            // Calcular saldo total para cada colaborador
+            const saldoTotalPorColaborador = {};
+            Object.keys(lancamentosPorColaborador).forEach(colabId => {
+                saldoTotalPorColaborador[colabId] = calcularSaldoTotal(lancamentosPorColaborador[colabId]);
             });
 
             // Renderizar mantendo a ordem original (mais recentes primeiro)
@@ -2375,7 +2396,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 
                 const quantidadeIcon = lanc.tipo === 'positiva' ? '➕' : '➖';
                 const saldoRestanteFormatado = decimalParaHora(lanc.saldoRestante || 0);
-                const saldoTotalFormatado = decimalParaHora(lanc.saldoTotal || 0);
+                const saldoTotalFormatado = decimalParaHora(saldoTotalPorColaborador[lanc.colaboradorId] || 0);
                 
                 const numCompensacoes = lanc.compensacoes ? lanc.compensacoes.length : 0;
                 const compensacoesText = numCompensacoes > 0 ? 
@@ -2485,9 +2506,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
 
             paginatedColabs.forEach(colab => {
                 const lancamentosColab = lancamentos.filter(l => l.colaboradorId === colab.id);
-                const saldoTotal = lancamentosColab.reduce((sum, l) => {
-                    return l.tipo === 'positiva' ? sum + (l.saldoRestante || l.horas) : sum - (l.saldoRestante || l.horas);
-                }, 0);
+                const saldoTotal = calcularSaldoTotal(lancamentosColab);
                 
                 const statusClass = saldoTotal >= 0 ? 'badge-success' : 'badge-danger';
                 const statusText = colab.ativo !== false ? 
@@ -2655,16 +2674,27 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
         function updateDashboard() {
             document.getElementById('totalColaboradores').textContent = colaboradores.filter(c => c.ativo !== false).length;
             
+            // Calcular saldo líquido total considerando todas as horas (originais)
+            let saldoLiquido = 0;
+            lancamentos.forEach(lanc => {
+                if (lanc.tipo === 'positiva') {
+                    saldoLiquido += lanc.horas;
+                } else {
+                    saldoLiquido -= lanc.horas;
+                }
+            });
+            
+            // Calcular totais de horas positivas e negativas (considerando originais)
             let totalPositivas = lancamentos
                 .filter(l => l.tipo === 'positiva')
-                .reduce((sum, l) => sum + (l.saldoRestante || l.horas), 0);
+                .reduce((sum, l) => sum + l.horas, 0);
             let totalNegativas = lancamentos
                 .filter(l => l.tipo === 'negativa')
-                .reduce((sum, l) => sum + (l.saldoRestante || l.horas), 0);
+                .reduce((sum, l) => sum + l.horas, 0);
             
             document.getElementById('totalHorasPositivas').textContent = decimalParaHora(totalPositivas);
             document.getElementById('totalHorasNegativas').textContent = decimalParaHora(totalNegativas);
-            document.getElementById('saldoLiquido').textContent = decimalParaHora(totalPositivas - totalNegativas);
+            document.getElementById('saldoLiquido').textContent = decimalParaHora(saldoLiquido);
 
             const activities = document.getElementById('recentActivities');
             
