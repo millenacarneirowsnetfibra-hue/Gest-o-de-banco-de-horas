@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Banco de Horas</title>
+    <title>Banco de Horas - Sistema de Compensação</title>
     <style>
         * {
             margin: 0;
@@ -442,6 +442,11 @@
         .badge-purple {
             background: #f3e8ff;
             color: #6b21a8;
+        }
+
+        .badge-compensada {
+            background: #d1fae5;
+            color: #065f46;
         }
 
         /* Lançamento Card */
@@ -907,9 +912,13 @@
                     </div>
                     
                     <div class="filter-group" style="justify-content: flex-end;">
-                        <button class="btn btn-refresh" onclick="recarregarDados()" style="margin-top: 24px;">
-                            🔄 Recarregar Dados
-                        </button>
+                        <label>Status do Lançamento</label>
+                        <select id="filtroStatusLancamento" onchange="aplicarFiltros()">
+                            <option value="">Todos</option>
+                            <option value="pendente">Pendente</option>
+                            <option value="compensada">Compensada</option>
+                            <option value="vencida">Vencida</option>
+                        </select>
                     </div>
                 </div>
 
@@ -949,7 +958,8 @@
                                 <th>Competência</th>
                                 <th>Vencimento</th>
                                 <th>Status</th>
-                                <th>Saldo Após</th>
+                                <th>Saldo Restante</th>
+                                <th>Compensações</th>
                                 <th>Ações</th>
                             </tr>
                         </thead>
@@ -1098,6 +1108,18 @@
                     <button type="submit" class="btn btn-success">Atualizar</button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <div id="visualizarCompensacoesModal" class="modal">
+        <div class="modal-content" style="max-width: 700px;">
+            <h2>Detalhes das Compensações</h2>
+            <div id="compensacoesList" style="max-height: 400px; overflow-y: auto;">
+                <!-- Compensações serão inseridas aqui -->
+            </div>
+            <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 20px;">
+                <button type="button" class="btn btn-secondary" onclick="hideModal('visualizarCompensacoesModal')">Fechar</button>
+            </div>
         </div>
     </div>
 
@@ -1345,8 +1367,8 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             document.getElementById('editLancamentoTipo').value = lanc.tipo;
             
             // Converter horas decimais para HH:MM
-            const horas = Math.floor(lanc.horas);
-            const minutos = Math.round((lanc.horas - horas) * 60);
+            const horas = Math.floor(Math.abs(lanc.horas));
+            const minutos = Math.round((Math.abs(lanc.horas) - horas) * 60);
             document.getElementById('editLancamentoHoras').value = `${horas.toString().padStart(2, '0')}:${minutos.toString().padStart(2, '0')}`;
             
             // Extrair mês e ano da data (DD/MM/AAAA)
@@ -1355,6 +1377,42 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             document.getElementById('editLancamentoAno').value = ano;
 
             document.getElementById('editLancamentoModal').style.display = 'block';
+        }
+
+        function showVisualizarCompensacoesModal(lancamentoId) {
+            const lanc = lancamentos.find(l => l.id === lancamentoId);
+            if (!lanc || !lanc.compensacoes || lanc.compensacoes.length === 0) {
+                alert('Este lançamento não possui compensações registradas.');
+                return;
+            }
+
+            const colaborador = colaboradores.find(c => c.id === lanc.colaboradorId);
+            const container = document.getElementById('compensacoesList');
+            
+            let html = `
+                <div style="margin-bottom: 20px; padding: 16px; background: #f8fafc; border-radius: 12px;">
+                    <strong>Lançamento:</strong> ${decimalParaHora(lanc.horas)} ${lanc.tipo === 'positiva' ? '➕' : '➖'}<br>
+                    <strong>Competência:</strong> ${formatarCompetencia(lanc.mes, lanc.ano)}<br>
+                    <strong>Colaborador:</strong> ${colaborador ? colaborador.nome : 'N/A'}
+                </div>
+                <h4 style="margin-bottom: 16px;">Compensações:</h4>
+            `;
+
+            lanc.compensacoes.forEach(comp => {
+                const lancComp = lancamentos.find(l => l.id === comp.lancamentoId);
+                if (lancComp) {
+                    html += `
+                        <div style="padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 8px;">
+                            <strong>${formatarCompetencia(lancComp.mes, lancComp.ano)}</strong><br>
+                            Quantidade: ${decimalParaHora(comp.quantidade)}<br>
+                            Data da compensação: ${comp.data}
+                        </div>
+                    `;
+                }
+            });
+
+            container.innerHTML = html;
+            document.getElementById('visualizarCompensacoesModal').style.display = 'block';
         }
 
         function showEmpresaModal(editNome = null) {
@@ -1410,9 +1468,10 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
 
         function decimalParaHora(decimal) {
             if (decimal === undefined || decimal === null) return '00:00';
-            const horas = Math.floor(Math.abs(decimal));
-            const minutos = Math.round((Math.abs(decimal) - horas) * 60);
             const sinal = decimal < 0 ? '-' : '';
+            const absDecimal = Math.abs(decimal);
+            const horas = Math.floor(absDecimal);
+            const minutos = Math.round((absDecimal - horas) * 60);
             return `${sinal}${horas.toString().padStart(2, '0')}:${minutos.toString().padStart(2, '0')}`;
         }
 
@@ -1431,6 +1490,11 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             return data.getDate() == dia && data.getMonth() == mes - 1;
         }
 
+        function formatarCompetencia(mes, ano) {
+            const meses = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+            return `${meses[parseInt(mes) - 1]}/${ano}`;
+        }
+
         // Função para calcular vencimento (1 ano após a competência)
         function calcularVencimento(mes, ano) {
             const dataVencimento = new Date(parseInt(ano) + 1, parseInt(mes) - 1, 1);
@@ -1438,68 +1502,154 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             return `${meses[dataVencimento.getMonth()]}/${dataVencimento.getFullYear()}`;
         }
 
-        // Função para calcular status do lançamento
-        function calcularStatus(dataVencimento) {
+        // Função para calcular status do lançamento baseado nas regras
+        function calcularStatus(lancamento) {
+            // Se já foi completamente compensado
+            if (lancamento.saldoRestante === 0) {
+                return { texto: 'Compensada', classe: 'badge-compensada' };
+            }
+
             const hoje = new Date();
-            const [mesVenc, anoVenc] = dataVencimento.split('/');
-            const meses = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
-            const mesIndex = meses.indexOf(mesVenc);
-            const vencimento = new Date(parseInt(anoVenc), mesIndex, 1);
+            const [mes, ano] = [lancamento.mes, lancamento.ano];
+            const vencimento = new Date(parseInt(ano) + 1, parseInt(mes) - 1, 1);
             
             const diffTime = vencimento - hoje;
             const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-            if (diffDays < 0) return { texto: 'Vencido', classe: 'badge-danger' };
-            if (diffDays <= 30) return { texto: 'À vencer - 30 dias', classe: 'badge-warning' };
-            if (diffDays <= 60) return { texto: 'À vencer - 60 dias', classe: 'badge-info' };
+            if (diffDays < 0) {
+                return { texto: 'Vencida', classe: 'badge-danger' };
+            }
+            if (diffDays <= 30) {
+                return { texto: 'À vencer em 30 dias', classe: 'badge-warning' };
+            }
+            if (diffDays <= 60) {
+                return { texto: 'À vencer em 60 dias', classe: 'badge-info' };
+            }
             return { texto: 'Em dia', classe: 'badge-success' };
         }
 
-        // Função para calcular saldo acumulado do colaborador
-        function calcularSaldoAcumulado(colaboradorId, dataLimite) {
-            const lancamentosColaborador = lancamentos
-                .filter(l => l.colaboradorId === colaboradorId)
-                .sort((a, b) => {
+        // Função principal de compensação de horas
+        function processarCompensacoes() {
+            addDebugLog('Iniciando processamento de compensações');
+            
+            // Agrupar lançamentos por colaborador
+            const lancamentosPorColaborador = {};
+            lancamentos.forEach(lanc => {
+                if (!lancamentosPorColaborador[lanc.colaboradorId]) {
+                    lancamentosPorColaborador[lanc.colaboradorId] = [];
+                }
+                lancamentosPorColaborador[lanc.colaboradorId].push(lanc);
+            });
+
+            // Para cada colaborador, processar compensações
+            Object.keys(lancamentosPorColaborador).forEach(colaboradorId => {
+                const lancamentosColab = lancamentosPorColaborador[colaboradorId];
+                
+                // Ordenar por data (mais antigos primeiro)
+                lancamentosColab.sort((a, b) => {
                     const [dA, mA, yA] = a.data.split('/');
                     const [dB, mB, yB] = b.data.split('/');
                     return new Date(yA, mA - 1, dA) - new Date(yB, mB - 1, dB);
                 });
 
-            let saldo = 0;
-            for (const lanc of lancamentosColaborador) {
-                const [dia, mes, ano] = lanc.data.split('/');
-                const dataLanc = new Date(ano, mes - 1, dia);
-                
-                if (dataLanc <= dataLimite) {
-                    if (lanc.tipo === 'positiva') {
-                        saldo += lanc.horas;
-                    } else {
-                        saldo -= lanc.horas;
+                // Inicializar saldos restantes
+                lancamentosColab.forEach(lanc => {
+                    lanc.saldoRestante = lanc.horas;
+                    lanc.compensacoes = lanc.compensacoes || [];
+                    
+                    // Se já tem compensações, recalcular saldo restante
+                    if (lanc.compensacoes.length > 0) {
+                        let totalCompensado = lanc.compensacoes.reduce((sum, comp) => sum + comp.quantidade, 0);
+                        lanc.saldoRestante = lanc.horas - totalCompensado;
+                    }
+                });
+
+                // Processar compensações
+                for (let i = 0; i < lancamentosColab.length; i++) {
+                    const lancAtual = lancamentosColab[i];
+                    
+                    // Se já está totalmente compensado, pular
+                    if (lancAtual.saldoRestante === 0) continue;
+
+                    // Buscar lançamentos de tipo oposto para compensar
+                    const tipoOposto = lancAtual.tipo === 'positiva' ? 'negativa' : 'positiva';
+                    
+                    for (let j = i + 1; j < lancamentosColab.length; j++) {
+                        const lancOposto = lancamentosColab[j];
+                        
+                        // Verificar se é do tipo oposto e se tem saldo
+                        if (lancOposto.tipo !== tipoOposto || lancOposto.saldoRestante === 0) continue;
+
+                        // Verificar se o lançamento oposto está dentro do prazo (até 1 ano após o atual)
+                        const [d1, m1, y1] = lancAtual.data.split('/');
+                        const [d2, m2, y2] = lancOposto.data.split('/');
+                        const dataAtual = new Date(y1, m1 - 1, d1);
+                        const dataOposto = new Date(y2, m2 - 1, d2);
+                        
+                        // Se o lançamento oposto for mais de 1 ano após o atual, pular
+                        const diffYears = dataOposto.getFullYear() - dataAtual.getFullYear();
+                        if (diffYears > 1 || (diffYears === 1 && dataOposto.getMonth() > dataAtual.getMonth())) {
+                            continue;
+                        }
+
+                        // Calcular quantidade a compensar
+                        const quantidadeCompensar = Math.min(lancAtual.saldoRestante, lancOposto.saldoRestante);
+                        
+                        if (quantidadeCompensar > 0) {
+                            // Registrar compensação
+                            const compensacao = {
+                                lancamentoId: lancOposto.id,
+                                quantidade: quantidadeCompensar,
+                                data: new Date().toLocaleDateString('pt-BR')
+                            };
+                            
+                            lancAtual.compensacoes.push(compensacao);
+                            lancAtual.saldoRestante -= quantidadeCompensar;
+                            
+                            // Atualizar saldo do lançamento oposto
+                            lancOposto.saldoRestante -= quantidadeCompensar;
+                            lancOposto.compensacoes = lancOposto.compensacoes || [];
+                            lancOposto.compensacoes.push({
+                                lancamentoId: lancAtual.id,
+                                quantidade: quantidadeCompensar,
+                                data: new Date().toLocaleDateString('pt-BR')
+                            });
+
+                            addDebugLog('Compensação realizada', {
+                                de: lancAtual.id,
+                                para: lancOposto.id,
+                                quantidade: quantidadeCompensar
+                            });
+
+                            // Se o lançamento atual foi completamente compensado, sair do loop
+                            if (lancAtual.saldoRestante === 0) break;
+                        }
                     }
                 }
-            }
-            return saldo;
+            });
+
+            addDebugLog('Processamento de compensações concluído');
         }
 
-        // Função para normalizar dados do lançamento (suporta diferentes formatos)
+        // Função para normalizar dados do lançamento
         function normalizarLancamento(doc) {
             const data = doc.data();
             const id = doc.id;
             
-            // Mapear campos com possíveis nomes alternativos
             const lancamento = {
                 id: id,
-                colaboradorId: data.colaboradorId || data.colaborador_id || data.userId || '',
-                colaboradorNome: data.colaboradorNome || data.colaborador_nome || data.nome || '',
+                colaboradorId: data.colaboradorId || data.colaborador_id || '',
+                colaboradorNome: data.colaboradorNome || data.colaborador_nome || '',
                 colaboradorDepartamento: data.colaboradorDepartamento || data.departamento || '',
                 data: data.data || data.date || '01/01/2024',
                 mes: data.mes || data.month || '01',
                 ano: data.ano || data.year || '2024',
                 tipo: data.tipo || data.type || 'positiva',
-                horas: typeof data.horas === 'number' ? data.horas : (typeof data.hours === 'number' ? data.hours : 0)
+                horas: typeof data.horas === 'number' ? data.horas : (typeof data.hours === 'number' ? data.hours : 0),
+                compensacoes: data.compensacoes || [],
+                saldoRestante: data.saldoRestante || data.horas || 0
             };
             
-            // Se não tiver mês/ano, tentar extrair da data
             if (!lancamento.mes || !lancamento.ano) {
                 const partes = lancamento.data.split('/');
                 if (partes.length === 3) {
@@ -1547,7 +1697,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                     ...doc.data()
                 }));
                 
-                // ORDENAÇÃO ALFABÉTICA
                 colaboradores.sort((a, b) => {
                     const nomeA = (a.nome || '').toLowerCase();
                     const nomeB = (b.nome || '').toLowerCase();
@@ -1558,17 +1707,14 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 // Carregar lançamentos
                 const lancamentosSnapshot = await db.collection('lancamentos').get();
                 
-                // Normalizar cada lançamento
                 lancamentos = lancamentosSnapshot.docs.map(doc => normalizarLancamento(doc));
                 
-                addDebugLog('Lançamentos carregados (raw)', lancamentosSnapshot.docs.length);
-                addDebugLog('Lançamentos normalizados', lancamentos.length);
-                
-                if (lancamentos.length > 0) {
-                    addDebugLog('Primeiro lançamento', lancamentos[0]);
-                }
+                addDebugLog('Lançamentos carregados', lancamentos.length);
 
-                // Ordenar por data manualmente (mais recentes primeiro)
+                // Processar compensações
+                processarCompensacoes();
+
+                // Ordenar por data (mais recentes primeiro)
                 lancamentos.sort((a, b) => {
                     try {
                         const [dA, mA, yA] = a.data.split('/');
@@ -1591,7 +1737,24 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             }
         }
 
-        // Preencher anos nos selects (2020-2030)
+        // Salvar compensações no Firebase
+        async function salvarCompensacoes() {
+            if (!firebaseConnected) return;
+            
+            try {
+                for (const lanc of lancamentos) {
+                    await db.collection('lancamentos').doc(lanc.id).update({
+                        compensacoes: lanc.compensacoes || [],
+                        saldoRestante: lanc.saldoRestante || lanc.horas
+                    });
+                }
+                addDebugLog('Compensações salvas no Firebase');
+            } catch (error) {
+                console.error('Erro ao salvar compensações:', error);
+            }
+        }
+
+        // Preencher anos nos selects
         function preencherAnos() {
             const anos = [];
             for (let i = 2020; i <= 2030; i++) {
@@ -1626,7 +1789,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 }
             });
 
-            // Select de ano sem opção "Todos" para formulários
             const lancamentoAno = document.getElementById('lancamentoAno');
             if (lancamentoAno) {
                 lancamentoAno.innerHTML = '';
@@ -1658,11 +1820,9 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
         }
 
         function carregarFiltros() {
-            // Carregar colaboradores no filtro
             const filtroColab = document.getElementById('filtroColaborador');
             filtroColab.innerHTML = '<option value="">Todos os colaboradores</option>';
             
-            // Carregar colaboradores no formulário
             const lancamentoColab = document.getElementById('lancamentoColaborador');
             lancamentoColab.innerHTML = '<option value="">Selecione um colaborador</option>';
             
@@ -1673,7 +1833,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 lancamentoColab.innerHTML += `<option value="${colab.id}">${optionText}</option>`;
             });
 
-            // Carregar departamentos no filtro
             const filtroDepto = document.getElementById('filtroDepartamento');
             filtroDepto.innerHTML = '<option value="">Todos os departamentos</option>';
             const deptosUnicos = [...new Set(colaboradores.map(c => c.departamento))];
@@ -1857,7 +2016,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 return;
             }
 
-            // Data no formato DD/MM/AAAA (primeiro dia do mês)
             const data = `01/${mes}/${ano}`;
 
             showLoading(true);
@@ -1873,24 +2031,20 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                     ano: ano,
                     tipo: tipo,
                     horas: horas,
+                    saldoRestante: horas,
+                    compensacoes: [],
                     createdAt: new Date().toISOString()
                 };
-
-                console.log('Salvando lançamento:', lancamentoData);
 
                 await db.collection('lancamentos').add(lancamentoData);
                 addDebugLog('Lançamento salvo com sucesso');
                 
-                // Recarregar dados imediatamente
                 await loadData();
                 
-                // Limpar formulário
                 document.getElementById('lancamentoHoras').value = '';
                 document.getElementById('lancamentoColaborador').value = '';
                 
-                // Aplicar filtros atuais
                 aplicarFiltros();
-                
                 alert('Lançamento realizado com sucesso!');
             } catch (error) {
                 console.error('Erro ao salvar lançamento:', error);
@@ -1938,6 +2092,8 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                     ano: ano,
                     tipo: tipo,
                     horas: horas,
+                    saldoRestante: horas,
+                    compensacoes: [],
                     updatedAt: new Date().toISOString()
                 });
 
@@ -2023,33 +2179,27 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             showLoading(false);
         }
 
-        // Função para aplicar filtros automaticamente
+        // Função para aplicar filtros
         function aplicarFiltros() {
             const colaboradorId = document.getElementById('filtroColaborador').value;
             const departamento = document.getElementById('filtroDepartamento').value;
             const status = document.getElementById('filtroStatus').value;
             const mes = document.getElementById('filtroMes').value;
             const ano = document.getElementById('filtroAno').value;
+            const statusLancamento = document.getElementById('filtroStatusLancamento').value;
 
-            addDebugLog('Aplicando filtros', { colaboradorId, departamento, status, mes, ano });
-            addDebugLog('Total de lançamentos antes do filtro', lancamentos.length);
+            addDebugLog('Aplicando filtros', { colaboradorId, departamento, status, mes, ano, statusLancamento });
 
-            // Filtrar lançamentos
             let lancamentosFiltrados = [...lancamentos];
 
-            // Filtro por colaborador
             if (colaboradorId) {
                 lancamentosFiltrados = lancamentosFiltrados.filter(l => l.colaboradorId === colaboradorId);
-                addDebugLog('Após filtro colaborador', lancamentosFiltrados.length);
             }
 
-            // Filtro por departamento
             if (departamento) {
                 lancamentosFiltrados = lancamentosFiltrados.filter(l => l.colaboradorDepartamento === departamento);
-                addDebugLog('Após filtro departamento', lancamentosFiltrados.length);
             }
 
-            // Filtro por status do colaborador - AGORA USA O STATUS ATUAL DO COLABORADOR, NÃO O DO LANÇAMENTO
             if (status !== 'todos') {
                 const statusAtivo = status === 'ativos';
                 lancamentosFiltrados = lancamentosFiltrados.filter(l => {
@@ -2057,34 +2207,39 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                     const colaboradorAtivo = colaborador ? colaborador.ativo !== false : true;
                     return colaboradorAtivo === statusAtivo;
                 });
-                addDebugLog('Após filtro status (usando status atual do colaborador)', lancamentosFiltrados.length);
             }
 
-            // Filtro por competência
             if (mes) {
                 lancamentosFiltrados = lancamentosFiltrados.filter(l => l.mes === mes);
-                addDebugLog('Após filtro mês', lancamentosFiltrados.length);
             }
             if (ano) {
                 lancamentosFiltrados = lancamentosFiltrados.filter(l => l.ano === ano);
-                addDebugLog('Após filtro ano', lancamentosFiltrados.length);
             }
 
-            addDebugLog('Lançamentos após todos os filtros', lancamentosFiltrados.length);
+            if (statusLancamento) {
+                lancamentosFiltrados = lancamentosFiltrados.filter(l => {
+                    const statusInfo = calcularStatus(l);
+                    if (statusLancamento === 'pendente') return statusInfo.texto !== 'Compensada';
+                    if (statusLancamento === 'compensada') return statusInfo.texto === 'Compensada';
+                    if (statusLancamento === 'vencida') return statusInfo.texto === 'Vencida';
+                    return true;
+                });
+            }
 
-            // Atualizar contador
             document.getElementById('contadorLancamentos').textContent = `${lancamentosFiltrados.length} lançamentos`;
 
-            // Atualizar resumo do colaborador selecionado
             const resumoContainer = document.getElementById('resumoSaldoContainer');
             if (colaboradorId) {
                 const colaborador = colaboradores.find(c => c.id === colaboradorId);
                 if (colaborador) {
                     document.getElementById('resumoColaboradorNome').textContent = colaborador.nome;
                     
-                    // Calcular saldo total
-                    const hoje = new Date();
-                    const saldoTotal = calcularSaldoAcumulado(colaboradorId, hoje);
+                    const saldoTotal = lancamentosFiltrados
+                        .filter(l => l.colaboradorId === colaboradorId)
+                        .reduce((sum, l) => {
+                            return l.tipo === 'positiva' ? sum + l.saldoRestante : sum - l.saldoRestante;
+                        }, 0);
+                    
                     document.getElementById('resumoSaldoTotal').textContent = decimalParaHora(saldoTotal);
                     
                     resumoContainer.style.display = 'flex';
@@ -2093,7 +2248,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 resumoContainer.style.display = 'none';
             }
 
-            // Renderizar tabela
             renderizarTabelaLancamentos(lancamentosFiltrados);
         }
 
@@ -2106,7 +2260,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             if (lancamentosFiltrados.length === 0) {
                 tabela.style.display = 'none';
                 semResultados.style.display = 'block';
-                addDebugLog('Nenhum lançamento para exibir');
                 return;
             }
 
@@ -2114,46 +2267,32 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             semResultados.style.display = 'none';
 
             tbody.innerHTML = '';
-            
-            const meses = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
-            let lancamentosExibidos = 0;
 
             lancamentosFiltrados.forEach(lanc => {
                 const colaborador = colaboradores.find(c => c.id === lanc.colaboradorId);
-                if (!colaborador) {
-                    addDebugLog('Colaborador não encontrado para lançamento', lanc);
-                    return;
-                }
+                if (!colaborador) return;
 
-                lancamentosExibidos++;
-
-                // Competência formatada
-                const competencia = `${meses[parseInt(lanc.mes) - 1]}/${lanc.ano}`;
-                
-                // Vencimento
+                const competencia = formatarCompetencia(lanc.mes, lanc.ano);
                 const vencimento = calcularVencimento(lanc.mes, lanc.ano);
+                const status = calcularStatus(lanc);
                 
-                // Status
-                const status = calcularStatus(vencimento);
-                
-                // Quantidade formatada com cor
-                const quantidade = decimalParaHora(lanc.horas);
-                const quantidadeClass = lanc.tipo === 'positiva' ? 'badge-success' : 'badge-danger';
                 const quantidadeIcon = lanc.tipo === 'positiva' ? '➕' : '➖';
+                const saldoRestanteFormatado = decimalParaHora(lanc.saldoRestante || lanc.horas);
                 
-                // Calcular saldo acumulado até esta data
-                const [dia, mes, ano] = lanc.data.split('/');
-                const dataLanc = new Date(ano, mes - 1, dia);
-                const saldoAteData = calcularSaldoAcumulado(lanc.colaboradorId, dataLanc);
-                
+                const numCompensacoes = lanc.compensacoes ? lanc.compensacoes.length : 0;
+                const compensacoesText = numCompensacoes > 0 ? 
+                    `<button class="btn btn-info btn-small" onclick="showVisualizarCompensacoesModal('${lanc.id}')">Ver ${numCompensacoes}</button>` : 
+                    '-';
+
                 tbody.innerHTML += `
                     <tr>
                         <td><strong>${colaborador.nome}</strong><br><small style="color: #64748b;">${colaborador.departamento}</small></td>
-                        <td><span class="badge ${quantidadeClass}">${quantidadeIcon} ${quantidade}</span></td>
+                        <td><span class="badge ${lanc.tipo === 'positiva' ? 'badge-success' : 'badge-danger'}">${quantidadeIcon} ${decimalParaHora(lanc.horas)}</span></td>
                         <td>${competencia}</td>
                         <td>${vencimento}</td>
                         <td><span class="badge ${status.classe}">${status.texto}</span></td>
-                        <td><span class="badge badge-purple">${decimalParaHora(saldoAteData)}</span></td>
+                        <td><span class="badge badge-purple">${saldoRestanteFormatado}</span></td>
+                        <td>${compensacoesText}</td>
                         <td>
                             <div class="action-buttons">
                                 <button class="btn btn-warning btn-small" onclick="showEditLancamentoModal('${lanc.id}')">✏️</button>
@@ -2163,8 +2302,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                     </tr>
                 `;
             });
-
-            addDebugLog('Lançamentos exibidos na tabela', lancamentosExibidos);
         }
 
         // Funções de filtro para colaboradores
@@ -2191,7 +2328,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 return matchSearch && matchDepto && matchEmpresa && matchStatus;
             });
 
-            // GARANTIR ORDENAÇÃO ALFABÉTICA APÓS FILTRO
             colaboradoresFiltrados.sort((a, b) => {
                 const nomeA = (a.nome || '').toLowerCase();
                 const nomeB = (b.nome || '').toLowerCase();
@@ -2249,8 +2385,12 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             }
 
             paginatedColabs.forEach(colab => {
-                const saldo = (colab.horasPositivas || 0) - (colab.horasNegativas || 0);
-                const statusClass = saldo >= 0 ? 'badge-success' : 'badge-danger';
+                const lancamentosColab = lancamentos.filter(l => l.colaboradorId === colab.id);
+                const saldoTotal = lancamentosColab.reduce((sum, l) => {
+                    return l.tipo === 'positiva' ? sum + (l.saldoRestante || l.horas) : sum - (l.saldoRestante || l.horas);
+                }, 0);
+                
+                const statusClass = saldoTotal >= 0 ? 'badge-success' : 'badge-danger';
                 const statusText = colab.ativo !== false ? 
                     '<span class="badge badge-success">Ativo</span>' : 
                     '<span class="badge badge-danger">Inativo</span>';
@@ -2261,7 +2401,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                         <td>${colab.dataAdmissao}</td>
                         <td>${colab.departamento}</td>
                         <td>${colab.empresa}</td>
-                        <td><span class="badge ${statusClass}">${decimalParaHora(saldo)}</span></td>
+                        <td><span class="badge ${statusClass}">${decimalParaHora(saldoTotal)}</span></td>
                         <td>${statusText}</td>
                         <td>
                             <button class="btn btn-primary btn-small" onclick="showColaboradorModal('${colab.id}')">Editar</button>
@@ -2418,10 +2558,10 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             
             let totalPositivas = lancamentos
                 .filter(l => l.tipo === 'positiva')
-                .reduce((sum, l) => sum + l.horas, 0);
+                .reduce((sum, l) => sum + (l.saldoRestante || l.horas), 0);
             let totalNegativas = lancamentos
                 .filter(l => l.tipo === 'negativa')
-                .reduce((sum, l) => sum + l.horas, 0);
+                .reduce((sum, l) => sum + (l.saldoRestante || l.horas), 0);
             
             document.getElementById('totalHorasPositivas').textContent = decimalParaHora(totalPositivas);
             document.getElementById('totalHorasNegativas').textContent = decimalParaHora(totalNegativas);
@@ -2440,11 +2580,14 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 
                 const tipoClass = lanc.tipo === 'positiva' ? 'badge-success' : 'badge-danger';
                 const tipoIcon = lanc.tipo === 'positiva' ? '➕' : '➖';
+                const status = calcularStatus(lanc);
+                
                 return `
                     <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px; border-bottom: 1px solid #f1f5f9;">
                         <div>
                             <strong>${colaborador.nome}</strong>
                             <span class="badge ${tipoClass}" style="margin-left: 8px;">${tipoIcon} ${decimalParaHora(lanc.horas)}</span>
+                            <span class="badge ${status.classe}" style="margin-left: 8px;">${status.texto}</span>
                         </div>
                         <span style="color: #64748b;">${lanc.data}</span>
                     </div>
@@ -2459,6 +2602,9 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             carregarFiltros();
             aplicarFiltros();
             filterColaboradores();
+            
+            // Salvar compensações no Firebase
+            salvarCompensacoes();
         }
 
         // Fechar modais ao clicar fora
