@@ -244,11 +244,6 @@
             color: white;
         }
 
-        .btn-info {
-            background: linear-gradient(135deg, #0ea5e9, #0284c7);
-            color: white;
-        }
-
         .btn-small {
             padding: 6px 12px;
             font-size: 0.85rem;
@@ -1652,7 +1647,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 tipo: data.tipo || data.type || 'positiva',
                 horas: typeof data.horas === 'number' ? data.horas : (typeof data.hours === 'number' ? data.hours : 0),
                 compensacoes: data.compensacoes || [],
-                saldoRestante: data.saldoRestante !== undefined ? data.saldoRestante : (typeof data.horas === 'number' ? data.horas : 0)
+                saldoRestante: data.saldoRestante || data.horas || 0
             };
             
             if (!lancamento.mes || !lancamento.ano) {
@@ -2282,8 +2277,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 const status = calcularStatus(lanc);
                 
                 const quantidadeIcon = lanc.tipo === 'positiva' ? '➕' : '➖';
-                // AQUI ESTÁ O AJUSTE: Saldo restante mostra exatamente as horas que faltam compensar (ou 00:00 se já compensado)
-                const saldoRestanteFormatado = decimalParaHora(lanc.saldoRestante || 0);
+                const saldoRestanteFormatado = decimalParaHora(lanc.saldoRestante || lanc.horas);
                 
                 const numCompensacoes = lanc.compensacoes ? lanc.compensacoes.length : 0;
                 const compensacoesText = numCompensacoes > 0 ? 
