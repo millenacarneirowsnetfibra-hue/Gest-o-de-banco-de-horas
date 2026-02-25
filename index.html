@@ -785,7 +785,7 @@
                                         <option value="12">Dezembro</option>
                                     </select>
                                     <select id="lancamentoAno" required>
-                                        <!-- Anos preenchidos via JS -->
+                                        <!-- Anos preenchidos via JS (2020-2030) -->
                                     </select>
                                 </div>
                             </div>
@@ -1281,9 +1281,11 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
         }
 
         function decimalParaHora(decimal) {
-            const horas = Math.floor(decimal);
-            const minutos = Math.round((decimal - horas) * 60);
-            return `${horas.toString().padStart(2, '0')}:${minutos.toString().padStart(2, '0')}`;
+            if (decimal === undefined || decimal === null) return '00:00';
+            const horas = Math.floor(Math.abs(decimal));
+            const minutos = Math.round((Math.abs(decimal) - horas) * 60);
+            const sinal = decimal < 0 ? '-' : '';
+            return `${sinal}${horas.toString().padStart(2, '0')}:${minutos.toString().padStart(2, '0')}`;
         }
 
         function isValidHora(horaStr) {
@@ -1608,7 +1610,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                     empresa,
                     horasPositivas: 0,
                     horasNegativas: 0,
-                    ativo,
+                    ativo: ativo,
                     updatedAt: new Date().toISOString()
                 };
 
@@ -1652,7 +1654,10 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             }
 
             const colaborador = colaboradores.find(c => c.id === colaboradorId);
-            if (!colaborador) return;
+            if (!colaborador) {
+                alert('Colaborador não encontrado!');
+                return;
+            }
 
             // Data no formato DD/MM/AAAA (primeiro dia do mês)
             const data = `01/${mes}/${ano}`;
@@ -1660,15 +1665,15 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             showLoading(true);
             try {
                 const lancamentoData = {
-                    colaboradorId,
-                    colaboradorNome: colaborador.nome,
-                    colaboradorDepartamento: colaborador.departamento,
-                    colaboradorAtivo: colaborador.ativo,
-                    data,
-                    mes,
-                    ano,
-                    tipo,
-                    horas,
+                    colaboradorId: colaboradorId,
+                    colaboradorNome: colaborador.nome || '',
+                    colaboradorDepartamento: colaborador.departamento || '',
+                    colaboradorAtivo: colaborador.ativo === true ? true : false,
+                    data: data,
+                    mes: mes,
+                    ano: ano,
+                    tipo: tipo,
+                    horas: horas,
                     createdAt: new Date().toISOString()
                 };
 
@@ -1677,6 +1682,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 
                 // Limpar formulário
                 document.getElementById('lancamentoHoras').value = '';
+                document.getElementById('lancamentoColaborador').value = '';
                 
                 // Aplicar filtros atuais
                 aplicarFiltros();
@@ -1709,20 +1715,25 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
 
             const horas = horaParaDecimal(horaStr);
             const colaborador = colaboradores.find(c => c.id === colaboradorId);
+            if (!colaborador) {
+                alert('Colaborador não encontrado!');
+                return;
+            }
+
             const data = `01/${mes}/${ano}`;
 
             showLoading(true);
             try {
                 await db.collection('lancamentos').doc(id).update({
-                    colaboradorId,
-                    colaboradorNome: colaborador.nome,
-                    colaboradorDepartamento: colaborador.departamento,
-                    colaboradorAtivo: colaborador.ativo,
-                    data,
-                    mes,
-                    ano,
-                    tipo,
-                    horas,
+                    colaboradorId: colaboradorId,
+                    colaboradorNome: colaborador.nome || '',
+                    colaboradorDepartamento: colaborador.departamento || '',
+                    colaboradorAtivo: colaborador.ativo === true ? true : false,
+                    data: data,
+                    mes: mes,
+                    ano: ano,
+                    tipo: tipo,
+                    horas: horas,
                     updatedAt: new Date().toISOString()
                 });
 
@@ -1831,7 +1842,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
 
             // Filtro por status do colaborador
             if (status === 'ativos') {
-                lancamentosFiltrados = lancamentosFiltrados.filter(l => l.colaboradorAtivo !== false);
+                lancamentosFiltrados = lancamentosFiltrados.filter(l => l.colaboradorAtivo === true);
             } else if (status === 'inativos') {
                 lancamentosFiltrados = lancamentosFiltrados.filter(l => l.colaboradorAtivo === false);
             }
@@ -1922,7 +1933,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                         <td><strong>${colaborador.nome}</strong><br><small style="color: #64748b;">${colaborador.departamento}</small></td>
                         <td>${competencia}</td>
                         <td><span class="badge ${tipoClass}">${tipoText}</span></td>
-                        <td>${quantidade} h</td>
+                        <td>${quantidade}</td>
                         <td>${vencimento}</td>
                         <td><span class="badge ${status.classe}">${status.texto}</span></td>
                         <td><span class="badge badge-purple">${decimalParaHora(saldoAteData)}</span></td>
