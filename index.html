@@ -1407,7 +1407,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                     ...doc.data()
                 }));
                 
-                // ORDENAÇÃO ALFABÉTICA - AQUI É O PONTO CRÍTICO
+                // ORDENAÇÃO ALFABÉTICA
                 colaboradores.sort((a, b) => {
                     const nomeA = (a.nome || '').toLowerCase();
                     const nomeB = (b.nome || '').toLowerCase();
@@ -1427,6 +1427,9 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                     empresas: empresas.length,
                     departamentos: departamentos.length
                 });
+
+                // Log para debug dos lançamentos
+                console.log('Lançamentos carregados:', lancamentos);
 
                 updateAllTables();
             } catch (error) {
@@ -1871,6 +1874,9 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             const mes = document.getElementById('filtroMes').value;
             const ano = document.getElementById('filtroAno').value;
 
+            console.log('Aplicando filtros:', { colaboradorId, departamento, status, mes, ano });
+            console.log('Total de lançamentos antes do filtro:', lancamentos.length);
+
             // Filtrar lançamentos
             let lancamentosFiltrados = [...lancamentos];
 
@@ -1898,6 +1904,8 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             if (ano) {
                 lancamentosFiltrados = lancamentosFiltrados.filter(l => l.ano === ano);
             }
+
+            console.log('Lançamentos após filtro:', lancamentosFiltrados.length);
 
             // Ordenar por data (mais recentes primeiro)
             lancamentosFiltrados.sort((a, b) => {
@@ -1949,7 +1957,10 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
 
             lancamentosFiltrados.forEach(lanc => {
                 const colaborador = colaboradores.find(c => c.id === lanc.colaboradorId);
-                if (!colaborador) return;
+                if (!colaborador) {
+                    console.log('Colaborador não encontrado para lançamento:', lanc);
+                    return;
+                }
 
                 // Competência formatada
                 const competencia = `${meses[parseInt(lanc.mes) - 1]}/${lanc.ano}`;
@@ -2280,7 +2291,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             updateDashboard();
             carregarFiltros();
             aplicarFiltros();
-            filterColaboradores(); // Isso já aplica a ordenação alfabética
+            filterColaboradores();
         }
 
         // Fechar modais ao clicar fora
