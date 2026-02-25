@@ -810,7 +810,7 @@
                                 <th onclick="sortColaboradores('dataAdmissao')">Admissão 📊</th>
                                 <th onclick="sortColaboradores('departamento')">Departamento 📊</th>
                                 <th onclick="sortColaboradores('empresa')">Empresa 📊</th>
-                                <th>Saldo</th>
+                                <th>Saldo Total</th>
                                 <th>Status</th>
                                 <th>Ações</th>
                             </tr>
@@ -905,7 +905,7 @@
                     </div>
 
                     <div class="filter-group">
-                        <label>Status</label>
+                        <label>Status Colaborador</label>
                         <select id="filtroStatus" onchange="aplicarFiltros()">
                             <option value="todos">Todos</option>
                             <option value="ativos" selected>Ativos</option>
@@ -957,7 +957,7 @@
                         <span class="resumo-value" id="resumoColaboradorNome">-</span>
                     </div>
                     <div class="resumo-item">
-                        <span class="resumo-label">Saldo Total:</span>
+                        <span class="resumo-label">Saldo Acumulado:</span>
                         <span class="resumo-value" id="resumoSaldoTotal">00:00</span>
                     </div>
                 </div>
@@ -2301,8 +2301,8 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 if (colaborador) {
                     document.getElementById('resumoColaboradorNome').textContent = colaborador.nome;
                     
-                    // Ordenar lançamentos por data para calcular saldo acumulado corretamente
-                    const lancamentosOrdenados = [...lancamentosFiltrados]
+                    // Calcular saldo acumulado do colaborador (todos os lançamentos, não apenas os filtrados)
+                    const lancamentosColaborador = lancamentos
                         .filter(l => l.colaboradorId === colaboradorId)
                         .sort((a, b) => {
                             const [dA, mA, yA] = a.data.split('/');
@@ -2310,9 +2310,8 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                             return new Date(yA, mA - 1, dA) - new Date(yB, mB - 1, dB);
                         });
                     
-                    // Calcular saldo acumulado somando sequencialmente do mais antigo para o mais recente
                     let saldoAcumulado = 0;
-                    lancamentosOrdenados.forEach(l => {
+                    lancamentosColaborador.forEach(l => {
                         if (l.tipo === 'positiva') {
                             saldoAcumulado += l.horas;
                         } else {
@@ -2348,35 +2347,35 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
 
             tbody.innerHTML = '';
 
-            // Ordenar por data (mais antigos primeiro) para calcular saldo acumulado corretamente
-            const lancamentosOrdenados = [...lancamentosFiltrados].sort((a, b) => {
-                try {
-                    const [dA, mA, yA] = a.data.split('/');
-                    const [dB, mB, yB] = b.data.split('/');
-                    return new Date(yA, mA - 1, dA) - new Date(yB, mB - 1, dB);
-                } catch (e) {
-                    return 0;
-                }
-            });
-
-            // Calcular saldo acumulado por colaborador (soma sequencial)
+            // Primeiro, calcular saldo acumulado para cada colaborador individualmente
+            // Vamos criar um mapa para armazenar o saldo acumulado por colaborador em cada data
             const saldoPorColaborador = {};
             
-            lancamentosOrdenados.forEach(lanc => {
+            // Ordenar todos os lançamentos por data (mais antigos primeiro) para calcular corretamente
+            const todosLancamentosOrdenados = [...lancamentos].sort((a, b) => {
+                const [dA, mA, yA] = a.data.split('/');
+                const [dB, mB, yB] = b.data.split('/');
+                return new Date(yA, mA - 1, dA) - new Date(yB, mB - 1, dB);
+            });
+
+            // Calcular saldo acumulado para cada lançamento, considerando apenas o próprio colaborador
+            todosLancamentosOrdenados.forEach(lanc => {
                 if (!saldoPorColaborador[lanc.colaboradorId]) {
                     saldoPorColaborador[lanc.colaboradorId] = 0;
                 }
                 
+                // Acumular o saldo do colaborador
                 if (lanc.tipo === 'positiva') {
                     saldoPorColaborador[lanc.colaboradorId] += lanc.horas;
                 } else {
                     saldoPorColaborador[lanc.colaboradorId] -= lanc.horas;
                 }
                 
+                // Armazenar o saldo acumulado neste ponto
                 lanc.saldoAcumulado = saldoPorColaborador[lanc.colaboradorId];
             });
 
-            // Renderizar mantendo a ordem original (mais recentes primeiro para exibição)
+            // Agora renderizar os lançamentos filtrados (já com saldoAcumulado calculado)
             lancamentosFiltrados.forEach(lanc => {
                 const colaborador = colaboradores.find(c => c.id === lanc.colaboradorId);
                 if (!colaborador) return;
@@ -2386,6 +2385,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 const status = calcularStatus(lanc);
                 
                 const quantidadeIcon = lanc.tipo === 'positiva' ? '➕' : '➖';
+                const quantidadeClass = lanc.tipo === 'positiva' ? 'badge-success' : 'badge-danger';
                 const saldoRestanteFormatado = decimalParaHora(lanc.saldoRestante || 0);
                 const saldoAcumuladoFormatado = decimalParaHora(lanc.saldoAcumulado || 0);
                 
@@ -2397,12 +2397,12 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 tbody.innerHTML += `
                     <tr>
                         <td><strong>${colaborador.nome}</strong><br><small style="color: #64748b;">${colaborador.departamento}</small></td>
-                        <td><span class="badge ${lanc.tipo === 'positiva' ? 'badge-success' : 'badge-danger'}">${quantidadeIcon} ${decimalParaHora(lanc.horas)}</span></td>
+                        <td><span class="badge ${quantidadeClass}">${quantidadeIcon} ${decimalParaHora(lanc.horas)}</span></td>
                         <td>${competencia}</td>
                         <td>${vencimento}</td>
                         <td><span class="badge ${status.classe}">${status.texto}</span></td>
                         <td><span class="badge badge-purple">${saldoRestanteFormatado}</span></td>
-                        <td><span class="badge badge-neutral">${saldoAcumuladoFormatado}</span></td>
+                        <td><span class="badge ${lanc.saldoAcumulado >= 0 ? 'badge-success' : 'badge-danger'}">${saldoAcumuladoFormatado}</span></td>
                         <td>${compensacoesText}</td>
                         <td>
                             <div class="action-buttons">
@@ -2496,16 +2496,17 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             }
 
             paginatedColabs.forEach(colab => {
-                const lancamentosColab = lancamentos.filter(l => l.colaboradorId === colab.id);
-                // Calcular saldo acumulado somando sequencialmente
-                const lancamentosOrdenados = [...lancamentosColab].sort((a, b) => {
-                    const [dA, mA, yA] = a.data.split('/');
-                    const [dB, mB, yB] = b.data.split('/');
-                    return new Date(yA, mA - 1, dA) - new Date(yB, mB - 1, dB);
-                });
+                // Calcular saldo acumulado do colaborador (soma sequencial de todos os lançamentos)
+                const lancamentosColab = lancamentos
+                    .filter(l => l.colaboradorId === colab.id)
+                    .sort((a, b) => {
+                        const [dA, mA, yA] = a.data.split('/');
+                        const [dB, mB, yB] = b.data.split('/');
+                        return new Date(yA, mA - 1, dA) - new Date(yB, mB - 1, dB);
+                    });
                 
                 let saldoAcumulado = 0;
-                lancamentosOrdenados.forEach(l => {
+                lancamentosColab.forEach(l => {
                     if (l.tipo === 'positiva') {
                         saldoAcumulado += l.horas;
                     } else {
