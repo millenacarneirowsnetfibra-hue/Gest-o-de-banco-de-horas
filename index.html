@@ -614,6 +614,29 @@
             justify-content: space-between;
             margin-bottom: 20px;
         }
+
+        /* Debug Panel */
+        .debug-panel {
+            background: #1e293b;
+            color: #e2e8f0;
+            border-radius: 12px;
+            padding: 16px;
+            margin-top: 20px;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 200px;
+            overflow-y: auto;
+            display: none;
+        }
+
+        .debug-panel.visible {
+            display: block;
+        }
+
+        .debug-panel pre {
+            color: #10b981;
+            margin: 4px 0;
+        }
     </style>
 </head>
 <body>
@@ -906,6 +929,9 @@
                         <h3 style="margin-bottom: 0;">📋 Histórico de Lançamentos</h3>
                         <div>
                             <span id="contadorLancamentos" style="color: #64748b; margin-right: 16px;">0 lançamentos</span>
+                            <button class="btn btn-secondary btn-small" onclick="toggleDebug()">
+                                🔧 Debug
+                            </button>
                         </div>
                     </div>
                     
@@ -929,6 +955,12 @@
                             <!-- Lançamentos serão inseridos aqui -->
                         </tbody>
                     </table>
+                    
+                    <!-- Painel de Debug -->
+                    <div id="debugPanel" class="debug-panel">
+                        <h4 style="color: white; margin-bottom: 10px;">📋 Debug - Últimos logs:</h4>
+                        <div id="debugLogs"></div>
+                    </div>
                 </div>
             </div>
 
@@ -1146,6 +1178,35 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
         let app;
         let db;
         let firebaseConnected = false;
+        let debugMode = false;
+        let debugLogs = [];
+
+        function addDebugLog(message, data = null) {
+            const timestamp = new Date().toLocaleTimeString();
+            const log = `[${timestamp}] ${message}` + (data ? `: ${JSON.stringify(data)}` : '');
+            debugLogs.unshift(log);
+            if (debugLogs.length > 20) debugLogs.pop();
+            
+            if (debugMode) {
+                const debugPanel = document.getElementById('debugLogs');
+                if (debugPanel) {
+                    debugPanel.innerHTML = debugLogs.map(log => `<pre>${log}</pre>`).join('');
+                }
+            }
+            console.log(log);
+        }
+
+        function toggleDebug() {
+            debugMode = !debugMode;
+            const panel = document.getElementById('debugPanel');
+            if (panel) {
+                panel.classList.toggle('visible');
+                if (debugMode) {
+                    const debugPanel = document.getElementById('debugLogs');
+                    debugPanel.innerHTML = debugLogs.map(log => `<pre>${log}</pre>`).join('');
+                }
+            }
+        }
 
         try {
             app = firebase.initializeApp(firebaseConfig);
@@ -1159,16 +1220,19 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 .then(() => {
                     console.log('Firebase conectado com sucesso!');
                     firebaseConnected = true;
+                    addDebugLog('Firebase conectado');
                     loadData();
                 })
                 .catch((error) => {
                     console.error('Erro ao testar conexão:', error);
                     firebaseConnected = false;
+                    addDebugLog('Erro ao conectar Firebase', error.message);
                     alert('Erro ao conectar com Firebase. Verifique sua conexão.');
                 });
         } catch (error) {
             console.error('Erro ao inicializar Firebase:', error);
             firebaseConnected = false;
+            addDebugLog('Erro ao inicializar Firebase', error.message);
         }
 
         // Variáveis globais
@@ -1219,6 +1283,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
         // Função para recarregar dados manualmente
         function recarregarDados() {
             if (firebaseConnected) {
+                addDebugLog('Recarregando dados manualmente');
                 loadData();
             } else {
                 alert('Sem conexão com o Firebase.');
@@ -1414,6 +1479,35 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             return saldo;
         }
 
+        // Função para normalizar dados do lançamento (suporta diferentes formatos)
+        function normalizarLancamento(doc) {
+            const data = doc.data();
+            const id = doc.id;
+            
+            // Mapear campos com possíveis nomes alternativos
+            const lancamento = {
+                id: id,
+                colaboradorId: data.colaboradorId || data.colaborador_id || data.userId || '',
+                colaboradorNome: data.colaboradorNome || data.colaborador_nome || data.nome || '',
+                colaboradorDepartamento: data.colaboradorDepartamento || data.departamento || '',
+                colaboradorAtivo: data.colaboradorAtivo !== undefined ? data.colaboradorAtivo : true,
+                data: data.data || data.date || '01/01/2024',
+                mes: data.mes || data.month || '01',
+                ano: data.ano || data.year || '2024',
+                tipo: data.tipo || data.type || 'positiva',
+                horas: typeof data.horas === 'number' ? data.horas : (typeof data.hours === 'number' ? data.hours : 0)
+            };
+            
+            // Se não tiver mês/ano, tentar extrair da data
+            if (!lancamento.mes || !lancamento.ano) {
+                const [dia, mes, ano] = lancamento.data.split('/');
+                lancamento.mes = mes;
+                lancamento.ano = ano;
+            }
+            
+            return lancamento;
+        }
+
         // Carregar dados do Firebase
         async function loadData() {
             if (!firebaseConnected) {
@@ -1422,6 +1516,8 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             }
             
             showLoading(true);
+            addDebugLog('Iniciando carregamento de dados');
+            
             try {
                 // Carregar empresas
                 const empresasSnapshot = await db.collection('empresas').get();
@@ -1430,6 +1526,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                     nome: doc.data().nome
                 }));
                 empresas = empresasDocs.map(doc => doc.nome);
+                addDebugLog('Empresas carregadas', empresas.length);
 
                 // Carregar departamentos
                 const departamentosSnapshot = await db.collection('departamentos').get();
@@ -1438,6 +1535,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                     nome: doc.data().nome
                 }));
                 departamentos = departamentosDocs.map(doc => doc.nome);
+                addDebugLog('Departamentos carregados', departamentos.length);
 
                 // Carregar colaboradores
                 const colaboradoresSnapshot = await db.collection('colaboradores').get();
@@ -1452,40 +1550,38 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                     const nomeB = (b.nome || '').toLowerCase();
                     return nomeA.localeCompare(nomeB);
                 });
+                addDebugLog('Colaboradores carregados', colaboradores.length);
 
-                // Carregar lançamentos - sem orderBy para evitar erros de índice
+                // Carregar lançamentos
                 const lancamentosSnapshot = await db.collection('lancamentos').get();
-                lancamentos = lancamentosSnapshot.docs.map(doc => ({
-                    id: doc.id,
-                    ...doc.data()
-                }));
+                
+                // Normalizar cada lançamento
+                lancamentos = lancamentosSnapshot.docs.map(doc => normalizarLancamento(doc));
+                
+                addDebugLog('Lançamentos carregados (raw)', lancamentosSnapshot.docs.length);
+                addDebugLog('Lançamentos normalizados', lancamentos.length);
+                
+                if (lancamentos.length > 0) {
+                    addDebugLog('Primeiro lançamento', lancamentos[0]);
+                }
 
                 // Ordenar por data manualmente (mais recentes primeiro)
                 lancamentos.sort((a, b) => {
-                    const [dA, mA, yA] = a.data.split('/');
-                    const [dB, mB, yB] = b.data.split('/');
-                    return new Date(yB, mB - 1, dB) - new Date(yA, mA - 1, dA);
+                    try {
+                        const [dA, mA, yA] = a.data.split('/');
+                        const [dB, mB, yB] = b.data.split('/');
+                        return new Date(yB, mB - 1, dB) - new Date(yA, mA - 1, dA);
+                    } catch (e) {
+                        return 0;
+                    }
                 });
-
-                console.log('Dados carregados:', {
-                    colaboradores: colaboradores.length,
-                    lancamentos: lancamentos.length,
-                    empresas: empresas.length,
-                    departamentos: departamentos.length
-                });
-
-                // Log detalhado dos lançamentos
-                console.log('Lançamentos carregados:', lancamentos.map(l => ({
-                    id: l.id,
-                    colaborador: l.colaboradorNome,
-                    tipo: l.tipo,
-                    horas: l.horas,
-                    data: l.data
-                })));
 
                 updateAllTables();
+                addDebugLog('Dados carregados com sucesso');
+                
             } catch (error) {
                 console.error('Erro ao carregar dados:', error);
+                addDebugLog('Erro ao carregar dados', error.message);
                 alert('Erro ao carregar dados: ' + error.message);
             } finally {
                 showLoading(false);
@@ -1762,6 +1858,8 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             const data = `01/${mes}/${ano}`;
 
             showLoading(true);
+            addDebugLog('Salvando lançamento', { colaboradorId, tipo, horas, mes, ano });
+            
             try {
                 const lancamentoData = {
                     colaboradorId: colaboradorId,
@@ -1779,6 +1877,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 console.log('Salvando lançamento:', lancamentoData);
 
                 await db.collection('lancamentos').add(lancamentoData);
+                addDebugLog('Lançamento salvo com sucesso');
                 
                 // Recarregar dados imediatamente
                 await loadData();
@@ -1793,6 +1892,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 alert('Lançamento realizado com sucesso!');
             } catch (error) {
                 console.error('Erro ao salvar lançamento:', error);
+                addDebugLog('Erro ao salvar lançamento', error.message);
                 alert('Erro ao salvar: ' + error.message);
             }
             showLoading(false);
@@ -1930,8 +2030,8 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             const mes = document.getElementById('filtroMes').value;
             const ano = document.getElementById('filtroAno').value;
 
-            console.log('Aplicando filtros:', { colaboradorId, departamento, status, mes, ano });
-            console.log('Total de lançamentos antes do filtro:', lancamentos.length);
+            addDebugLog('Aplicando filtros', { colaboradorId, departamento, status, mes, ano });
+            addDebugLog('Total de lançamentos antes do filtro', lancamentos.length);
 
             // Filtrar lançamentos
             let lancamentosFiltrados = [...lancamentos];
@@ -1961,7 +2061,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 lancamentosFiltrados = lancamentosFiltrados.filter(l => l.ano === ano);
             }
 
-            console.log('Lançamentos após filtro:', lancamentosFiltrados.length);
+            addDebugLog('Lançamentos após filtro', lancamentosFiltrados.length);
 
             // Atualizar contador
             document.getElementById('contadorLancamentos').textContent = `${lancamentosFiltrados.length} lançamentos`;
@@ -1997,6 +2097,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             if (lancamentosFiltrados.length === 0) {
                 tabela.style.display = 'none';
                 semResultados.style.display = 'block';
+                addDebugLog('Nenhum lançamento para exibir');
                 return;
             }
 
@@ -2006,13 +2107,16 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             tbody.innerHTML = '';
             
             const meses = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+            let lancamentosExibidos = 0;
 
             lancamentosFiltrados.forEach(lanc => {
                 const colaborador = colaboradores.find(c => c.id === lanc.colaboradorId);
                 if (!colaborador) {
-                    console.log('Colaborador não encontrado para lançamento:', lanc);
+                    addDebugLog('Colaborador não encontrado para lançamento', lanc);
                     return;
                 }
+
+                lancamentosExibidos++;
 
                 // Competência formatada
                 const competencia = `${meses[parseInt(lanc.mes) - 1]}/${lanc.ano}`;
@@ -2050,6 +2154,8 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                     </tr>
                 `;
             });
+
+            addDebugLog('Lançamentos exibidos na tabela', lancamentosExibidos);
         }
 
         // Funções de filtro para colaboradores
