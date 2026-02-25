@@ -624,7 +624,7 @@
             margin-top: 20px;
             font-family: monospace;
             font-size: 12px;
-            max-height: 200px;
+            max-height: 300px;
             overflow-y: auto;
             display: none;
         }
@@ -636,6 +636,8 @@
         .debug-panel pre {
             color: #10b981;
             margin: 4px 0;
+            white-space: pre-wrap;
+            word-wrap: break-word;
         }
     </style>
 </head>
@@ -1185,7 +1187,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             const timestamp = new Date().toLocaleTimeString();
             const log = `[${timestamp}] ${message}` + (data ? `: ${JSON.stringify(data)}` : '');
             debugLogs.unshift(log);
-            if (debugLogs.length > 20) debugLogs.pop();
+            if (debugLogs.length > 50) debugLogs.pop();
             
             if (debugMode) {
                 const debugPanel = document.getElementById('debugLogs');
@@ -1490,7 +1492,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 colaboradorId: data.colaboradorId || data.colaborador_id || data.userId || '',
                 colaboradorNome: data.colaboradorNome || data.colaborador_nome || data.nome || '',
                 colaboradorDepartamento: data.colaboradorDepartamento || data.departamento || '',
-                colaboradorAtivo: data.colaboradorAtivo !== undefined ? data.colaboradorAtivo : true,
                 data: data.data || data.date || '01/01/2024',
                 mes: data.mes || data.month || '01',
                 ano: data.ano || data.year || '2024',
@@ -1500,9 +1501,11 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             
             // Se não tiver mês/ano, tentar extrair da data
             if (!lancamento.mes || !lancamento.ano) {
-                const [dia, mes, ano] = lancamento.data.split('/');
-                lancamento.mes = mes;
-                lancamento.ano = ano;
+                const partes = lancamento.data.split('/');
+                if (partes.length === 3) {
+                    lancamento.mes = partes[1];
+                    lancamento.ano = partes[2];
+                }
             }
             
             return lancamento;
@@ -1865,7 +1868,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                     colaboradorId: colaboradorId,
                     colaboradorNome: colaborador.nome || '',
                     colaboradorDepartamento: colaborador.departamento || '',
-                    colaboradorAtivo: colaborador.ativo === true ? true : false,
                     data: data,
                     mes: mes,
                     ano: ano,
@@ -1931,7 +1933,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                     colaboradorId: colaboradorId,
                     colaboradorNome: colaborador.nome || '',
                     colaboradorDepartamento: colaborador.departamento || '',
-                    colaboradorAtivo: colaborador.ativo === true ? true : false,
                     data: data,
                     mes: mes,
                     ano: ano,
@@ -2039,29 +2040,37 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             // Filtro por colaborador
             if (colaboradorId) {
                 lancamentosFiltrados = lancamentosFiltrados.filter(l => l.colaboradorId === colaboradorId);
+                addDebugLog('Após filtro colaborador', lancamentosFiltrados.length);
             }
 
             // Filtro por departamento
             if (departamento) {
                 lancamentosFiltrados = lancamentosFiltrados.filter(l => l.colaboradorDepartamento === departamento);
+                addDebugLog('Após filtro departamento', lancamentosFiltrados.length);
             }
 
-            // Filtro por status do colaborador
-            if (status === 'ativos') {
-                lancamentosFiltrados = lancamentosFiltrados.filter(l => l.colaboradorAtivo === true);
-            } else if (status === 'inativos') {
-                lancamentosFiltrados = lancamentosFiltrados.filter(l => l.colaboradorAtivo === false);
+            // Filtro por status do colaborador - AGORA USA O STATUS ATUAL DO COLABORADOR, NÃO O DO LANÇAMENTO
+            if (status !== 'todos') {
+                const statusAtivo = status === 'ativos';
+                lancamentosFiltrados = lancamentosFiltrados.filter(l => {
+                    const colaborador = colaboradores.find(c => c.id === l.colaboradorId);
+                    const colaboradorAtivo = colaborador ? colaborador.ativo !== false : true;
+                    return colaboradorAtivo === statusAtivo;
+                });
+                addDebugLog('Após filtro status (usando status atual do colaborador)', lancamentosFiltrados.length);
             }
 
             // Filtro por competência
             if (mes) {
                 lancamentosFiltrados = lancamentosFiltrados.filter(l => l.mes === mes);
+                addDebugLog('Após filtro mês', lancamentosFiltrados.length);
             }
             if (ano) {
                 lancamentosFiltrados = lancamentosFiltrados.filter(l => l.ano === ano);
+                addDebugLog('Após filtro ano', lancamentosFiltrados.length);
             }
 
-            addDebugLog('Lançamentos após filtro', lancamentosFiltrados.length);
+            addDebugLog('Lançamentos após todos os filtros', lancamentosFiltrados.length);
 
             // Atualizar contador
             document.getElementById('contadorLancamentos').textContent = `${lancamentosFiltrados.length} lançamentos`;
