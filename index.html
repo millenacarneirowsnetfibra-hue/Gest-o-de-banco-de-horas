@@ -737,7 +737,7 @@
                 </div>
             </div>
 
-            <!-- LANÇAMENTOS TAB - TOTALMENTE REFEITA -->
+            <!-- LANÇAMENTOS TAB -->
             <div id="lancamentos" class="tab-content active">
                 <!-- Card de Novo Lançamento -->
                 <div class="lancamento-card">
@@ -843,7 +843,7 @@
                             </select>
                             <select id="filtroAno" onchange="aplicarFiltros()">
                                 <option value="">Todos</option>
-                                <!-- Anos preenchidos via JS -->
+                                <!-- Anos preenchidos via JS (2020-2030) -->
                             </select>
                         </div>
                     </div>
@@ -1012,7 +1012,7 @@
                             <option value="12">Dezembro</option>
                         </select>
                         <select id="editLancamentoAno" required>
-                            <!-- Anos -->
+                            <!-- Anos preenchidos via JS (2020-2030) -->
                         </select>
                     </div>
                 </div>
@@ -1312,7 +1312,9 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
         function calcularStatus(dataVencimento) {
             const hoje = new Date();
             const [mesVenc, anoVenc] = dataVencimento.split('/');
-            const vencimento = new Date(parseInt(anoVenc), parseInt(meses.indexOf(mesVenc)), 1);
+            const meses = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+            const mesIndex = meses.indexOf(mesVenc);
+            const vencimento = new Date(parseInt(anoVenc), mesIndex, 1);
             
             const diffTime = vencimento - hoje;
             const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
@@ -1398,11 +1400,10 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             }
         }
 
-        // Preencher anos nos selects
+        // Preencher anos nos selects (2020-2030)
         function preencherAnos() {
-            const anoAtual = new Date().getFullYear();
             const anos = [];
-            for (let i = anoAtual - 2; i <= anoAtual + 2; i++) {
+            for (let i = 2020; i <= 2030; i++) {
                 anos.push(i);
             }
             
@@ -1420,7 +1421,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                         const option = document.createElement('option');
                         option.value = ano;
                         option.textContent = ano;
-                        if (ano === anoAtual) option.selected = true;
+                        if (ano === new Date().getFullYear()) option.selected = true;
                         select.appendChild(option);
                     });
                 }
@@ -1434,7 +1435,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                     const option = document.createElement('option');
                     option.value = ano;
                     option.textContent = ano;
-                    if (ano === anoAtual) option.selected = true;
+                    if (ano === new Date().getFullYear()) option.selected = true;
                     lancamentoAno.appendChild(option);
                 });
             }
