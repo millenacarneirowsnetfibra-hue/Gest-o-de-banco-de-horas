@@ -1124,14 +1124,17 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             const settings = { timestampsInSnapshots: true };
             db.settings(settings);
             
+            // Testar conexão
             db.collection('test').limit(1).get()
                 .then(() => {
+                    console.log('Firebase conectado com sucesso!');
                     firebaseConnected = true;
                     loadData();
                 })
                 .catch((error) => {
                     console.error('Erro ao testar conexão:', error);
                     firebaseConnected = false;
+                    alert('Erro ao conectar com Firebase. Verifique sua conexão.');
                 });
         } catch (error) {
             console.error('Erro ao inicializar Firebase:', error);
@@ -1163,10 +1166,15 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             });
             document.getElementById(tabName).classList.add('active');
             
-            document.querySelectorAll('.sidebar-nav li').forEach(item => {
+            document.querySelectorAll('.sidebar-nav li').forEach((item, index) => {
                 item.classList.remove('active');
+                if ((tabName === 'dashboard' && index === 0) ||
+                    (tabName === 'colaboradores' && index === 1) ||
+                    (tabName === 'lancamentos' && index === 2) ||
+                    (tabName === 'configuracoes' && index === 3)) {
+                    item.classList.add('active');
+                }
             });
-            event.target.classList.add('active');
             
             if (tabName === 'lancamentos') {
                 carregarFiltros();
@@ -1221,7 +1229,8 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             const select = document.getElementById('editLancamentoColaborador');
             select.innerHTML = '<option value="">Selecione...</option>';
             colaboradores.sort((a, b) => a.nome.localeCompare(b.nome)).forEach(colab => {
-                select.innerHTML += `<option value="${colab.id}">${colab.nome}</option>`;
+                const status = colab.ativo !== false ? '' : ' (Inativo)';
+                select.innerHTML += `<option value="${colab.id}">${colab.nome}${status}</option>`;
             });
 
             // Preencher dados
@@ -1406,6 +1415,13 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                     ...doc.data()
                 }));
 
+                console.log('Dados carregados:', {
+                    colaboradores: colaboradores.length,
+                    lancamentos: lancamentos.length,
+                    empresas: empresas.length,
+                    departamentos: departamentos.length
+                });
+
                 updateAllTables();
             } catch (error) {
                 console.error('Erro ao carregar dados:', error);
@@ -1431,12 +1447,20 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             selects.forEach(selectId => {
                 const select = document.getElementById(selectId);
                 if (select) {
-                    select.innerHTML = '<option value="">Todos</option>';
+                    select.innerHTML = '';
+                    if (selectId === 'filtroAno') {
+                        const optionAll = document.createElement('option');
+                        optionAll.value = '';
+                        optionAll.textContent = 'Todos';
+                        select.appendChild(optionAll);
+                    }
                     anos.forEach(ano => {
                         const option = document.createElement('option');
                         option.value = ano;
                         option.textContent = ano;
-                        if (ano === new Date().getFullYear()) option.selected = true;
+                        if (ano === new Date().getFullYear() && selectId !== 'filtroAno') {
+                            option.selected = true;
+                        }
                         select.appendChild(option);
                     });
                 }
@@ -1484,8 +1508,9 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             
             colaboradores.sort((a, b) => a.nome.localeCompare(b.nome)).forEach(colab => {
                 const status = colab.ativo !== false ? '' : ' (Inativo)';
-                filtroColab.innerHTML += `<option value="${colab.id}">${colab.nome}${status}</option>`;
-                lancamentoColab.innerHTML += `<option value="${colab.id}">${colab.nome}${status}</option>`;
+                const optionText = `${colab.nome}${status}`;
+                filtroColab.innerHTML += `<option value="${colab.id}">${optionText}</option>`;
+                lancamentoColab.innerHTML += `<option value="${colab.id}">${optionText}</option>`;
             });
 
             // Carregar departamentos no filtro
@@ -2199,8 +2224,12 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
         function updateDashboard() {
             document.getElementById('totalColaboradores').textContent = colaboradores.filter(c => c.ativo !== false).length;
             
-            let totalPositivas = colaboradores.reduce((sum, colab) => sum + (colab.horasPositivas || 0), 0);
-            let totalNegativas = colaboradores.reduce((sum, colab) => sum + (colab.horasNegativas || 0), 0);
+            let totalPositivas = lancamentos
+                .filter(l => l.tipo === 'positiva')
+                .reduce((sum, l) => sum + l.horas, 0);
+            let totalNegativas = lancamentos
+                .filter(l => l.tipo === 'negativa')
+                .reduce((sum, l) => sum + l.horas, 0);
             
             document.getElementById('totalHorasPositivas').textContent = decimalParaHora(totalPositivas);
             document.getElementById('totalHorasNegativas').textContent = decimalParaHora(totalNegativas);
@@ -2214,12 +2243,15 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             }
 
             activities.innerHTML = lancamentos.slice(0, 5).map(lanc => {
+                const colaborador = colaboradores.find(c => c.id === lanc.colaboradorId);
+                if (!colaborador) return '';
+                
                 const tipoClass = lanc.tipo === 'positiva' ? 'badge-success' : 'badge-danger';
                 const tipoIcon = lanc.tipo === 'positiva' ? '➕' : '➖';
                 return `
                     <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px; border-bottom: 1px solid #f1f5f9;">
                         <div>
-                            <strong>${lanc.colaboradorNome}</strong>
+                            <strong>${colaborador.nome}</strong>
                             <span class="badge ${tipoClass}" style="margin-left: 8px;">${tipoIcon} ${decimalParaHora(lanc.horas)}</span>
                         </div>
                         <span style="color: #64748b;">${lanc.data}</span>
