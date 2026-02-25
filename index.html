@@ -957,8 +957,12 @@
                         <span class="resumo-value" id="resumoColaboradorNome">-</span>
                     </div>
                     <div class="resumo-item">
-                        <span class="resumo-label">Saldo Total:</span>
-                        <span class="resumo-value" id="resumoSaldoTotal">00:00</span>
+                        <span class="resumo-label">Saldo do Período:</span>
+                        <span class="resumo-value" id="resumoSaldoPeriodo">00:00</span>
+                    </div>
+                    <div class="resumo-item">
+                        <span class="resumo-label">Saldo Acumulado:</span>
+                        <span class="resumo-value" id="resumoSaldoAcumulado">00:00</span>
                     </div>
                 </div>
 
@@ -986,8 +990,8 @@
                                 <th>Competência</th>
                                 <th>Vencimento</th>
                                 <th>Status</th>
-                                <th>Saldo Restante</th>
-                                <th>Saldo Total</th>
+                                <th>Saldo da Competência</th>
+                                <th>Saldo Acumulado</th>
                                 <th>Compensações</th>
                                 <th>Ações</th>
                             </tr>
@@ -1725,8 +1729,8 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             return lancamento;
         }
 
-        // Função para calcular saldo total acumulado corretamente
-        function calcularSaldoTotal(lancamentosDoColaborador) {
+        // Função para calcular saldo acumulado seguindo o modelo do relatório
+        function calcularSaldosPorCompetencia(lancamentosDoColaborador) {
             // Ordenar por data (mais antigos primeiro)
             const lancamentosOrdenados = [...lancamentosDoColaborador].sort((a, b) => {
                 try {
@@ -1739,17 +1743,27 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             });
 
             let saldoAcumulado = 0;
+            const resultados = [];
             
             lancamentosOrdenados.forEach(lanc => {
-                // Usar horas originais para cálculo do saldo total histórico
+                // Calcular saldo da competência (considerando compensações)
+                const saldoCompetencia = lanc.tipo === 'positiva' ? lanc.saldoRestante : -lanc.saldoRestante;
+                
+                // Atualizar saldo acumulado
                 if (lanc.tipo === 'positiva') {
                     saldoAcumulado += lanc.horas;
                 } else {
                     saldoAcumulado -= lanc.horas;
                 }
+                
+                resultados.push({
+                    lancamento: lanc,
+                    saldoCompetencia: saldoCompetencia,
+                    saldoAcumulado: saldoAcumulado
+                });
             });
             
-            return saldoAcumulado;
+            return resultados;
         }
 
         // Carregar dados do Firebase
@@ -2112,7 +2126,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             }
 
             const horas = horaParaDecimal(horaStr);
-            // Removida a validação de horas > 0 para permitir 00:00
 
             const colaborador = colaboradores.find(c => c.id === colaboradorId);
             if (!colaborador) {
@@ -2340,9 +2353,21 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                     document.getElementById('resumoColaboradorNome').textContent = colaborador.nome;
                     
                     const lancamentosDoColaborador = lancamentos.filter(l => l.colaboradorId === colaboradorId);
-                    const saldoTotal = calcularSaldoTotal(lancamentosDoColaborador);
                     
-                    document.getElementById('resumoSaldoTotal').textContent = decimalParaHora(saldoTotal);
+                    // Calcular saldo do período (soma dos saldos das competências filtradas)
+                    const saldoPeriodo = lancamentosFiltrados
+                        .filter(l => l.colaboradorId === colaboradorId)
+                        .reduce((sum, l) => {
+                            return l.tipo === 'positiva' ? sum + l.saldoRestante : sum - l.saldoRestante;
+                        }, 0);
+                    
+                    // Calcular saldo acumulado total (todas as competências)
+                    const saldoAcumulado = lancamentosDoColaborador.reduce((sum, l) => {
+                        return l.tipo === 'positiva' ? sum + l.horas : sum - l.horas;
+                    }, 0);
+                    
+                    document.getElementById('resumoSaldoPeriodo').textContent = decimalParaHora(saldoPeriodo);
+                    document.getElementById('resumoSaldoAcumulado').textContent = decimalParaHora(saldoAcumulado);
                     
                     resumoContainer.style.display = 'flex';
                 }
@@ -2370,7 +2395,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
 
             tbody.innerHTML = '';
 
-            // Agrupar lançamentos por colaborador para calcular saldo total
+            // Agrupar lançamentos por colaborador
             const lancamentosPorColaborador = {};
             lancamentosFiltrados.forEach(lanc => {
                 if (!lancamentosPorColaborador[lanc.colaboradorId]) {
@@ -2379,10 +2404,19 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 lancamentosPorColaborador[lanc.colaboradorId].push(lanc);
             });
 
-            // Calcular saldo total para cada colaborador
-            const saldoTotalPorColaborador = {};
+            // Calcular saldos para cada colaborador
+            const saldosPorColaborador = {};
             Object.keys(lancamentosPorColaborador).forEach(colabId => {
-                saldoTotalPorColaborador[colabId] = calcularSaldoTotal(lancamentosPorColaborador[colabId]);
+                const todosLancamentosColab = lancamentos.filter(l => l.colaboradorId === colabId);
+                saldosPorColaborador[colabId] = calcularSaldosPorCompetencia(todosLancamentosColab);
+            });
+
+            // Criar mapa de saldos por ID de lançamento para acesso rápido
+            const saldoMap = {};
+            Object.values(saldosPorColaborador).forEach(resultados => {
+                resultados.forEach(r => {
+                    saldoMap[r.lancamento.id] = r;
+                });
             });
 
             // Renderizar mantendo a ordem original (mais recentes primeiro)
@@ -2395,8 +2429,10 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 const status = calcularStatus(lanc);
                 
                 const quantidadeIcon = lanc.tipo === 'positiva' ? '➕' : '➖';
-                const saldoRestanteFormatado = decimalParaHora(lanc.saldoRestante || 0);
-                const saldoTotalFormatado = decimalParaHora(saldoTotalPorColaborador[lanc.colaboradorId] || 0);
+                
+                const saldoInfo = saldoMap[lanc.id];
+                const saldoCompetenciaFormatado = saldoInfo ? decimalParaHora(saldoInfo.saldoCompetencia) : decimalParaHora(0);
+                const saldoAcumuladoFormatado = saldoInfo ? decimalParaHora(saldoInfo.saldoAcumulado) : decimalParaHora(0);
                 
                 const numCompensacoes = lanc.compensacoes ? lanc.compensacoes.length : 0;
                 const compensacoesText = numCompensacoes > 0 ? 
@@ -2410,8 +2446,8 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                         <td>${competencia}</td>
                         <td>${vencimento}</td>
                         <td><span class="badge ${status.classe}">${status.texto}</span></td>
-                        <td><span class="badge badge-purple">${saldoRestanteFormatado}</span></td>
-                        <td><span class="badge badge-neutral">${saldoTotalFormatado}</span></td>
+                        <td><span class="badge ${lanc.tipo === 'positiva' ? 'badge-success' : 'badge-danger'}">${saldoCompetenciaFormatado}</span></td>
+                        <td><span class="badge badge-neutral">${saldoAcumuladoFormatado}</span></td>
                         <td>${compensacoesText}</td>
                         <td>
                             <div class="action-buttons">
@@ -2506,7 +2542,9 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
 
             paginatedColabs.forEach(colab => {
                 const lancamentosColab = lancamentos.filter(l => l.colaboradorId === colab.id);
-                const saldoTotal = calcularSaldoTotal(lancamentosColab);
+                const saldoTotal = lancamentosColab.reduce((sum, l) => {
+                    return l.tipo === 'positiva' ? sum + l.horas : sum - l.horas;
+                }, 0);
                 
                 const statusClass = saldoTotal >= 0 ? 'badge-success' : 'badge-danger';
                 const statusText = colab.ativo !== false ? 
