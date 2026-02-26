@@ -1608,9 +1608,9 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
 
             for (const lanc of lancamentosOrdenados) {
                 if (lanc.tipo === 'positiva') {
-                    saldo += lanc.horas;
+                    saldo += lanc.saldoRestante;
                 } else {
-                    saldo -= lanc.horas;
+                    saldo -= lanc.saldoRestante;
                 }
                 saldosPorLancamento.push({
                     id: lanc.id,
@@ -1638,9 +1638,8 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             return tooltip;
         }
 
-        // Função principal de compensação de horas
+        // Função principal de compensação de horas - CORRIGIDA!
         function processarCompensacoes() {
-            
             // Agrupar lançamentos por colaborador
             const lancamentosPorColaborador = {};
             lancamentos.forEach(lanc => {
@@ -1654,78 +1653,100 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             Object.keys(lancamentosPorColaborador).forEach(colaboradorId => {
                 const lancamentosColab = lancamentosPorColaborador[colaboradorId];
                 
-                // Ordenar por data (mais antigos primeiro)
+                // Ordenar por data (mais antigos primeiro) - ESSENCIAL para a lógica FIFO
                 lancamentosColab.sort((a, b) => {
                     const [dA, mA, yA] = a.data.split('/');
                     const [dB, mB, yB] = b.data.split('/');
                     return new Date(yA, mA - 1, dA) - new Date(yB, mB - 1, dB);
                 });
 
-                // Inicializar saldos restantes
+                // Inicializar saldos restantes e compensações
                 lancamentosColab.forEach(lanc => {
                     lanc.saldoRestante = lanc.horas;
                     lanc.compensacoes = lanc.compensacoes || [];
                     
                     // Se já tem compensações, recalcular saldo restante
-                    if (lanc.compensacoes.length > 0) {
+                    if (lanc.compensacoes && lanc.compensacoes.length > 0) {
                         let totalCompensado = lanc.compensacoes.reduce((sum, comp) => sum + comp.quantidade, 0);
                         lanc.saldoRestante = lanc.horas - totalCompensado;
+                    } else {
+                        lanc.compensacoes = [];
                     }
                 });
 
-                // Processar compensações
+                // NOVA LÓGICA DE COMPENSAÇÃO - Baseada no FIFO (First In, First Out)
+                // Percorrer todos os lançamentos em ordem cronológica
                 for (let i = 0; i < lancamentosColab.length; i++) {
                     const lancAtual = lancamentosColab[i];
                     
-                    // Se já está totalmente compensado ou é hora zero, pular
-                    if (lancAtual.saldoRestante === 0 || lancAtual.horas === 0) continue;
+                    // Se o lançamento atual já está totalmente compensado, pular
+                    if (lancAtual.saldoRestante === 0) continue;
 
-                    // Buscar lançamentos de tipo oposto para compensar
-                    const tipoOposto = lancAtual.tipo === 'positiva' ? 'negativa' : 'positiva';
-                    
+                    // Procurar lançamentos futuros de tipo oposto para compensar
                     for (let j = i + 1; j < lancamentosColab.length; j++) {
-                        const lancOposto = lancamentosColab[j];
+                        const lancFuturo = lancamentosColab[j];
                         
-                        // Verificar se é do tipo oposto e se tem saldo
-                        if (lancOposto.tipo !== tipoOposto || lancOposto.saldoRestante === 0 || lancOposto.horas === 0) continue;
+                        // Se o lançamento futuro já está totalmente compensado, pular
+                        if (lancFuturo.saldoRestante === 0) continue;
+                        
+                        // Verificar se são de tipos opostos (um positivo e outro negativo)
+                        if (lancAtual.tipo === lancFuturo.tipo) continue;
 
-                        // Verificar se o lançamento oposto está dentro do prazo (até 1 ano após o atual)
-                        const [d1, m1, y1] = lancAtual.data.split('/');
-                        const [d2, m2, y2] = lancOposto.data.split('/');
-                        const dataAtual = new Date(y1, m1 - 1, d1);
-                        const dataOposto = new Date(y2, m2 - 1, d2);
+                        // Verificar se o lançamento futuro está dentro do prazo (até 1 ano após o atual)
+                        const [dAtual, mAtual, yAtual] = lancAtual.data.split('/');
+                        const [dFuturo, mFuturo, yFuturo] = lancFuturo.data.split('/');
+                        const dataAtual = new Date(yAtual, mAtual - 1, dAtual);
+                        const dataFuturo = new Date(yFuturo, mFuturo - 1, dFuturo);
                         
-                        // Se o lançamento oposto for mais de 1 ano após o atual, pular
-                        const diffYears = dataOposto.getFullYear() - dataAtual.getFullYear();
-                        if (diffYears > 1 || (diffYears === 1 && dataOposto.getMonth() > dataAtual.getMonth())) {
+                        // Calcular diferença em anos
+                        const diffAnos = dataFuturo.getFullYear() - dataAtual.getFullYear();
+                        const diffMeses = dataFuturo.getMonth() - dataAtual.getMonth();
+                        
+                        // Se o lançamento futuro for mais de 1 ano após o atual, não pode compensar
+                        if (diffAnos > 1 || (diffAnos === 1 && diffMeses > 0)) {
                             continue;
                         }
 
-                        // Calcular quantidade a compensar
-                        const quantidadeCompensar = Math.min(lancAtual.saldoRestante, lancOposto.saldoRestante);
+                        // Determinar qual é o lançamento que tem saldo positivo (crédito) e qual tem saldo negativo (débito)
+                        let lancCredito, lancDebito;
+                        if (lancAtual.tipo === 'positiva' && lancFuturo.tipo === 'negativa') {
+                            // Atual é crédito, futuro é débito
+                            lancCredito = lancAtual;
+                            lancDebito = lancFuturo;
+                        } else if (lancAtual.tipo === 'negativa' && lancFuturo.tipo === 'positiva') {
+                            // Atual é débito, futuro é crédito
+                            lancCredito = lancFuturo;
+                            lancDebito = lancAtual;
+                        } else {
+                            continue; // Não deveria acontecer devido ao check acima
+                        }
+
+                        // Calcular quanto pode ser compensado
+                        const saldoCredito = lancCredito.saldoRestante;
+                        const saldoDebito = lancDebito.saldoRestante;
                         
-                        if (quantidadeCompensar > 0) {
-                            // Registrar compensação
-                            const compensacao = {
-                                lancamentoId: lancOposto.id,
-                                quantidade: quantidadeCompensar,
-                                data: new Date().toLocaleDateString('pt-BR')
-                            };
-                            
-                            lancAtual.compensacoes.push(compensacao);
-                            lancAtual.saldoRestante -= quantidadeCompensar;
-                            
-                            // Atualizar saldo do lançamento oposto
-                            lancOposto.saldoRestante -= quantidadeCompensar;
-                            lancOposto.compensacoes = lancOposto.compensacoes || [];
-                            lancOposto.compensacoes.push({
-                                lancamentoId: lancAtual.id,
-                                quantidade: quantidadeCompensar,
+                        // A compensação é sempre do crédito para o débito
+                        // O valor compensado é o menor entre o saldo do crédito e o saldo do débito
+                        const valorCompensar = Math.min(saldoCredito, saldoDebito);
+                        
+                        if (valorCompensar > 0) {
+                            // Registrar compensação no lançamento de crédito (de onde sai as horas)
+                            lancCredito.compensacoes.push({
+                                lancamentoId: lancDebito.id,
+                                quantidade: valorCompensar,
                                 data: new Date().toLocaleDateString('pt-BR')
                             });
-
-                            // Se o lançamento atual foi completamente compensado, sair do loop
-                            if (lancAtual.saldoRestante === 0) break;
+                            
+                            // Registrar compensação no lançamento de débito (para onde vai as horas)
+                            lancDebito.compensacoes.push({
+                                lancamentoId: lancCredito.id,
+                                quantidade: valorCompensar,
+                                data: new Date().toLocaleDateString('pt-BR')
+                            });
+                            
+                            // Atualizar saldos
+                            lancCredito.saldoRestante -= valorCompensar;
+                            lancDebito.saldoRestante -= valorCompensar;
                         }
                     }
                 }
@@ -1806,10 +1827,10 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 
                 lancamentos = lancamentosSnapshot.docs.map(doc => normalizarLancamento(doc));
 
-                // Processar compensações
+                // Processar compensações com a nova lógica
                 processarCompensacoes();
 
-                // Ordenar por data (mais recentes primeiro)
+                // Ordenar por data (mais recentes primeiro) para exibição
                 lancamentos.sort((a, b) => {
                     try {
                         const [dA, mA, yA] = a.data.split('/');
@@ -1835,11 +1856,26 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             if (!firebaseConnected) return;
             
             try {
+                const batch = db.batch();
+                let count = 0;
+                
                 for (const lanc of lancamentos) {
-                    await db.collection('lancamentos').doc(lanc.id).update({
+                    const ref = db.collection('lancamentos').doc(lanc.id);
+                    batch.update(ref, {
                         compensacoes: lanc.compensacoes || [],
-                        saldoRestante: lanc.saldoRestante || lanc.horas
+                        saldoRestante: lanc.saldoRestante
                     });
+                    count++;
+                    
+                    // Firestore batch tem limite de 500 operações
+                    if (count >= 400) {
+                        await batch.commit();
+                        count = 0;
+                    }
+                }
+                
+                if (count > 0) {
+                    await batch.commit();
                 }
             } catch (error) {
                 console.error('Erro ao salvar compensações:', error);
@@ -2235,7 +2271,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 if (colaborador) {
                     document.getElementById('resumoColaboradorNome').textContent = colaborador.nome;
                     
-                    const saldoTotal = lancamentosFiltrados
+                    const saldoTotal = lancamentos
                         .filter(l => l.colaboradorId === colaboradorId)
                         .reduce((sum, l) => {
                             return l.tipo === 'positiva' ? sum + l.saldoRestante : sum - l.saldoRestante;
@@ -2299,8 +2335,8 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 // Obter saldo acumulado para este lançamento
                 const saldoAcumulado = saldosAcumulados[lanc.colaboradorId]?.get(lanc.id) || 0;
                 
-                // Horas que faltam compensar ou "Completo" para hora zero
-                const horasFaltantes = lanc.horas === 0 ? 0 : (lanc.saldoRestante || 0);
+                // Horas que faltam compensar
+                const horasFaltantes = lanc.saldoRestante || 0;
                 
                 // Gerar tooltip com as compensações
                 const tooltipText = gerarTooltipCompensacoes(lanc);
@@ -2412,7 +2448,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             paginatedColabs.forEach(colab => {
                 const lancamentosColab = lancamentos.filter(l => l.colaboradorId === colab.id);
                 const saldoTotal = lancamentosColab.reduce((sum, l) => {
-                    return l.tipo === 'positiva' ? sum + (l.saldoRestante || l.horas) : sum - (l.saldoRestante || l.horas);
+                    return l.tipo === 'positiva' ? sum + l.saldoRestante : sum - l.saldoRestante;
                 }, 0);
                 
                 const statusClass = saldoTotal >= 0 ? 'badge-success' : 'badge-danger';
@@ -2583,10 +2619,10 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             
             let totalPositivas = lancamentos
                 .filter(l => l.tipo === 'positiva')
-                .reduce((sum, l) => sum + (l.saldoRestante || l.horas), 0);
+                .reduce((sum, l) => sum + l.saldoRestante, 0);
             let totalNegativas = lancamentos
                 .filter(l => l.tipo === 'negativa')
-                .reduce((sum, l) => sum + (l.saldoRestante || l.horas), 0);
+                .reduce((sum, l) => sum + l.saldoRestante, 0);
             
             document.getElementById('totalHorasPositivas').textContent = decimalParaHora(totalPositivas);
             document.getElementById('totalHorasNegativas').textContent = decimalParaHora(totalNegativas);
