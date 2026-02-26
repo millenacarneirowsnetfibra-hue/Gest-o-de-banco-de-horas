@@ -820,7 +820,7 @@
                 <h2>⏰ Banco de Horas</h2>
             </div>
             <ul class="sidebar-nav">
-                <li onclick="showTab('dashboard')">
+                <li class="active" onclick="showTab('dashboard')">
                     <span>📊</span> Dashboard
                 </li>
                 <li onclick="showTab('colaboradores')">
@@ -850,7 +850,7 @@
             </div>
 
             <!-- Dashboard Tab -->
-            <div id="dashboard" class="tab-content">
+            <div id="dashboard" class="tab-content active">
                 <div class="dashboard-grid">
                     <div class="stat-card">
                         <div class="stat-header">
@@ -1953,7 +1953,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             document.getElementById('importModal').style.display = 'block';
         }
 
-        // Função para verificar se uma hora está vencida
+        // Função para verificar se uma hora está vencida (mais de 1 ano da competência)
         function isHoraVencida(mes, ano) {
             const hoje = new Date();
             const dataVencimento = new Date(parseInt(ano) + 1, parseInt(mes) - 1, 1);
@@ -2419,30 +2419,35 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             return date1 <= date2;
         }
 
-        // Função para verificar se uma data está dentro do prazo (dentro de 1 ano)
+        // Função para verificar se uma data está dentro do prazo de 1 ano (regra correta: deve estar no mesmo ano ou até 1 ano após)
         function estaDentroDoPrazo(dataOrigem, dataDestino) {
             const [d1, m1, y1] = dataOrigem.split('/');
             const [d2, m2, y2] = dataDestino.split('/');
-            const dateOrigem = new Date(y1, m1 - 1, d1);
-            const dateDestino = new Date(y2, m2 - 1, d2);
             
-            // Calcula a diferença em anos
-            const diffYears = dateDestino.getFullYear() - dateOrigem.getFullYear();
+            // Converter para objetos Date (primeiro dia do mês)
+            const dateOrigem = new Date(parseInt(y1), parseInt(m1) - 1, 1);
+            const dateDestino = new Date(parseInt(y2), parseInt(m2) - 1, 1);
             
-            // Se a diferença for maior que 1 ano, está fora do prazo
-            if (diffYears > 1) return false;
+            // Calcular diferença em meses
+            const diffMeses = (dateDestino.getFullYear() - dateOrigem.getFullYear()) * 12 + 
+                              (dateDestino.getMonth() - dateOrigem.getMonth());
             
-            // Se for exatamente 1 ano, verifica o mês
-            if (diffYears === 1) {
-                return dateDestino.getMonth() <= dateOrigem.getMonth();
-            }
-            
-            return true;
+            // Está dentro do prazo se a diferença for de 0 a 12 meses
+            return diffMeses >= 0 && diffMeses <= 12;
         }
 
-        // Função principal de compensação de horas (CORRIGIDA)
+        // Função principal de compensação de horas (CORRIGIDA - respeita prazo de 1 ano)
         function processarCompensacoes() {
             console.log('Iniciando processamento de compensações...');
+            
+            // Resetar saldos e compensações
+            lancamentos.forEach(lanc => {
+                if (!lanc.quitado) {
+                    lanc.saldoRestante = lanc.horas;
+                    lanc.compensacoes = [];
+                    lanc.compensadoPor = [];
+                }
+            });
             
             // Agrupar lançamentos por colaborador
             const lancamentosPorColaborador = {};
@@ -2467,35 +2472,21 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 });
 
                 // Separar positivos e negativos
-                const positivos = lancamentosColab.filter(l => l.tipo === 'positiva').map(l => ({
-                    ...l,
-                    saldoRestante: l.horas,
-                    compensacoes: [],
-                    compensadoPor: []
-                }));
-                
-                const negativos = lancamentosColab.filter(l => l.tipo === 'negativa').map(l => ({
-                    ...l,
-                    saldoRestante: l.horas,
-                    compensacoes: [],
-                    compensadoPor: []
-                }));
+                const positivos = lancamentosColab.filter(l => l.tipo === 'positiva');
+                const negativos = lancamentosColab.filter(l => l.tipo === 'negativa');
 
-                // Processar compensações apenas para horas não vencidas
-                // Horas vencidas (negativas com mais de 1 ano) não podem ser compensadas
-                const negativosNaoVencidos = negativos.filter(l => !isHoraVencida(l.mes, l.ano));
-                
-                // Primeiro, positivos compensam negativos não vencidos
+                // Processar compensações: positivos compensam negativos
                 for (let i = 0; i < positivos.length; i++) {
                     const positivo = positivos[i];
                     if (positivo.saldoRestante <= 0) continue;
                     
-                    for (let j = 0; j < negativosNaoVencidos.length; j++) {
-                        const negativo = negativosNaoVencidos[j];
+                    for (let j = 0; j < negativos.length; j++) {
+                        const negativo = negativos[j];
                         if (negativo.saldoRestante <= 0) continue;
                         
-                        // Verificar se está dentro do prazo (negativo deve ser até 1 ano após o positivo)
-                        if (!estaDentroDoPrazo(positivo.data, negativo.data)) continue;
+                        // Verificar se está dentro do prazo de 1 ano
+                        // Horas negativas só podem ser compensadas por horas positivas até 1 ano após a competência da negativa
+                        if (!estaDentroDoPrazo(negativo.data, positivo.data)) continue;
                         
                         // Calcular quantidade a compensar
                         const quantidadeCompensar = Math.min(positivo.saldoRestante, negativo.saldoRestante);
@@ -2522,16 +2513,18 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                     }
                 }
 
-                // Depois, negativos não vencidos compensam positivos (os que sobraram)
-                for (let i = 0; i < negativosNaoVencidos.length; i++) {
-                    const negativo = negativosNaoVencidos[i];
+                // Depois, negativos podem compensar positivos apenas se estiverem dentro do prazo
+                // (negativo pode ser compensado por positivo de até 1 ano após sua competência)
+                for (let i = 0; i < negativos.length; i++) {
+                    const negativo = negativos[i];
                     if (negativo.saldoRestante <= 0) continue;
                     
                     for (let j = 0; j < positivos.length; j++) {
                         const positivo = positivos[j];
                         if (positivo.saldoRestante <= 0) continue;
                         
-                        // Verificar se está dentro do prazo (positivo deve ser até 1 ano após o negativo)
+                        // Verificar se o positivo está dentro do prazo para compensar este negativo
+                        // (positivo deve ser até 1 ano após o negativo)
                         if (!estaDentroDoPrazo(negativo.data, positivo.data)) continue;
                         
                         // Calcular quantidade a compensar
@@ -2558,17 +2551,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                         }
                     }
                 }
-
-                // Atualizar os lançamentos originais
-                const todosAtualizados = [...positivos, ...negativos];
-                todosAtualizados.forEach(lancAtualizado => {
-                    const lancOriginal = lancamentos.find(l => l.id === lancAtualizado.id);
-                    if (lancOriginal) {
-                        lancOriginal.saldoRestante = lancAtualizado.saldoRestante;
-                        lancOriginal.compensacoes = lancAtualizado.compensacoes;
-                        lancOriginal.compensadoPor = lancAtualizado.compensadoPor;
-                    }
-                });
             });
 
             console.log('Processamento de compensações concluído.');
@@ -2586,7 +2568,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 return { texto: 'Compensada', classe: 'badge-compensada' };
             }
 
-            // Se for hora negativa e estiver vencida
+            // Se for hora negativa e estiver vencida (mais de 1 ano da competência)
             if (lancamento.tipo === 'negativa' && isHoraVencida(lancamento.mes, lancamento.ano)) {
                 return { texto: 'Vencida', classe: 'badge-vencida' };
             }
@@ -3731,6 +3713,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
         document.addEventListener('DOMContentLoaded', function() {
             preencherAnos();
             document.getElementById('quitacaoData').value = new Date().toISOString().split('T')[0];
+            showTab('dashboard');
         });
     </script>
 </body>
