@@ -2410,33 +2410,13 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             return `${meses[dataVencimento.getMonth()]}/${dataVencimento.getFullYear()}`;
         }
 
-        // Função para comparar datas (retorna true se data1 <= data2)
-        function dataMenorOuIgual(data1, data2) {
-            const [d1, m1, y1] = data1.split('/');
-            const [d2, m2, y2] = data2.split('/');
-            const date1 = new Date(y1, m1 - 1, d1);
-            const date2 = new Date(y2, m2 - 1, d2);
-            return date1 <= date2;
+        // Função para converter data string para objeto Date (usando primeiro dia do mês)
+        function dataParaObjeto(dataStr) {
+            const [dia, mes, ano] = dataStr.split('/');
+            return new Date(parseInt(ano), parseInt(mes) - 1, 1);
         }
 
-        // Função para verificar se uma data está dentro do prazo de 1 ano (regra correta: deve estar no mesmo ano ou até 1 ano após)
-        function estaDentroDoPrazo(dataOrigem, dataDestino) {
-            const [d1, m1, y1] = dataOrigem.split('/');
-            const [d2, m2, y2] = dataDestino.split('/');
-            
-            // Converter para objetos Date (primeiro dia do mês)
-            const dateOrigem = new Date(parseInt(y1), parseInt(m1) - 1, 1);
-            const dateDestino = new Date(parseInt(y2), parseInt(m2) - 1, 1);
-            
-            // Calcular diferença em meses
-            const diffMeses = (dateDestino.getFullYear() - dateOrigem.getFullYear()) * 12 + 
-                              (dateDestino.getMonth() - dateOrigem.getMonth());
-            
-            // Está dentro do prazo se a diferença for de 0 a 12 meses
-            return diffMeses >= 0 && diffMeses <= 12;
-        }
-
-        // Função principal de compensação de horas (CORRIGIDA - respeita prazo de 1 ano)
+        // Função principal de compensação de horas (CORRIGIDA)
         function processarCompensacoes() {
             console.log('Iniciando processamento de compensações...');
             
@@ -2464,29 +2444,88 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             Object.keys(lancamentosPorColaborador).forEach(colaboradorId => {
                 const lancamentosColab = lancamentosPorColaborador[colaboradorId];
                 
-                // Ordenar por data (mais antigos primeiro)
+                // Ordenar todos os lançamentos por data (mais antigos primeiro)
                 lancamentosColab.sort((a, b) => {
-                    const [dA, mA, yA] = a.data.split('/');
-                    const [dB, mB, yB] = b.data.split('/');
-                    return new Date(yA, mA - 1, dA) - new Date(yB, mB - 1, dB);
+                    return dataParaObjeto(a.data) - dataParaObjeto(b.data);
                 });
 
-                // Separar positivos e negativos
+                // Separar positivos e negativos, mantendo a ordem cronológica
                 const positivos = lancamentosColab.filter(l => l.tipo === 'positiva');
                 const negativos = lancamentosColab.filter(l => l.tipo === 'negativa');
 
-                // Processar compensações: positivos compensam negativos
-                for (let i = 0; i < positivos.length; i++) {
-                    const positivo = positivos[i];
+                // PRIMEIRA ETAPA: Horas negativas devem ser compensadas por horas positivas
+                // Para cada negativo (débito), buscar positivos (créditos) disponíveis dentro do prazo
+                for (let i = 0; i < negativos.length; i++) {
+                    const negativo = negativos[i];
+                    if (negativo.saldoRestante <= 0) continue;
+                    
+                    // Encontrar positivos que podem compensar este negativo
+                    // Devem ser positivos com data <= data do negativo + 1 ano
+                    const dataVencimentoNegativo = new Date(dataParaObjeto(negativo.data));
+                    dataVencimentoNegativo.setFullYear(dataVencimentoNegativo.getFullYear() + 1);
+                    
+                    const positivosViaveis = positivos.filter(p => 
+                        p.saldoRestante > 0 && 
+                        dataParaObjeto(p.data) <= dataVencimentoNegativo
+                    );
+                    
+                    // Ordenar positivos por data (mais antigos primeiro)
+                    positivosViaveis.sort((a, b) => dataParaObjeto(a.data) - dataParaObjeto(b.data));
+                    
+                    for (let j = 0; j < positivosViaveis.length && negativo.saldoRestante > 0; j++) {
+                        const positivo = positivosViaveis[j];
+                        
+                        // Calcular quantidade a compensar
+                        const quantidadeCompensar = Math.min(positivo.saldoRestante, negativo.saldoRestante);
+                        
+                        if (quantidadeCompensar > 0) {
+                            // Registrar compensação
+                            negativo.compensadoPor.push({
+                                lancamentoId: positivo.id,
+                                quantidade: quantidadeCompensar,
+                                data: new Date().toLocaleDateString('pt-BR')
+                            });
+                            
+                            positivo.compensacoes.push({
+                                lancamentoId: negativo.id,
+                                quantidade: quantidadeCompensar,
+                                data: new Date().toLocaleDateString('pt-BR')
+                            });
+                            
+                            negativo.saldoRestante -= quantidadeCompensar;
+                            positivo.saldoRestante -= quantidadeCompensar;
+                        }
+                    }
+                }
+
+                // SEGUNDA ETAPA: Horas positivas que sobraram podem ser usadas para compensar negativos futuros?
+                // Na verdade, a regra é: positivos podem compensar negativos até 1 ano após a data do negativo
+                // Já tratamos isso acima. Agora vamos tratar o caso de positivos antigos que podem compensar negativos recentes
+                // que ainda não foram totalmente compensados
+                
+                // Reordenar positivos e negativos que ainda têm saldo
+                const positivosRestantes = positivos.filter(p => p.saldoRestante > 0);
+                const negativosRestantes = negativos.filter(n => n.saldoRestante > 0);
+                
+                // Para cada positivo restante, verificar se pode compensar algum negativo mais recente
+                for (let i = 0; i < positivosRestantes.length; i++) {
+                    const positivo = positivosRestantes[i];
                     if (positivo.saldoRestante <= 0) continue;
                     
-                    for (let j = 0; j < negativos.length; j++) {
-                        const negativo = negativos[j];
-                        if (negativo.saldoRestante <= 0) continue;
-                        
-                        // Verificar se está dentro do prazo de 1 ano
-                        // Horas negativas só podem ser compensadas por horas positivas até 1 ano após a competência da negativa
-                        if (!estaDentroDoPrazo(negativo.data, positivo.data)) continue;
+                    // Encontrar negativos que podem ser compensados por este positivo
+                    // O positivo deve ter data <= data do negativo + 1 ano
+                    const dataPositivo = dataParaObjeto(positivo.data);
+                    
+                    const negativosViaveis = negativosRestantes.filter(n => 
+                        n.saldoRestante > 0 && 
+                        dataPositivo <= new Date(dataParaObjeto(n.data).getFullYear() + 1, dataParaObjeto(n.data).getMonth(), 1)
+                    );
+                    
+                    // Ordenar negativos por data (mais antigos primeiro)
+                    negativosViaveis.sort((a, b) => dataParaObjeto(a.data) - dataParaObjeto(b.data));
+                    
+                    for (let j = 0; j < negativosViaveis.length && positivo.saldoRestante > 0; j++) {
+                        const negativo = negativosViaveis[j];
                         
                         // Calcular quantidade a compensar
                         const quantidadeCompensar = Math.min(positivo.saldoRestante, negativo.saldoRestante);
@@ -2507,47 +2546,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                             
                             positivo.saldoRestante -= quantidadeCompensar;
                             negativo.saldoRestante -= quantidadeCompensar;
-                            
-                            if (positivo.saldoRestante <= 0) break;
-                        }
-                    }
-                }
-
-                // Depois, negativos podem compensar positivos apenas se estiverem dentro do prazo
-                // (negativo pode ser compensado por positivo de até 1 ano após sua competência)
-                for (let i = 0; i < negativos.length; i++) {
-                    const negativo = negativos[i];
-                    if (negativo.saldoRestante <= 0) continue;
-                    
-                    for (let j = 0; j < positivos.length; j++) {
-                        const positivo = positivos[j];
-                        if (positivo.saldoRestante <= 0) continue;
-                        
-                        // Verificar se o positivo está dentro do prazo para compensar este negativo
-                        // (positivo deve ser até 1 ano após o negativo)
-                        if (!estaDentroDoPrazo(negativo.data, positivo.data)) continue;
-                        
-                        // Calcular quantidade a compensar
-                        const quantidadeCompensar = Math.min(negativo.saldoRestante, positivo.saldoRestante);
-                        
-                        if (quantidadeCompensar > 0) {
-                            // Registrar compensação
-                            negativo.compensacoes.push({
-                                lancamentoId: positivo.id,
-                                quantidade: quantidadeCompensar,
-                                data: new Date().toLocaleDateString('pt-BR')
-                            });
-                            
-                            positivo.compensadoPor.push({
-                                lancamentoId: negativo.id,
-                                quantidade: quantidadeCompensar,
-                                data: new Date().toLocaleDateString('pt-BR')
-                            });
-                            
-                            negativo.saldoRestante -= quantidadeCompensar;
-                            positivo.saldoRestante -= quantidadeCompensar;
-                            
-                            if (negativo.saldoRestante <= 0) break;
                         }
                     }
                 }
@@ -2596,9 +2594,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
         function calcularSaldoAcumulado(colaboradorId, lancamentosDoColaborador) {
             // Ordenar lançamentos por data (mais antigos primeiro)
             const lancamentosOrdenados = [...lancamentosDoColaborador].sort((a, b) => {
-                const [dA, mA, yA] = a.data.split('/');
-                const [dB, mB, yB] = b.data.split('/');
-                return new Date(yA, mA - 1, dA) - new Date(yB, mB - 1, dB);
+                return dataParaObjeto(a.data) - dataParaObjeto(b.data);
             });
 
             // Calcular saldo acumulado sequencialmente usando o valor original das horas
@@ -2752,9 +2748,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 // Ordenar lançamentos por data (mais recentes primeiro)
                 lancamentos.sort((a, b) => {
                     try {
-                        const [dA, mA, yA] = a.data.split('/');
-                        const [dB, mB, yB] = b.data.split('/');
-                        return new Date(yB, mB - 1, dB) - new Date(yA, mA - 1, dA);
+                        return dataParaObjeto(b.data) - dataParaObjeto(a.data);
                     } catch (e) {
                         return 0;
                     }
