@@ -277,12 +277,13 @@
             background-color: rgba(0,0,0,0.5);
             backdrop-filter: blur(4px);
             z-index: 1000;
+            overflow-y: auto;
         }
 
         .modal-content {
             background-color: white;
             width: 90%;
-            max-width: 500px;
+            max-width: 800px;
             margin: 40px auto;
             padding: 32px;
             border-radius: 24px;
@@ -329,6 +330,22 @@
             outline: none;
             border-color: #3b82f6;
             box-shadow: 0 0 0 3px rgba(59,130,246,0.1);
+        }
+
+        .form-group input[type="checkbox"] {
+            width: auto;
+            margin-right: 8px;
+        }
+
+        .form-row {
+            display: flex;
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+
+        .form-row .form-group {
+            flex: 1;
+            margin-bottom: 0;
         }
 
         /* Filtros */
@@ -461,6 +478,11 @@
         }
 
         .badge-compensada {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .badge-quitado {
             background: #d1fae5;
             color: #065f46;
         }
@@ -654,6 +676,96 @@
                 font-weight: normal;
             }
         }
+
+        /* Checkbox list */
+        .checkbox-list {
+            max-height: 300px;
+            overflow-y: auto;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 16px;
+        }
+
+        .checkbox-item {
+            display: flex;
+            align-items: center;
+            padding: 12px;
+            border-bottom: 1px solid #f1f5f9;
+        }
+
+        .checkbox-item:last-child {
+            border-bottom: none;
+        }
+
+        .checkbox-item input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            margin-right: 16px;
+            cursor: pointer;
+        }
+
+        .checkbox-item .info {
+            flex: 1;
+        }
+
+        .checkbox-item .competencia {
+            font-weight: 600;
+            color: #0f172a;
+        }
+
+        .checkbox-item .detalhes {
+            font-size: 0.9rem;
+            color: #64748b;
+            margin-top: 4px;
+        }
+
+        .checkbox-item .badge {
+            margin-left: 8px;
+        }
+
+        .checkbox-item.selected {
+            background-color: #f0f9ff;
+        }
+
+        /* Campos de valor */
+        .valor-input {
+            position: relative;
+        }
+
+        .valor-input input {
+            padding-left: 30px;
+        }
+
+        .valor-input::before {
+            content: 'R$';
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #64748b;
+            font-weight: 600;
+        }
+
+        .resumo-pagamento {
+            background: #f8fafc;
+            border-radius: 16px;
+            padding: 16px;
+            margin-top: 20px;
+        }
+
+        .resumo-linha {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .resumo-linha:last-child {
+            border-bottom: none;
+            font-weight: 700;
+            font-size: 1.1rem;
+            color: #0f172a;
+        }
     </style>
 </head>
 <body>
@@ -668,7 +780,7 @@
                 <h2>⏰ Banco de Horas</h2>
             </div>
             <ul class="sidebar-nav">
-                <li class="active" onclick="showTab('dashboard')">
+                <li onclick="showTab('dashboard')">
                     <span>📊</span> Dashboard
                 </li>
                 <li onclick="showTab('colaboradores')">
@@ -676,6 +788,9 @@
                 </li>
                 <li onclick="showTab('lancamentos')">
                     <span>⏱️</span> Banco de Horas
+                </li>
+                <li onclick="showTab('quitacoes')">
+                    <span>💰</span> Quitações
                 </li>
                 <li onclick="showTab('configuracoes')">
                     <span>⚙️</span> Configurações
@@ -695,7 +810,7 @@
             </div>
 
             <!-- Dashboard Tab -->
-            <div id="dashboard" class="tab-content active">
+            <div id="dashboard" class="tab-content">
                 <div class="dashboard-grid">
                     <div class="stat-card">
                         <div class="stat-header">
@@ -919,6 +1034,104 @@
                 </div>
             </div>
 
+            <!-- QUITAÇÕES TAB -->
+            <div id="quitacoes" class="tab-content">
+                <!-- Header com ações -->
+                <div class="header-with-actions">
+                    <h2 style="color: #0f172a;">💰 Quitações</h2>
+                    <div class="header-actions">
+                        <button class="btn btn-print" onclick="window.print()">
+                            🖨️ Imprimir
+                        </button>
+                        <button class="btn btn-primary" onclick="showNovaQuitacaoModal()">
+                            + Nova Quitação
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Filtros -->
+                <div class="filters-bar">
+                    <div class="filter-group">
+                        <label>Colaborador</label>
+                        <select id="filtroQuitacaoColaborador" onchange="aplicarFiltrosQuitacoes()">
+                            <option value="">Todos os colaboradores</option>
+                        </select>
+                    </div>
+                    
+                    <div class="filter-group">
+                        <label>Departamento</label>
+                        <select id="filtroQuitacaoDepartamento" onchange="aplicarFiltrosQuitacoes()">
+                            <option value="">Todos os departamentos</option>
+                        </select>
+                    </div>
+
+                    <div class="filter-group">
+                        <label>Competência Pagamento</label>
+                        <div style="display: flex; gap: 8px;">
+                            <select id="filtroQuitacaoMes" onchange="aplicarFiltrosQuitacoes()">
+                                <option value="">Todos</option>
+                                <option value="01">Janeiro</option>
+                                <option value="02">Fevereiro</option>
+                                <option value="03">Março</option>
+                                <option value="04">Abril</option>
+                                <option value="05">Maio</option>
+                                <option value="06">Junho</option>
+                                <option value="07">Julho</option>
+                                <option value="08">Agosto</option>
+                                <option value="09">Setembro</option>
+                                <option value="10">Outubro</option>
+                                <option value="11">Novembro</option>
+                                <option value="12">Dezembro</option>
+                            </select>
+                            <select id="filtroQuitacaoAno" onchange="aplicarFiltrosQuitacoes()">
+                                <option value="">Todos</option>
+                                <!-- Anos preenchidos via JS (2020-2030) -->
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="filter-group">
+                        <label>Data Quitação</label>
+                        <input type="date" id="filtroQuitacaoData" onchange="aplicarFiltrosQuitacoes()">
+                    </div>
+                </div>
+
+                <div class="filter-group" style="margin-bottom: 20px; display: flex; gap: 12px;">
+                    <button class="btn btn-primary" onclick="aplicarFiltrosQuitacoes()">Aplicar Filtros</button>
+                    <button class="btn btn-secondary" onclick="limparFiltrosQuitacoes()">Limpar</button>
+                </div>
+
+                <!-- Tabela de Quitações -->
+                <div class="table-container">
+                    <div class="header-with-refresh">
+                        <h3 style="margin-bottom: 0;">📋 Histórico de Quitações</h3>
+                        <span id="contadorQuitacoes" style="color: #64748b;">0 quitações</span>
+                    </div>
+                    
+                    <div id="semQuitacoesMsg" style="text-align: center; padding: 40px; color: #64748b; display: none;">
+                        Nenhuma quitação encontrada com os filtros selecionados.
+                    </div>
+
+                    <table id="quitacoesTable">
+                        <thead>
+                            <tr>
+                                <th>Funcionário</th>
+                                <th>Data da Quitação</th>
+                                <th>Competência Pagamento</th>
+                                <th>Horas Quitadas</th>
+                                <th>Valor (Folha)</th>
+                                <th>Valor (Reflexo)</th>
+                                <th>Total</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="quitacoesList">
+                            <!-- Quitações serão inseridas aqui -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
             <!-- Configurações Tab -->
             <div id="configuracoes" class="tab-content">
                 <h2 style="color: #0f172a; margin-bottom: 24px;">⚙️ Configurações</h2>
@@ -1017,6 +1230,118 @@
                     <button type="submit" class="btn btn-success">Salvar Lançamento</button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <!-- Modal de Nova Quitação -->
+    <div id="novaQuitacaoModal" class="modal">
+        <div class="modal-content" style="max-width: 900px;">
+            <h2>💰 Nova Quitação</h2>
+            <form id="novaQuitacaoForm" onsubmit="event.preventDefault(); salvarNovaQuitacao();">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Funcionário *</label>
+                        <select id="quitacaoColaborador" required onchange="carregarHorasVencidasColaborador()">
+                            <option value="">Selecione um funcionário</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Departamento</label>
+                        <input type="text" id="quitacaoDepartamento" readonly disabled style="background-color: #f1f5f9;">
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Competência de Pagamento *</label>
+                        <div style="display: flex; gap: 8px;">
+                            <select id="quitacaoMesPagamento" required style="flex: 1;">
+                                <option value="01">Janeiro</option>
+                                <option value="02">Fevereiro</option>
+                                <option value="03">Março</option>
+                                <option value="04">Abril</option>
+                                <option value="05">Maio</option>
+                                <option value="06">Junho</option>
+                                <option value="07">Julho</option>
+                                <option value="08">Agosto</option>
+                                <option value="09">Setembro</option>
+                                <option value="10">Outubro</option>
+                                <option value="11">Novembro</option>
+                                <option value="12">Dezembro</option>
+                            </select>
+                            <select id="quitacaoAnoPagamento" required style="flex: 1;">
+                                <!-- Anos preenchidos via JS (2020-2030) -->
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Data da Quitação *</label>
+                        <input type="date" id="quitacaoData" required value="<?php echo date('Y-m-d'); ?>">
+                    </div>
+                </div>
+
+                <div style="margin: 24px 0;">
+                    <h3 style="margin-bottom: 16px;">📋 Lançamentos Disponíveis para Quitação</h3>
+                    
+                    <div class="checkbox-list" id="lancamentosDisponiveisList">
+                        <!-- Lançamentos serão inseridos aqui -->
+                    </div>
+
+                    <div id="totalHorasSelecionadas" style="margin-top: 12px; text-align: right; font-weight: 600; color: #0f172a;">
+                        Horas selecionadas: 00:00 de 00:00 disponíveis
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 24px; margin: 24px 0;">
+                    <div class="form-group" style="flex: 1;">
+                        <label>Valor na Folha (R$) *</label>
+                        <input type="number" id="quitacaoValorFolha" step="0.01" min="0" required onchange="calcularTotalQuitacao()">
+                    </div>
+
+                    <div class="form-group" style="flex: 1;">
+                        <label>Valor de Reflexo (R$)</label>
+                        <input type="number" id="quitacaoValorReflexo" step="0.01" min="0" value="0.00" onchange="calcularTotalQuitacao()">
+                    </div>
+                </div>
+
+                <div class="resumo-pagamento">
+                    <div class="resumo-linha">
+                        <span>Valor na Folha:</span>
+                        <span>R$ <span id="resumoValorFolha">0,00</span></span>
+                    </div>
+                    <div class="resumo-linha">
+                        <span>Valor de Reflexo:</span>
+                        <span>R$ <span id="resumoValorReflexo">0,00</span></span>
+                    </div>
+                    <div class="resumo-linha">
+                        <span>Total Pago:</span>
+                        <span>R$ <span id="resumoTotalPago">0,00</span></span>
+                    </div>
+                </div>
+
+                <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 24px;">
+                    <button type="button" class="btn btn-secondary" onclick="hideModal('novaQuitacaoModal')">Cancelar</button>
+                    <button type="submit" class="btn btn-success">Salvar Quitação</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal de Visualização de Quitação -->
+    <div id="visualizarQuitacaoModal" class="modal">
+        <div class="modal-content" style="max-width: 700px;">
+            <h2>Detalhes da Quitação</h2>
+            <div id="detalhesQuitacao" style="margin-bottom: 24px;">
+                <!-- Detalhes serão inseridos aqui -->
+            </div>
+            <div id="lancamentosQuitadosList" style="max-height: 300px; overflow-y: auto; margin-bottom: 20px;">
+                <!-- Lançamentos quitados serão inseridos aqui -->
+            </div>
+            <div style="display: flex; justify-content: flex-end; gap: 12px;">
+                <button type="button" class="btn btn-secondary" onclick="hideModal('visualizarQuitacaoModal')">Fechar</button>
+            </div>
         </div>
     </div>
 
@@ -1229,6 +1554,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
         // Variáveis globais
         let colaboradores = [];
         let lancamentos = [];
+        let quitacoes = [];
         let empresas = [];
         let empresasDocs = [];
         let departamentos = [];
@@ -1256,7 +1582,8 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 if ((tabName === 'dashboard' && index === 0) ||
                     (tabName === 'colaboradores' && index === 1) ||
                     (tabName === 'lancamentos' && index === 2) ||
-                    (tabName === 'configuracoes' && index === 3)) {
+                    (tabName === 'quitacoes' && index === 3) ||
+                    (tabName === 'configuracoes' && index === 4)) {
                     item.classList.add('active');
                 }
             });
@@ -1264,6 +1591,9 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             if (tabName === 'lancamentos') {
                 carregarFiltros();
                 aplicarFiltros();
+            } else if (tabName === 'quitacoes') {
+                carregarFiltrosQuitacoes();
+                aplicarFiltrosQuitacoes();
             }
         }
 
@@ -1352,9 +1682,11 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                     ano: ano,
                     tipo: tipo,
                     horas: horas,
-                    saldoRestante: horas, // Inicialmente o saldo restante é igual às horas lançadas
-                    compensacoes: [], // Array para registrar as compensações
-                    compensadoPor: [], // IDs dos lançamentos que compensaram este
+                    saldoRestante: horas,
+                    compensacoes: [],
+                    compensadoPor: [],
+                    quitado: false,
+                    quitacoes: [],
                     createdAt: new Date().toISOString()
                 };
 
@@ -1541,6 +1873,311 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             document.getElementById('importModal').style.display = 'block';
         }
 
+        // Função para mostrar modal de nova quitação
+        function showNovaQuitacaoModal() {
+            if (!firebaseConnected) {
+                alert('Sem conexão com o Firebase.');
+                return;
+            }
+            
+            if (colaboradores.length === 0) {
+                alert('Cadastre colaboradores primeiro!');
+                showTab('colaboradores');
+                return;
+            }
+
+            // Preencher select de colaboradores
+            const selectColab = document.getElementById('quitacaoColaborador');
+            selectColab.innerHTML = '<option value="">Selecione um funcionário</option>';
+            colaboradores.sort((a, b) => a.nome.localeCompare(b.nome)).forEach(colab => {
+                const status = colab.ativo !== false ? '' : ' (Inativo)';
+                selectColab.innerHTML += `<option value="${colab.id}">${colab.nome}${status}</option>`;
+            });
+
+            // Preencher anos
+            const anoSelect = document.getElementById('quitacaoAnoPagamento');
+            anoSelect.innerHTML = '';
+            for (let i = 2020; i <= 2030; i++) {
+                const option = document.createElement('option');
+                option.value = i;
+                option.textContent = i;
+                if (i === new Date().getFullYear()) option.selected = true;
+                anoSelect.appendChild(option);
+            }
+
+            // Resetar formulário
+            document.getElementById('novaQuitacaoForm').reset();
+            document.getElementById('quitacaoData').value = new Date().toISOString().split('T')[0];
+            document.getElementById('quitacaoValorReflexo').value = '0.00';
+            document.getElementById('quitacaoDepartamento').value = '';
+            document.getElementById('lancamentosDisponiveisList').innerHTML = '<div style="text-align: center; padding: 20px;">Selecione um colaborador</div>';
+            document.getElementById('totalHorasSelecionadas').textContent = 'Horas selecionadas: 00:00 de 00:00 disponíveis';
+            
+            calcularTotalQuitacao();
+
+            document.getElementById('novaQuitacaoModal').style.display = 'block';
+        }
+
+        // Função para carregar horas vencidas do colaborador
+        function carregarHorasVencidasColaborador() {
+            const colaboradorId = document.getElementById('quitacaoColaborador').value;
+            
+            if (!colaboradorId) {
+                document.getElementById('quitacaoDepartamento').value = '';
+                document.getElementById('lancamentosDisponiveisList').innerHTML = '<div style="text-align: center; padding: 20px;">Selecione um colaborador</div>';
+                document.getElementById('totalHorasSelecionadas').textContent = 'Horas selecionadas: 00:00 de 00:00 disponíveis';
+                return;
+            }
+
+            const colaborador = colaboradores.find(c => c.id === colaboradorId);
+            if (colaborador) {
+                document.getElementById('quitacaoDepartamento').value = colaborador.departamento || '';
+            }
+
+            // Filtrar lançamentos do colaborador que são negativos (débitos) e não estão quitados
+            const lancamentosColab = lancamentos.filter(l => 
+                l.colaboradorId === colaboradorId && 
+                l.tipo === 'negativa' && 
+                l.saldoRestante > 0 &&
+                !l.quitado
+            );
+
+            if (lancamentosColab.length === 0) {
+                document.getElementById('lancamentosDisponiveisList').innerHTML = '<div style="text-align: center; padding: 20px;">Nenhuma hora vencida disponível para quitação.</div>';
+                document.getElementById('totalHorasSelecionadas').textContent = 'Horas selecionadas: 00:00 de 00:00 disponíveis';
+                return;
+            }
+
+            // Ordenar por data de vencimento (mais antigos primeiro)
+            lancamentosColab.sort((a, b) => {
+                const [dA, mA, yA] = a.data.split('/');
+                const [dB, mB, yB] = b.data.split('/');
+                return new Date(yA, mA - 1, dA) - new Date(yB, mB - 1, dB);
+            });
+
+            let html = '';
+            lancamentosColab.forEach(lanc => {
+                const competencia = formatarCompetencia(lanc.mes, lanc.ano);
+                const vencimento = calcularVencimento(lanc.mes, lanc.ano);
+                const status = calcularStatus(lanc);
+                
+                html += `
+                    <div class="checkbox-item">
+                        <input type="checkbox" class="lancamento-checkbox" 
+                               value="${lanc.id}" 
+                               data-horas="${lanc.saldoRestante}"
+                               onchange="atualizarTotalHorasSelecionadas()">
+                        <div class="info">
+                            <div>
+                                <span class="competencia">${competencia}</span>
+                                <span class="badge ${status.classe}" style="margin-left: 8px;">${status.texto}</span>
+                            </div>
+                            <div class="detalhes">
+                                Disponível: ${decimalParaHora(lanc.saldoRestante)} | 
+                                Vencimento: ${vencimento}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            document.getElementById('lancamentosDisponiveisList').innerHTML = html;
+            atualizarTotalHorasSelecionadas();
+        }
+
+        // Função para atualizar total de horas selecionadas
+        function atualizarTotalHorasSelecionadas() {
+            const checkboxes = document.querySelectorAll('.lancamento-checkbox:checked');
+            let totalSelecionado = 0;
+            let totalDisponivel = 0;
+
+            document.querySelectorAll('.lancamento-checkbox').forEach(cb => {
+                if (cb.checked) {
+                    totalSelecionado += parseFloat(cb.dataset.horas);
+                }
+                totalDisponivel += parseFloat(cb.dataset.horas);
+            });
+
+            document.getElementById('totalHorasSelecionadas').textContent = 
+                `Horas selecionadas: ${decimalParaHora(totalSelecionado)} de ${decimalParaHora(totalDisponivel)} disponíveis`;
+        }
+
+        // Função para calcular total da quitação
+        function calcularTotalQuitacao() {
+            const valorFolha = parseFloat(document.getElementById('quitacaoValorFolha').value) || 0;
+            const valorReflexo = parseFloat(document.getElementById('quitacaoValorReflexo').value) || 0;
+            const total = valorFolha + valorReflexo;
+
+            document.getElementById('resumoValorFolha').textContent = valorFolha.toFixed(2).replace('.', ',');
+            document.getElementById('resumoValorReflexo').textContent = valorReflexo.toFixed(2).replace('.', ',');
+            document.getElementById('resumoTotalPago').textContent = total.toFixed(2).replace('.', ',');
+        }
+
+        // Função para salvar nova quitação
+        async function salvarNovaQuitacao() {
+            const colaboradorId = document.getElementById('quitacaoColaborador').value;
+            const mesPagamento = document.getElementById('quitacaoMesPagamento').value;
+            const anoPagamento = document.getElementById('quitacaoAnoPagamento').value;
+            const dataQuitacao = document.getElementById('quitacaoData').value;
+            const valorFolha = parseFloat(document.getElementById('quitacaoValorFolha').value) || 0;
+            const valorReflexo = parseFloat(document.getElementById('quitacaoValorReflexo').value) || 0;
+
+            // Validar campos obrigatórios
+            if (!colaboradorId || !mesPagamento || !anoPagamento || !dataQuitacao) {
+                alert('Preencha todos os campos obrigatórios!');
+                return;
+            }
+
+            // Validar se pelo menos um lançamento foi selecionado
+            const checkboxes = document.querySelectorAll('.lancamento-checkbox:checked');
+            if (checkboxes.length === 0) {
+                alert('Selecione pelo menos uma hora vencida para quitar!');
+                return;
+            }
+
+            // Validar valor na folha
+            if (valorFolha <= 0) {
+                alert('O valor na folha deve ser maior que zero!');
+                return;
+            }
+
+            const colaborador = colaboradores.find(c => c.id === colaboradorId);
+            if (!colaborador) {
+                alert('Colaborador não encontrado!');
+                return;
+            }
+
+            // Calcular total de horas selecionadas
+            let totalHoras = 0;
+            const lancamentosSelecionados = [];
+            checkboxes.forEach(cb => {
+                totalHoras += parseFloat(cb.dataset.horas);
+                lancamentosSelecionados.push({
+                    id: cb.value,
+                    horas: parseFloat(cb.dataset.horas)
+                });
+            });
+
+            // Formatar competência de pagamento
+            const competenciaPagamento = `${mesPagamento}/${anoPagamento}`;
+
+            showLoading(true);
+
+            try {
+                // Criar registro de quitação
+                const quitacaoData = {
+                    colaboradorId: colaboradorId,
+                    colaboradorNome: colaborador.nome,
+                    colaboradorDepartamento: colaborador.departamento,
+                    dataQuitacao: dataQuitacao,
+                    competenciaPagamento: competenciaPagamento,
+                    mesPagamento: mesPagamento,
+                    anoPagamento: anoPagamento,
+                    horasQuitadas: totalHoras,
+                    valorFolha: valorFolha,
+                    valorReflexo: valorReflexo,
+                    totalPago: valorFolha + valorReflexo,
+                    lancamentos: lancamentosSelecionados,
+                    createdAt: new Date().toISOString()
+                };
+
+                const quitacaoRef = await db.collection('quitacoes').add(quitacaoData);
+
+                // Atualizar lançamentos quitados
+                for (const lanc of lancamentosSelecionados) {
+                    await db.collection('lancamentos').doc(lanc.id).update({
+                        quitado: true,
+                        quitadoEm: dataQuitacao,
+                        quitacaoId: quitacaoRef.id,
+                        valorQuitacaoFolha: valorFolha / lancamentosSelecionados.length, // Rateio simples
+                        valorQuitacaoReflexo: valorReflexo / lancamentosSelecionados.length
+                    });
+                }
+
+                await loadData();
+                
+                hideModal('novaQuitacaoModal');
+                aplicarFiltrosQuitacoes();
+                alert('Quitação realizada com sucesso!');
+            } catch (error) {
+                console.error('Erro ao salvar quitação:', error);
+                alert('Erro ao salvar: ' + error.message);
+            }
+            showLoading(false);
+        }
+
+        // Função para visualizar detalhes da quitação
+        function showVisualizarQuitacaoModal(id) {
+            const quitacao = quitacoes.find(q => q.id === id);
+            if (!quitacao) return;
+
+            const colaborador = colaboradores.find(c => c.id === quitacao.colaboradorId);
+            
+            const detalhes = document.getElementById('detalhesQuitacao');
+            detalhes.innerHTML = `
+                <div style="padding: 16px; background: #f8fafc; border-radius: 12px; margin-bottom: 20px;">
+                    <p><strong>Colaborador:</strong> ${quitacao.colaboradorNome}</p>
+                    <p><strong>Departamento:</strong> ${quitacao.colaboradorDepartamento || 'N/A'}</p>
+                    <p><strong>Data da Quitação:</strong> ${new Date(quitacao.dataQuitacao).toLocaleDateString('pt-BR')}</p>
+                    <p><strong>Competência Pagamento:</strong> ${quitacao.competenciaPagamento}</p>
+                    <p><strong>Total Horas:</strong> ${decimalParaHora(quitacao.horasQuitadas)}</p>
+                    <p><strong>Valor na Folha:</strong> R$ ${quitacao.valorFolha.toFixed(2).replace('.', ',')}</p>
+                    <p><strong>Valor de Reflexo:</strong> R$ ${quitacao.valorReflexo.toFixed(2).replace('.', ',')}</p>
+                    <p><strong>Total Pago:</strong> R$ ${quitacao.totalPago.toFixed(2).replace('.', ',')}</p>
+                </div>
+            `;
+
+            // Listar lançamentos quitados
+            const lancamentosQuitados = document.getElementById('lancamentosQuitadosList');
+            let lancHtml = '<h4 style="margin-bottom: 16px;">Lançamentos Quitados:</h4>';
+            
+            quitacao.lancamentos.forEach(lanc => {
+                const lancOriginal = lancamentos.find(l => l.id === lanc.id);
+                if (lancOriginal) {
+                    lancHtml += `
+                        <div style="padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 8px;">
+                            <strong>${formatarCompetencia(lancOriginal.mes, lancOriginal.ano)}</strong><br>
+                            Horas: ${decimalParaHora(lanc.horas)}
+                        </div>
+                    `;
+                }
+            });
+
+            lancamentosQuitados.innerHTML = lancHtml;
+            document.getElementById('visualizarQuitacaoModal').style.display = 'block';
+        }
+
+        // Função para excluir quitação
+        async function deleteQuitacao(id) {
+            if (!confirm('Tem certeza que deseja excluir esta quitação? Isso reverterá o status dos lançamentos quitados.')) return;
+
+            showLoading(true);
+            try {
+                const quitacao = quitacoes.find(q => q.id === id);
+                if (!quitacao) return;
+
+                // Reverter status dos lançamentos
+                for (const lanc of quitacao.lancamentos) {
+                    await db.collection('lancamentos').doc(lanc.id).update({
+                        quitado: false,
+                        quitadoEm: null,
+                        quitacaoId: null,
+                        valorQuitacaoFolha: null,
+                        valorQuitacaoReflexo: null
+                    });
+                }
+
+                await db.collection('quitacoes').doc(id).delete();
+                await loadData();
+                aplicarFiltrosQuitacoes();
+                alert('Quitação excluída com sucesso!');
+            } catch (error) {
+                console.error('Erro ao excluir quitação:', error);
+                alert('Erro ao excluir: ' + error.message);
+            }
+            showLoading(false);
+        }
+
         // Funções de conversão de horas
         function horaParaDecimal(horaStr) {
             const [horas, minutos] = horaStr.split(':').map(Number);
@@ -1620,10 +2257,12 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             // Agrupar lançamentos por colaborador
             const lancamentosPorColaborador = {};
             lancamentos.forEach(lanc => {
-                if (!lancamentosPorColaborador[lanc.colaboradorId]) {
-                    lancamentosPorColaborador[lanc.colaboradorId] = [];
+                if (!lanc.quitado) { // Ignorar lançamentos já quitados
+                    if (!lancamentosPorColaborador[lanc.colaboradorId]) {
+                        lancamentosPorColaborador[lanc.colaboradorId] = [];
+                    }
+                    lancamentosPorColaborador[lanc.colaboradorId].push(lanc);
                 }
-                lancamentosPorColaborador[lanc.colaboradorId].push(lanc);
             });
 
             // Para cada colaborador, processar compensações
@@ -1746,6 +2385,11 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
 
         // Função para calcular status do lançamento baseado nas regras
         function calcularStatus(lancamento) {
+            // Se já foi quitado
+            if (lancamento.quitado) {
+                return { texto: 'Quitado', classe: 'badge-quitado' };
+            }
+            
             // Se for hora zero ou já foi completamente compensado
             if (lancamento.horas === 0 || lancamento.saldoRestante === 0) {
                 return { texto: 'Compensada', classe: 'badge-compensada' };
@@ -1851,7 +2495,10 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 horas: typeof data.horas === 'number' ? data.horas : (typeof data.hours === 'number' ? data.hours : 0),
                 compensacoes: data.compensacoes || [],
                 compensadoPor: data.compensadoPor || [],
-                saldoRestante: data.saldoRestante !== undefined ? data.saldoRestante : (data.horas || 0)
+                saldoRestante: data.saldoRestante !== undefined ? data.saldoRestante : (data.horas || 0),
+                quitado: data.quitado || false,
+                quitadoEm: data.quitadoEm || null,
+                quitacaoId: data.quitacaoId || null
             };
             
             if (!lancamento.mes || !lancamento.ano) {
@@ -1909,10 +2556,22 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 
                 lancamentos = lancamentosSnapshot.docs.map(doc => normalizarLancamento(doc));
 
+                // Carregar quitações
+                const quitacoesSnapshot = await db.collection('quitacoes').get();
+                quitacoes = quitacoesSnapshot.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data()
+                }));
+
+                // Ordenar quitações por data (mais recentes primeiro)
+                quitacoes.sort((a, b) => {
+                    return new Date(b.dataQuitacao) - new Date(a.dataQuitacao);
+                });
+
                 // Processar compensações
                 processarCompensacoes();
 
-                // Ordenar por data (mais recentes primeiro)
+                // Ordenar lançamentos por data (mais recentes primeiro)
                 lancamentos.sort((a, b) => {
                     try {
                         const [dA, mA, yA] = a.data.split('/');
@@ -1960,14 +2619,16 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             const selects = [
                 'novoLancamentoAno',
                 'filtroAno', 
-                'editLancamentoAno'
+                'editLancamentoAno',
+                'quitacaoAnoPagamento',
+                'filtroQuitacaoAno'
             ];
             
             selects.forEach(selectId => {
                 const select = document.getElementById(selectId);
                 if (select) {
                     select.innerHTML = '';
-                    if (selectId === 'filtroAno') {
+                    if (selectId === 'filtroAno' || selectId === 'filtroQuitacaoAno') {
                         const optionAll = document.createElement('option');
                         optionAll.value = '';
                         optionAll.textContent = 'Todos';
@@ -1977,7 +2638,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                         const option = document.createElement('option');
                         option.value = ano;
                         option.textContent = ano;
-                        if (ano === new Date().getFullYear() && selectId !== 'filtroAno') {
+                        if (ano === new Date().getFullYear() && (selectId !== 'filtroAno' && selectId !== 'filtroQuitacaoAno')) {
                             option.selected = true;
                         }
                         select.appendChild(option);
@@ -2021,6 +2682,112 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             });
 
             preencherAnos();
+        }
+
+        function carregarFiltrosQuitacoes() {
+            const filtroColab = document.getElementById('filtroQuitacaoColaborador');
+            filtroColab.innerHTML = '<option value="">Todos os colaboradores</option>';
+            
+            colaboradores.sort((a, b) => a.nome.localeCompare(b.nome)).forEach(colab => {
+                const status = colab.ativo !== false ? '' : ' (Inativo)';
+                const optionText = `${colab.nome}${status}`;
+                filtroColab.innerHTML += `<option value="${colab.id}">${optionText}</option>`;
+            });
+
+            const filtroDepto = document.getElementById('filtroQuitacaoDepartamento');
+            filtroDepto.innerHTML = '<option value="">Todos os departamentos</option>';
+            const deptosUnicos = [...new Set(colaboradores.map(c => c.departamento))];
+            deptosUnicos.sort().forEach(depto => {
+                filtroDepto.innerHTML += `<option value="${depto}">${depto}</option>`;
+            });
+
+            preencherAnos();
+        }
+
+        // Função para aplicar filtros nas quitações
+        function aplicarFiltrosQuitacoes() {
+            const colaboradorId = document.getElementById('filtroQuitacaoColaborador').value;
+            const departamento = document.getElementById('filtroQuitacaoDepartamento').value;
+            const mes = document.getElementById('filtroQuitacaoMes').value;
+            const ano = document.getElementById('filtroQuitacaoAno').value;
+            const dataQuitacao = document.getElementById('filtroQuitacaoData').value;
+
+            let quitacoesFiltradas = [...quitacoes];
+
+            if (colaboradorId) {
+                quitacoesFiltradas = quitacoesFiltradas.filter(q => q.colaboradorId === colaboradorId);
+            }
+
+            if (departamento) {
+                quitacoesFiltradas = quitacoesFiltradas.filter(q => q.colaboradorDepartamento === departamento);
+            }
+
+            if (mes) {
+                quitacoesFiltradas = quitacoesFiltradas.filter(q => q.mesPagamento === mes);
+            }
+
+            if (ano) {
+                quitacoesFiltradas = quitacoesFiltradas.filter(q => q.anoPagamento === ano);
+            }
+
+            if (dataQuitacao) {
+                quitacoesFiltradas = quitacoesFiltradas.filter(q => q.dataQuitacao === dataQuitacao);
+            }
+
+            document.getElementById('contadorQuitacoes').textContent = `${quitacoesFiltradas.length} quitações`;
+
+            renderizarTabelaQuitacoes(quitacoesFiltradas);
+        }
+
+        // Função para limpar filtros de quitações
+        function limparFiltrosQuitacoes() {
+            document.getElementById('filtroQuitacaoColaborador').value = '';
+            document.getElementById('filtroQuitacaoDepartamento').value = '';
+            document.getElementById('filtroQuitacaoMes').value = '';
+            document.getElementById('filtroQuitacaoAno').value = '';
+            document.getElementById('filtroQuitacaoData').value = '';
+            aplicarFiltrosQuitacoes();
+        }
+
+        // Função para renderizar tabela de quitações
+        function renderizarTabelaQuitacoes(quitacoesFiltradas) {
+            const tbody = document.getElementById('quitacoesList');
+            const tabela = document.getElementById('quitacoesTable');
+            const semResultados = document.getElementById('semQuitacoesMsg');
+
+            if (quitacoesFiltradas.length === 0) {
+                tabela.style.display = 'none';
+                semResultados.style.display = 'block';
+                return;
+            }
+
+            tabela.style.display = 'table';
+            semResultados.style.display = 'none';
+
+            tbody.innerHTML = '';
+
+            quitacoesFiltradas.forEach(quitacao => {
+                const colaborador = colaboradores.find(c => c.id === quitacao.colaboradorId);
+                const dataQuitacaoFormatada = new Date(quitacao.dataQuitacao).toLocaleDateString('pt-BR');
+                
+                tbody.innerHTML += `
+                    <tr>
+                        <td><strong>${quitacao.colaboradorNome}</strong><br><small style="color: #64748b;">${quitacao.colaboradorDepartamento || ''}</small></td>
+                        <td>${dataQuitacaoFormatada}</td>
+                        <td>${quitacao.competenciaPagamento}</td>
+                        <td>${decimalParaHora(quitacao.horasQuitadas)}</td>
+                        <td>R$ ${quitacao.valorFolha.toFixed(2).replace('.', ',')}</td>
+                        <td>R$ ${quitacao.valorReflexo.toFixed(2).replace('.', ',')}</td>
+                        <td><strong>R$ ${quitacao.totalPago.toFixed(2).replace('.', ',')}</strong></td>
+                        <td>
+                            <div class="action-buttons">
+                                <button class="btn btn-info btn-small" onclick="showVisualizarQuitacaoModal('${quitacao.id}')" title="Ver detalhes">🔍</button>
+                                <button class="btn btn-danger btn-small" onclick="deleteQuitacao('${quitacao.id}')" title="Excluir">🗑️</button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            });
         }
 
         // Funções CRUD
@@ -2737,7 +3504,9 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             updateDepartamentosTable();
             updateDashboard();
             carregarFiltros();
+            carregarFiltrosQuitacoes();
             aplicarFiltros();
+            aplicarFiltrosQuitacoes();
             filterColaboradores();
             
             // Salvar compensações no Firebase
