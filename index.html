@@ -1955,8 +1955,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             document.getElementById('importModal').style.display = 'block';
         }
 
-        // Função CORRIGIDA para verificar se uma hora está vencida
-        // Uma hora negativa vence após 1 ano da sua competência
+        // Função para verificar se uma hora está vencida (considerando prazo de 1 ano)
         function isHoraVencida(mes, ano) {
             const hoje = new Date();
             
@@ -2431,7 +2430,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             return new Date(parseInt(ano), parseInt(mes) - 1, 1);
         }
 
-        // FUNÇÃO PRINCIPAL DE COMPENSAÇÃO - VERSÃO CORRIGIDA (COMPENSAÇÃO SIMULTÂNEA)
+        // FUNÇÃO PRINCIPAL DE COMPENSAÇÃO - VERSÃO CORRIGIDA (COMPENSAÇÃO SIMULTÂNEA COM PRAZO)
         function processarCompensacoes() {
             console.log('Iniciando processamento de compensações simultâneo...');
             
@@ -2459,11 +2458,12 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             Object.keys(lancamentosPorColaborador).forEach(colaboradorId => {
                 const lancamentosColab = lancamentosPorColaborador[colaboradorId];
                 
-                // Filtrar apenas lançamentos com saldo restante > 0
-                const lancamentosAtivos = lancamentosColab.filter(l => l.saldoRestante > 0);
+                // Filtrar apenas lançamentos com saldo restante > 0 que ainda estão dentro do prazo
+                const lancamentosAtivos = lancamentosColab.filter(l => 
+                    l.saldoRestante > 0 && !isHoraVencida(l.mes, l.ano)
+                );
                 
                 // Ordenar TODOS os lançamentos por data (mais antigos primeiro)
-                // Independentemente de serem positivos ou negativos
                 lancamentosAtivos.sort((a, b) => {
                     return dataParaObjeto(a.data) - dataParaObjeto(b.data);
                 });
@@ -2547,12 +2547,16 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             // Verificar se são de tipos opostos
             if (lanc1.tipo === lanc2.tipo) return false;
             
+            // Verificar se ambos ainda estão dentro do prazo (não vencidos)
+            if (isHoraVencida(lanc1.mes, lanc1.ano) || isHoraVencida(lanc2.mes, lanc2.ano)) {
+                return false; // Se qualquer um estiver vencido, não podem compensar
+            }
+            
             // Obter as datas
             const data1 = dataParaObjeto(lanc1.data);
             const data2 = dataParaObjeto(lanc2.data);
             
             // A diferença entre as datas não pode exceder 1 ano (365 dias)
-            // Isso funciona em qualquer direção (qualquer um pode ser mais antigo)
             const diffEmDias = Math.abs((data2 - data1) / (1000 * 60 * 60 * 24));
             
             return diffEmDias <= 365;
@@ -2570,27 +2574,25 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 return { texto: 'Compensada', classe: 'badge-compensada' };
             }
 
-            // Se for hora negativa e estiver vencida
-            if (lancamento.tipo === 'negativa' && isHoraVencida(lancamento.mes, lancamento.ano)) {
+            // Verificar se está vencido (independente de ser positivo ou negativo)
+            if (isHoraVencida(lancamento.mes, lancamento.ano)) {
                 return { texto: 'Vencida', classe: 'badge-vencida' };
             }
 
-            // Para horas negativas não vencidas
-            if (lancamento.tipo === 'negativa') {
-                const dataCompetencia = dataParaObjeto(lancamento.data);
-                const dataVencimento = new Date(dataCompetencia);
-                dataVencimento.setFullYear(dataVencimento.getFullYear() + 1);
-                
-                const hoje = new Date();
-                const diffTime = dataVencimento - hoje;
-                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            // Para horas não vencidas com saldo restante
+            const dataCompetencia = dataParaObjeto(lancamento.data);
+            const dataVencimento = new Date(dataCompetencia);
+            dataVencimento.setFullYear(dataVencimento.getFullYear() + 1);
+            
+            const hoje = new Date();
+            const diffTime = dataVencimento - hoje;
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-                if (diffDays <= 30) {
-                    return { texto: 'À vencer em 30 dias', classe: 'badge-warning' };
-                }
-                if (diffDays <= 60) {
-                    return { texto: 'À vencer em 60 dias', classe: 'badge-info' };
-                }
+            if (diffDays <= 30) {
+                return { texto: 'À vencer em 30 dias', classe: 'badge-warning' };
+            }
+            if (diffDays <= 60) {
+                return { texto: 'À vencer em 60 dias', classe: 'badge-info' };
             }
 
             return { texto: 'Em dia', classe: 'badge-success' };
