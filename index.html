@@ -1953,17 +1953,29 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             document.getElementById('importModal').style.display = 'block';
         }
 
-        // Função para verificar se uma hora está vencida (mais de 1 ano da competência)
+        // Função CORRIGIDA para verificar se uma hora está vencida
+        // Uma hora negativa vence após 1 ano da sua competência
         function isHoraVencida(mes, ano) {
             const hoje = new Date();
-            const dataVencimento = new Date(parseInt(ano) + 1, parseInt(mes) - 1, 1);
-            return hoje > dataVencimento;
+            
+            // Data da competência (primeiro dia do mês)
+            const dataCompetencia = new Date(parseInt(ano), parseInt(mes) - 1, 1);
+            
+            // Data de vencimento é 1 ano após a competência
+            const dataVencimento = new Date(dataCompetencia);
+            dataVencimento.setFullYear(dataVencimento.getFullYear() + 1);
+            
+            // Se hoje for maior ou igual à data de vencimento, está vencida
+            return hoje >= dataVencimento;
         }
 
         // Função para calcular dias vencidos
         function calcularDiasVencidos(mes, ano) {
             const hoje = new Date();
-            const dataVencimento = new Date(parseInt(ano) + 1, parseInt(mes) - 1, 1);
+            const dataCompetencia = new Date(parseInt(ano), parseInt(mes) - 1, 1);
+            const dataVencimento = new Date(dataCompetencia);
+            dataVencimento.setFullYear(dataVencimento.getFullYear() + 1);
+            
             const diffTime = hoje - dataVencimento;
             const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
             return diffDays > 0 ? diffDays : 0;
@@ -2048,9 +2060,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
 
             // Ordenar por data de vencimento (mais antigos primeiro)
             lancamentosColab.sort((a, b) => {
-                const [dA, mA, yA] = a.data.split('/');
-                const [dB, mB, yB] = b.data.split('/');
-                return new Date(yA, mA - 1, dA) - new Date(yB, mB - 1, dB);
+                return dataParaObjeto(a.data) - dataParaObjeto(b.data);
             });
 
             let html = '';
@@ -2405,7 +2415,10 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
 
         // Função para calcular vencimento (1 ano após a competência)
         function calcularVencimento(mes, ano) {
-            const dataVencimento = new Date(parseInt(ano) + 1, parseInt(mes) - 1, 1);
+            const dataCompetencia = new Date(parseInt(ano), parseInt(mes) - 1, 1);
+            const dataVencimento = new Date(dataCompetencia);
+            dataVencimento.setFullYear(dataVencimento.getFullYear() + 1);
+            
             const meses = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
             return `${meses[dataVencimento.getMonth()]}/${dataVencimento.getFullYear()}`;
         }
@@ -2414,6 +2427,20 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
         function dataParaObjeto(dataStr) {
             const [dia, mes, ano] = dataStr.split('/');
             return new Date(parseInt(ano), parseInt(mes) - 1, 1);
+        }
+
+        // Função para verificar se um positivo pode compensar um negativo (dentro do prazo de 1 ano)
+        function podeCompensar(positivo, negativo) {
+            // O positivo deve ser até 1 ano após o negativo
+            const dataNegativo = dataParaObjeto(negativo.data);
+            const dataPositivo = dataParaObjeto(positivo.data);
+            
+            // Calcular data limite (negativo + 1 ano)
+            const dataLimite = new Date(dataNegativo);
+            dataLimite.setFullYear(dataLimite.getFullYear() + 1);
+            
+            // O positivo deve ser >= negativo e <= negativo + 1 ano
+            return dataPositivo >= dataNegativo && dataPositivo <= dataLimite;
         }
 
         // Função principal de compensação de horas (CORRIGIDA)
@@ -2432,7 +2459,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             // Agrupar lançamentos por colaborador
             const lancamentosPorColaborador = {};
             lancamentos.forEach(lanc => {
-                if (!lanc.quitado) { // Ignorar lançamentos já quitados
+                if (!lanc.quitado) {
                     if (!lancamentosPorColaborador[lanc.colaboradorId]) {
                         lancamentosPorColaborador[lanc.colaboradorId] = [];
                     }
@@ -2449,24 +2476,18 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                     return dataParaObjeto(a.data) - dataParaObjeto(b.data);
                 });
 
-                // Separar positivos e negativos, mantendo a ordem cronológica
+                // Separar positivos e negativos
                 const positivos = lancamentosColab.filter(l => l.tipo === 'positiva');
                 const negativos = lancamentosColab.filter(l => l.tipo === 'negativa');
 
-                // PRIMEIRA ETAPA: Horas negativas devem ser compensadas por horas positivas
-                // Para cada negativo (débito), buscar positivos (créditos) disponíveis dentro do prazo
+                // Para cada negativo, buscar positivos que podem compensá-lo
                 for (let i = 0; i < negativos.length; i++) {
                     const negativo = negativos[i];
                     if (negativo.saldoRestante <= 0) continue;
                     
                     // Encontrar positivos que podem compensar este negativo
-                    // Devem ser positivos com data <= data do negativo + 1 ano
-                    const dataVencimentoNegativo = new Date(dataParaObjeto(negativo.data));
-                    dataVencimentoNegativo.setFullYear(dataVencimentoNegativo.getFullYear() + 1);
-                    
                     const positivosViaveis = positivos.filter(p => 
-                        p.saldoRestante > 0 && 
-                        dataParaObjeto(p.data) <= dataVencimentoNegativo
+                        p.saldoRestante > 0 && podeCompensar(p, negativo)
                     );
                     
                     // Ordenar positivos por data (mais antigos primeiro)
@@ -2475,7 +2496,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                     for (let j = 0; j < positivosViaveis.length && negativo.saldoRestante > 0; j++) {
                         const positivo = positivosViaveis[j];
                         
-                        // Calcular quantidade a compensar
                         const quantidadeCompensar = Math.min(positivo.saldoRestante, negativo.saldoRestante);
                         
                         if (quantidadeCompensar > 0) {
@@ -2498,57 +2518,8 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                     }
                 }
 
-                // SEGUNDA ETAPA: Horas positivas que sobraram podem ser usadas para compensar negativos futuros?
-                // Na verdade, a regra é: positivos podem compensar negativos até 1 ano após a data do negativo
-                // Já tratamos isso acima. Agora vamos tratar o caso de positivos antigos que podem compensar negativos recentes
-                // que ainda não foram totalmente compensados
-                
-                // Reordenar positivos e negativos que ainda têm saldo
-                const positivosRestantes = positivos.filter(p => p.saldoRestante > 0);
-                const negativosRestantes = negativos.filter(n => n.saldoRestante > 0);
-                
-                // Para cada positivo restante, verificar se pode compensar algum negativo mais recente
-                for (let i = 0; i < positivosRestantes.length; i++) {
-                    const positivo = positivosRestantes[i];
-                    if (positivo.saldoRestante <= 0) continue;
-                    
-                    // Encontrar negativos que podem ser compensados por este positivo
-                    // O positivo deve ter data <= data do negativo + 1 ano
-                    const dataPositivo = dataParaObjeto(positivo.data);
-                    
-                    const negativosViaveis = negativosRestantes.filter(n => 
-                        n.saldoRestante > 0 && 
-                        dataPositivo <= new Date(dataParaObjeto(n.data).getFullYear() + 1, dataParaObjeto(n.data).getMonth(), 1)
-                    );
-                    
-                    // Ordenar negativos por data (mais antigos primeiro)
-                    negativosViaveis.sort((a, b) => dataParaObjeto(a.data) - dataParaObjeto(b.data));
-                    
-                    for (let j = 0; j < negativosViaveis.length && positivo.saldoRestante > 0; j++) {
-                        const negativo = negativosViaveis[j];
-                        
-                        // Calcular quantidade a compensar
-                        const quantidadeCompensar = Math.min(positivo.saldoRestante, negativo.saldoRestante);
-                        
-                        if (quantidadeCompensar > 0) {
-                            // Registrar compensação
-                            positivo.compensacoes.push({
-                                lancamentoId: negativo.id,
-                                quantidade: quantidadeCompensar,
-                                data: new Date().toLocaleDateString('pt-BR')
-                            });
-                            
-                            negativo.compensadoPor.push({
-                                lancamentoId: positivo.id,
-                                quantidade: quantidadeCompensar,
-                                data: new Date().toLocaleDateString('pt-BR')
-                            });
-                            
-                            positivo.saldoRestante -= quantidadeCompensar;
-                            negativo.saldoRestante -= quantidadeCompensar;
-                        }
-                    }
-                }
+                // Agora, para positivos que sobraram, verificar se podem compensar negativos restantes
+                // (mas isso já foi coberto no loop acima, então não precisamos repetir)
             });
 
             console.log('Processamento de compensações concluído.');
@@ -2566,31 +2537,33 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 return { texto: 'Compensada', classe: 'badge-compensada' };
             }
 
-            // Se for hora negativa e estiver vencida (mais de 1 ano da competência)
+            // Se for hora negativa e estiver vencida
             if (lancamento.tipo === 'negativa' && isHoraVencida(lancamento.mes, lancamento.ano)) {
                 return { texto: 'Vencida', classe: 'badge-vencida' };
             }
 
-            const hoje = new Date();
-            const [mes, ano] = [lancamento.mes, lancamento.ano];
-            const vencimento = new Date(parseInt(ano) + 1, parseInt(mes) - 1, 1);
-            
-            const diffTime = vencimento - hoje;
-            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            // Para horas negativas não vencidas
+            if (lancamento.tipo === 'negativa') {
+                const dataCompetencia = dataParaObjeto(lancamento.data);
+                const dataVencimento = new Date(dataCompetencia);
+                dataVencimento.setFullYear(dataVencimento.getFullYear() + 1);
+                
+                const hoje = new Date();
+                const diffTime = dataVencimento - hoje;
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-            if (diffDays < 0) {
-                return { texto: 'Vencida', classe: 'badge-danger' };
+                if (diffDays <= 30) {
+                    return { texto: 'À vencer em 30 dias', classe: 'badge-warning' };
+                }
+                if (diffDays <= 60) {
+                    return { texto: 'À vencer em 60 dias', classe: 'badge-info' };
+                }
             }
-            if (diffDays <= 30) {
-                return { texto: 'À vencer em 30 dias', classe: 'badge-warning' };
-            }
-            if (diffDays <= 60) {
-                return { texto: 'À vencer em 60 dias', classe: 'badge-info' };
-            }
+
             return { texto: 'Em dia', classe: 'badge-success' };
         }
 
-        // Função para calcular saldo acumulado por colaborador (mantém o saldo real, não afetado pelas compensações)
+        // Função para calcular saldo acumulado por colaborador
         function calcularSaldoAcumulado(colaboradorId, lancamentosDoColaborador) {
             // Ordenar lançamentos por data (mais antigos primeiro)
             const lancamentosOrdenados = [...lancamentosDoColaborador].sort((a, b) => {
@@ -3284,7 +3257,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 if (colaborador) {
                     document.getElementById('resumoColaboradorNome').textContent = colaborador.nome;
                     
-                    // Calcular saldo total (usando horas originais, não saldoRestante)
+                    // Calcular saldo total (usando horas originais)
                     const saldoTotal = lancamentos
                         .filter(l => l.colaboradorId === colaboradorId)
                         .reduce((sum, l) => {
@@ -3346,10 +3319,10 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 
                 const quantidadeIcon = lanc.tipo === 'positiva' ? '➕' : '➖';
                 
-                // Obter saldo acumulado para este lançamento (baseado nas horas originais)
+                // Obter saldo acumulado para este lançamento
                 const saldoAcumulado = saldosAcumulados[lanc.colaboradorId]?.get(lanc.id) || 0;
                 
-                // Horas que faltam compensar (baseado no saldoRestante)
+                // Horas que faltam compensar
                 const horasFaltantes = lanc.saldoRestante !== undefined ? lanc.saldoRestante : lanc.horas;
                 
                 // Gerar tooltip com as compensações
@@ -3359,7 +3332,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                     `<span class="badge badge-warning compensacoes-tooltip" data-tooltip="${tooltipText}">Falta ${decimalParaHora(horasFaltantes)}</span>` : 
                     `<span class="badge badge-success compensacoes-tooltip" data-tooltip="${tooltipText}">Completo</span>`;
 
-                // Botão de visualizar compensações (só aparece se houver compensações)
+                // Botão de visualizar compensações
                 const visualizarBtn = (lanc.compensacoes && lanc.compensacoes.length > 0) || (lanc.compensadoPor && lanc.compensadoPor.length > 0) ?
                     `<button class="btn btn-info btn-small" onclick="showVisualizarCompensacoesModal('${lanc.id}')" title="Ver detalhes das compensações">🔍</button>` : '';
 
