@@ -806,6 +806,20 @@
             color: #dc2626;
             font-size: 1.5rem;
         }
+
+        /* Estilo para horas vencidas (positivas e negativas) */
+        .badge-vencida-positiva {
+            background: #fef3c7;
+            color: #92400e;
+            border: 1px solid #f59e0b;
+        }
+        
+        .badge-vencida-negativa {
+            background: #fee2e2;
+            color: #991b1b;
+            border: 1px solid #dc2626;
+            animation: pulse 2s infinite;
+        }
     </style>
 </head>
 <body>
@@ -1164,7 +1178,8 @@
                                 <th>Departamento</th>
                                 <th>Competência</th>
                                 <th>Vencimento</th>
-                                <th>Horas Negativas</th>
+                                <th>Tipo</th>
+                                <th>Horas</th>
                                 <th>Dias Vencidos</th>
                                 <th>Ações</th>
                             </tr>
@@ -1192,6 +1207,7 @@
                                 <th>Funcionário</th>
                                 <th>Data da Quitação</th>
                                 <th>Competência Pagamento</th>
+                                <th>Tipo</th>
                                 <th>Horas Quitadas</th>
                                 <th>Valor (Folha)</th>
                                 <th>Valor (Reflexo)</th>
@@ -1953,8 +1969,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             document.getElementById('importModal').style.display = 'block';
         }
 
-        // Função CORRIGIDA para verificar se uma hora está vencida
-        // Uma hora negativa vence após 1 ano da sua competência
+        // Função para verificar se uma hora está vencida (MESMA REGRA PARA POSITIVAS E NEGATIVAS)
         function isHoraVencida(mes, ano) {
             const hoje = new Date();
             
@@ -2027,7 +2042,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             document.getElementById('novaQuitacaoModal').style.display = 'block';
         }
 
-        // Função para carregar horas vencidas do colaborador
+        // Função para carregar horas vencidas do colaborador (POSITIVAS E NEGATIVAS)
         function carregarHorasVencidasColaborador() {
             const colaboradorId = document.getElementById('quitacaoColaborador').value;
             
@@ -2043,10 +2058,9 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 document.getElementById('quitacaoDepartamento').value = colaborador.departamento || '';
             }
 
-            // Filtrar lançamentos do colaborador que são negativos (débitos), estão vencidos e não quitados
+            // Filtrar lançamentos do colaborador que estão vencidos e não quitados (AMBOS OS TIPOS)
             const lancamentosColab = lancamentos.filter(l => 
                 l.colaboradorId === colaboradorId && 
-                l.tipo === 'negativa' && 
                 l.saldoRestante > 0 &&
                 !l.quitado &&
                 isHoraVencida(l.mes, l.ano)
@@ -2068,20 +2082,24 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 const competencia = formatarCompetencia(lanc.mes, lanc.ano);
                 const vencimento = calcularVencimento(lanc.mes, lanc.ano);
                 const diasVencidos = calcularDiasVencidos(lanc.mes, lanc.ano);
+                const tipoLabel = lanc.tipo === 'positiva' ? '➕ Hora Extra (a receber)' : '➖ Hora Débito (a pagar)';
+                const badgeClass = lanc.tipo === 'positiva' ? 'badge-warning' : 'badge-danger';
                 
                 html += `
                     <div class="checkbox-item">
                         <input type="checkbox" class="lancamento-checkbox" 
                                value="${lanc.id}" 
                                data-horas="${lanc.saldoRestante}"
+                               data-tipo="${lanc.tipo}"
                                onchange="atualizarTotalHorasSelecionadas()">
                         <div class="info">
                             <div>
                                 <span class="competencia">${competencia}</span>
+                                <span class="badge ${badgeClass}" style="margin-left: 8px;">${lanc.tipo === 'positiva' ? 'A RECEBER' : 'A PAGAR'}</span>
                                 <span class="badge badge-danger" style="margin-left: 8px;">VENCIDA</span>
                             </div>
                             <div class="detalhes">
-                                Disponível: ${decimalParaHora(lanc.saldoRestante)} | 
+                                ${tipoLabel} - Disponível: ${decimalParaHora(lanc.saldoRestante)} | 
                                 Vencimento: ${vencimento} | 
                                 Dias vencidos: ${diasVencidos}
                             </div>
@@ -2174,7 +2192,8 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 totalHoras += parseFloat(cb.dataset.horas);
                 lancamentosSelecionados.push({
                     id: cb.value,
-                    horas: parseFloat(cb.dataset.horas)
+                    horas: parseFloat(cb.dataset.horas),
+                    tipo: cb.dataset.tipo
                 });
             });
 
@@ -2261,9 +2280,10 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             quitacao.lancamentos.forEach(lanc => {
                 const lancOriginal = lancamentos.find(l => l.id === lanc.id);
                 if (lancOriginal) {
+                    const tipoLabel = lancOriginal.tipo === 'positiva' ? '➕ Hora Extra (a receber)' : '➖ Hora Débito (a pagar)';
                     lancHtml += `
                         <div style="padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 8px;">
-                            <strong>${formatarCompetencia(lancOriginal.mes, lancOriginal.ano)}</strong><br>
+                            <strong>${formatarCompetencia(lancOriginal.mes, lancOriginal.ano)}</strong> - ${tipoLabel}<br>
                             Horas: ${decimalParaHora(lanc.horas)}
                         </div>
                     `;
@@ -2306,10 +2326,9 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             showLoading(false);
         }
 
-        // Função para renderizar horas vencidas
+        // Função para renderizar horas vencidas (POSITIVAS E NEGATIVAS)
         function renderizarHorasVencidas() {
             const horasVencidas = lancamentos.filter(l => 
-                l.tipo === 'negativa' && 
                 !l.quitado && 
                 l.saldoRestante > 0 && 
                 isHoraVencida(l.mes, l.ano)
@@ -2350,13 +2369,17 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 const vencimento = calcularVencimento(lanc.mes, lanc.ano);
                 const diasVencidos = calcularDiasVencidos(lanc.mes, lanc.ano);
                 
+                const tipoLabel = lanc.tipo === 'positiva' ? '➕ Hora Extra (a receber)' : '➖ Hora Débito (a pagar)';
+                const badgeClass = lanc.tipo === 'positiva' ? 'badge-warning' : 'badge-danger';
+                
                 tbody.innerHTML += `
                     <tr>
                         <td><strong>${colaborador.nome}</strong></td>
                         <td>${colaborador.departamento || 'N/A'}</td>
                         <td>${competencia}</td>
                         <td>${vencimento}</td>
-                        <td><span class="badge badge-danger">${decimalParaHora(lanc.saldoRestante)}</span></td>
+                        <td><span class="badge ${badgeClass}">${tipoLabel}</span></td>
+                        <td><span class="badge ${badgeClass}">${decimalParaHora(lanc.saldoRestante)}</span></td>
                         <td><span class="badge badge-danger">${diasVencidos} dias</span></td>
                         <td>
                             <button class="btn btn-primary btn-small" onclick="showNovaQuitacaoParaColaborador('${lanc.colaboradorId}')">
@@ -2443,7 +2466,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             return dataPositivo >= dataNegativo && dataPositivo <= dataLimite;
         }
 
-        // Função principal de compensação de horas (CORRIGIDA)
+        // Função principal de compensação de horas
         function processarCompensacoes() {
             console.log('Iniciando processamento de compensações...');
             
@@ -2517,9 +2540,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                         }
                     }
                 }
-
-                // Agora, para positivos que sobraram, verificar se podem compensar negativos restantes
-                // (mas isso já foi coberto no loop acima, então não precisamos repetir)
             });
 
             console.log('Processamento de compensações concluído.');
@@ -2532,32 +2552,34 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 return { texto: 'Quitado', classe: 'badge-quitado' };
             }
             
-            // Se for hora zero ou já foi completamente compensado
+            // Se for hora zero ou já foi completamente compensada
             if (lancamento.horas === 0 || lancamento.saldoRestante === 0) {
                 return { texto: 'Compensada', classe: 'badge-compensada' };
             }
 
-            // Se for hora negativa e estiver vencida
-            if (lancamento.tipo === 'negativa' && isHoraVencida(lancamento.mes, lancamento.ano)) {
-                return { texto: 'Vencida', classe: 'badge-vencida' };
+            // Se estiver vencida (após 1 ano)
+            if (isHoraVencida(lancamento.mes, lancamento.ano)) {
+                if (lancamento.tipo === 'positiva') {
+                    return { texto: 'Vencida (a receber)', classe: 'badge-warning' };
+                } else {
+                    return { texto: 'Vencida (a pagar)', classe: 'badge-vencida' };
+                }
             }
 
-            // Para horas negativas não vencidas
-            if (lancamento.tipo === 'negativa') {
-                const dataCompetencia = dataParaObjeto(lancamento.data);
-                const dataVencimento = new Date(dataCompetencia);
-                dataVencimento.setFullYear(dataVencimento.getFullYear() + 1);
-                
-                const hoje = new Date();
-                const diffTime = dataVencimento - hoje;
-                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            // Para horas não vencidas, verificar proximidade do vencimento
+            const dataCompetencia = dataParaObjeto(lancamento.data);
+            const dataVencimento = new Date(dataCompetencia);
+            dataVencimento.setFullYear(dataVencimento.getFullYear() + 1);
+            
+            const hoje = new Date();
+            const diffTime = dataVencimento - hoje;
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-                if (diffDays <= 30) {
-                    return { texto: 'À vencer em 30 dias', classe: 'badge-warning' };
-                }
-                if (diffDays <= 60) {
-                    return { texto: 'À vencer em 60 dias', classe: 'badge-info' };
-                }
+            if (diffDays <= 30) {
+                return { texto: 'À vencer em 30 dias', classe: 'badge-warning' };
+            }
+            if (diffDays <= 60) {
+                return { texto: 'À vencer em 60 dias', classe: 'badge-info' };
             }
 
             return { texto: 'Em dia', classe: 'badge-success' };
@@ -2920,11 +2942,17 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 const colaborador = colaboradores.find(c => c.id === quitacao.colaboradorId);
                 const dataQuitacaoFormatada = new Date(quitacao.dataQuitacao).toLocaleDateString('pt-BR');
                 
+                // Determinar se a quitação foi de horas positivas ou negativas
+                const tipos = [...new Set(quitacao.lancamentos.map(l => l.tipo))];
+                const tipoLabel = tipos.includes('positiva') && tipos.includes('negativa') ? 'Misto' :
+                                 tipos.includes('positiva') ? '➕ A Receber' : '➖ A Pagar';
+                
                 tbody.innerHTML += `
                     <tr>
                         <td><strong>${quitacao.colaboradorNome}</strong><br><small style="color: #64748b;">${quitacao.colaboradorDepartamento || ''}</small></td>
                         <td>${dataQuitacaoFormatada}</td>
                         <td>${quitacao.competenciaPagamento}</td>
+                        <td><span class="badge ${tipos.includes('positiva') ? 'badge-warning' : 'badge-danger'}">${tipoLabel}</span></td>
                         <td>${decimalParaHora(quitacao.horasQuitadas)}</td>
                         <td>R$ ${quitacao.valorFolha.toFixed(2).replace('.', ',')}</td>
                         <td>R$ ${quitacao.valorReflexo.toFixed(2).replace('.', ',')}</td>
@@ -3336,8 +3364,8 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 const visualizarBtn = (lanc.compensacoes && lanc.compensacoes.length > 0) || (lanc.compensadoPor && lanc.compensadoPor.length > 0) ?
                     `<button class="btn btn-info btn-small" onclick="showVisualizarCompensacoesModal('${lanc.id}')" title="Ver detalhes das compensações">🔍</button>` : '';
 
-                // Botão de quitar (aparece apenas para horas negativas vencidas)
-                const quitarBtn = (lanc.tipo === 'negativa' && !lanc.quitado && horasFaltantes > 0 && isHoraVencida(lanc.mes, lanc.ano)) ?
+                // Botão de quitar (aparece apenas para horas vencidas - AMBOS OS TIPOS)
+                const quitarBtn = (!lanc.quitado && horasFaltantes > 0 && isHoraVencida(lanc.mes, lanc.ano)) ?
                     `<button class="btn btn-primary btn-small" onclick="showNovaQuitacaoParaColaborador('${lanc.colaboradorId}')" title="Quitar horas vencidas">💰</button>` : '';
 
                 tbody.innerHTML += `
