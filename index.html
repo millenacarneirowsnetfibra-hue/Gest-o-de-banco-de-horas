@@ -806,20 +806,6 @@
             color: #dc2626;
             font-size: 1.5rem;
         }
-
-        /* Estilo para horas vencidas (positivas e negativas) */
-        .badge-vencida-positiva {
-            background: #fef3c7;
-            color: #92400e;
-            border: 1px solid #f59e0b;
-        }
-        
-        .badge-vencida-negativa {
-            background: #fee2e2;
-            color: #991b1b;
-            border: 1px solid #dc2626;
-            animation: pulse 2s infinite;
-        }
     </style>
 </head>
 <body>
@@ -1178,8 +1164,7 @@
                                 <th>Departamento</th>
                                 <th>Competência</th>
                                 <th>Vencimento</th>
-                                <th>Tipo</th>
-                                <th>Horas</th>
+                                <th>Horas Negativas</th>
                                 <th>Dias Vencidos</th>
                                 <th>Ações</th>
                             </tr>
@@ -1207,7 +1192,6 @@
                                 <th>Funcionário</th>
                                 <th>Data da Quitação</th>
                                 <th>Competência Pagamento</th>
-                                <th>Tipo</th>
                                 <th>Horas Quitadas</th>
                                 <th>Valor (Folha)</th>
                                 <th>Valor (Reflexo)</th>
@@ -1897,9 +1881,10 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 lanc.compensacoes.forEach(comp => {
                     const lancComp = lancamentos.find(l => l.id === comp.lancamentoId);
                     if (lancComp) {
+                        const tipoIcon = lancComp.tipo === 'positiva' ? '➕' : '➖';
                         html += `
                             <div style="padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 8px;">
-                                <strong>${formatarCompetencia(lancComp.mes, lancComp.ano)}</strong> (${lancComp.tipo === 'positiva' ? '➕' : '➖'})<br>
+                                <strong>${formatarCompetencia(lancComp.mes, lancComp.ano)} ${tipoIcon}</strong><br>
                                 Quantidade compensada: ${decimalParaHora(comp.quantidade)}<br>
                                 Data: ${comp.data || 'N/A'}
                             </div>
@@ -1914,9 +1899,10 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 lanc.compensadoPor.forEach(comp => {
                     const lancComp = lancamentos.find(l => l.id === comp.lancamentoId);
                     if (lancComp) {
+                        const tipoIcon = lancComp.tipo === 'positiva' ? '➕' : '➖';
                         html += `
                             <div style="padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 8px;">
-                                <strong>${formatarCompetencia(lancComp.mes, lancComp.ano)}</strong> (${lancComp.tipo === 'positiva' ? '➕' : '➖'})<br>
+                                <strong>${formatarCompetencia(lancComp.mes, lancComp.ano)} ${tipoIcon}</strong><br>
                                 Quantidade: ${decimalParaHora(comp.quantidade)}<br>
                                 Data: ${comp.data || 'N/A'}
                             </div>
@@ -1969,7 +1955,8 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             document.getElementById('importModal').style.display = 'block';
         }
 
-        // Função para verificar se uma hora está vencida (MESMA REGRA PARA POSITIVAS E NEGATIVAS)
+        // Função CORRIGIDA para verificar se uma hora está vencida
+        // Uma hora negativa vence após 1 ano da sua competência
         function isHoraVencida(mes, ano) {
             const hoje = new Date();
             
@@ -2042,7 +2029,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             document.getElementById('novaQuitacaoModal').style.display = 'block';
         }
 
-        // Função para carregar horas vencidas do colaborador (POSITIVAS E NEGATIVAS)
+        // Função para carregar horas vencidas do colaborador
         function carregarHorasVencidasColaborador() {
             const colaboradorId = document.getElementById('quitacaoColaborador').value;
             
@@ -2058,9 +2045,10 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 document.getElementById('quitacaoDepartamento').value = colaborador.departamento || '';
             }
 
-            // Filtrar lançamentos do colaborador que estão vencidos e não quitados (AMBOS OS TIPOS)
+            // Filtrar lançamentos do colaborador que são negativos (débitos), estão vencidos e não quitados
             const lancamentosColab = lancamentos.filter(l => 
                 l.colaboradorId === colaboradorId && 
+                l.tipo === 'negativa' && 
                 l.saldoRestante > 0 &&
                 !l.quitado &&
                 isHoraVencida(l.mes, l.ano)
@@ -2082,24 +2070,20 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 const competencia = formatarCompetencia(lanc.mes, lanc.ano);
                 const vencimento = calcularVencimento(lanc.mes, lanc.ano);
                 const diasVencidos = calcularDiasVencidos(lanc.mes, lanc.ano);
-                const tipoLabel = lanc.tipo === 'positiva' ? '➕ Hora Extra (a receber)' : '➖ Hora Débito (a pagar)';
-                const badgeClass = lanc.tipo === 'positiva' ? 'badge-warning' : 'badge-danger';
                 
                 html += `
                     <div class="checkbox-item">
                         <input type="checkbox" class="lancamento-checkbox" 
                                value="${lanc.id}" 
                                data-horas="${lanc.saldoRestante}"
-                               data-tipo="${lanc.tipo}"
                                onchange="atualizarTotalHorasSelecionadas()">
                         <div class="info">
                             <div>
                                 <span class="competencia">${competencia}</span>
-                                <span class="badge ${badgeClass}" style="margin-left: 8px;">${lanc.tipo === 'positiva' ? 'A RECEBER' : 'A PAGAR'}</span>
                                 <span class="badge badge-danger" style="margin-left: 8px;">VENCIDA</span>
                             </div>
                             <div class="detalhes">
-                                ${tipoLabel} - Disponível: ${decimalParaHora(lanc.saldoRestante)} | 
+                                Disponível: ${decimalParaHora(lanc.saldoRestante)} | 
                                 Vencimento: ${vencimento} | 
                                 Dias vencidos: ${diasVencidos}
                             </div>
@@ -2192,8 +2176,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 totalHoras += parseFloat(cb.dataset.horas);
                 lancamentosSelecionados.push({
                     id: cb.value,
-                    horas: parseFloat(cb.dataset.horas),
-                    tipo: cb.dataset.tipo
+                    horas: parseFloat(cb.dataset.horas)
                 });
             });
 
@@ -2280,10 +2263,9 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             quitacao.lancamentos.forEach(lanc => {
                 const lancOriginal = lancamentos.find(l => l.id === lanc.id);
                 if (lancOriginal) {
-                    const tipoLabel = lancOriginal.tipo === 'positiva' ? '➕ Hora Extra (a receber)' : '➖ Hora Débito (a pagar)';
                     lancHtml += `
                         <div style="padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 8px;">
-                            <strong>${formatarCompetencia(lancOriginal.mes, lancOriginal.ano)}</strong> - ${tipoLabel}<br>
+                            <strong>${formatarCompetencia(lancOriginal.mes, lancOriginal.ano)}</strong><br>
                             Horas: ${decimalParaHora(lanc.horas)}
                         </div>
                     `;
@@ -2326,9 +2308,10 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             showLoading(false);
         }
 
-        // Função para renderizar horas vencidas (POSITIVAS E NEGATIVAS)
+        // Função para renderizar horas vencidas
         function renderizarHorasVencidas() {
             const horasVencidas = lancamentos.filter(l => 
+                l.tipo === 'negativa' && 
                 !l.quitado && 
                 l.saldoRestante > 0 && 
                 isHoraVencida(l.mes, l.ano)
@@ -2369,17 +2352,13 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 const vencimento = calcularVencimento(lanc.mes, lanc.ano);
                 const diasVencidos = calcularDiasVencidos(lanc.mes, lanc.ano);
                 
-                const tipoLabel = lanc.tipo === 'positiva' ? '➕ Hora Extra (a receber)' : '➖ Hora Débito (a pagar)';
-                const badgeClass = lanc.tipo === 'positiva' ? 'badge-warning' : 'badge-danger';
-                
                 tbody.innerHTML += `
                     <tr>
                         <td><strong>${colaborador.nome}</strong></td>
                         <td>${colaborador.departamento || 'N/A'}</td>
                         <td>${competencia}</td>
                         <td>${vencimento}</td>
-                        <td><span class="badge ${badgeClass}">${tipoLabel}</span></td>
-                        <td><span class="badge ${badgeClass}">${decimalParaHora(lanc.saldoRestante)}</span></td>
+                        <td><span class="badge badge-danger">${decimalParaHora(lanc.saldoRestante)}</span></td>
                         <td><span class="badge badge-danger">${diasVencidos} dias</span></td>
                         <td>
                             <button class="btn btn-primary btn-small" onclick="showNovaQuitacaoParaColaborador('${lanc.colaboradorId}')">
@@ -2452,23 +2431,9 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             return new Date(parseInt(ano), parseInt(mes) - 1, 1);
         }
 
-        // Função para verificar se um positivo pode compensar um negativo (dentro do prazo de 1 ano)
-        function podeCompensar(positivo, negativo) {
-            // O positivo deve ser até 1 ano após o negativo
-            const dataNegativo = dataParaObjeto(negativo.data);
-            const dataPositivo = dataParaObjeto(positivo.data);
-            
-            // Calcular data limite (negativo + 1 ano)
-            const dataLimite = new Date(dataNegativo);
-            dataLimite.setFullYear(dataLimite.getFullYear() + 1);
-            
-            // O positivo deve ser >= negativo e <= negativo + 1 ano
-            return dataPositivo >= dataNegativo && dataPositivo <= dataLimite;
-        }
-
-        // Função principal de compensação de horas
+        // FUNÇÃO PRINCIPAL DE COMPENSAÇÃO - VERSÃO CORRIGIDA (COMPENSAÇÃO SIMULTÂNEA)
         function processarCompensacoes() {
-            console.log('Iniciando processamento de compensações...');
+            console.log('Iniciando processamento de compensações simultâneo...');
             
             // Resetar saldos e compensações
             lancamentos.forEach(lanc => {
@@ -2494,55 +2459,103 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             Object.keys(lancamentosPorColaborador).forEach(colaboradorId => {
                 const lancamentosColab = lancamentosPorColaborador[colaboradorId];
                 
-                // Ordenar todos os lançamentos por data (mais antigos primeiro)
-                lancamentosColab.sort((a, b) => {
+                // Filtrar apenas lançamentos com saldo restante > 0
+                const lancamentosAtivos = lancamentosColab.filter(l => l.saldoRestante > 0);
+                
+                // Ordenar TODOS os lançamentos por data (mais antigos primeiro)
+                // Independentemente de serem positivos ou negativos
+                lancamentosAtivos.sort((a, b) => {
                     return dataParaObjeto(a.data) - dataParaObjeto(b.data);
                 });
 
-                // Separar positivos e negativos
-                const positivos = lancamentosColab.filter(l => l.tipo === 'positiva');
-                const negativos = lancamentosColab.filter(l => l.tipo === 'negativa');
-
-                // Para cada negativo, buscar positivos que podem compensá-lo
-                for (let i = 0; i < negativos.length; i++) {
-                    const negativo = negativos[i];
-                    if (negativo.saldoRestante <= 0) continue;
+                // Enquanto houver lançamentos com saldo, tentar compensar
+                let houveCompensacao = true;
+                while (houveCompensacao) {
+                    houveCompensacao = false;
                     
-                    // Encontrar positivos que podem compensar este negativo
-                    const positivosViaveis = positivos.filter(p => 
-                        p.saldoRestante > 0 && podeCompensar(p, negativo)
-                    );
-                    
-                    // Ordenar positivos por data (mais antigos primeiro)
-                    positivosViaveis.sort((a, b) => dataParaObjeto(a.data) - dataParaObjeto(b.data));
-                    
-                    for (let j = 0; j < positivosViaveis.length && negativo.saldoRestante > 0; j++) {
-                        const positivo = positivosViaveis[j];
+                    // Percorrer todos os lançamentos em ordem cronológica
+                    for (let i = 0; i < lancamentosAtivos.length; i++) {
+                        const lanc1 = lancamentosAtivos[i];
+                        if (lanc1.saldoRestante <= 0) continue;
                         
-                        const quantidadeCompensar = Math.min(positivo.saldoRestante, negativo.saldoRestante);
-                        
-                        if (quantidadeCompensar > 0) {
-                            // Registrar compensação
-                            negativo.compensadoPor.push({
-                                lancamentoId: positivo.id,
-                                quantidade: quantidadeCompensar,
-                                data: new Date().toLocaleDateString('pt-BR')
-                            });
+                        // Procurar outro lançamento de tipo oposto que possa compensar este
+                        for (let j = i + 1; j < lancamentosAtivos.length; j++) {
+                            const lanc2 = lancamentosAtivos[j];
+                            if (lanc2.saldoRestante <= 0) continue;
+                            if (lanc1.tipo === lanc2.tipo) continue; // Mesmo tipo não compensa
                             
-                            positivo.compensacoes.push({
-                                lancamentoId: negativo.id,
-                                quantidade: quantidadeCompensar,
-                                data: new Date().toLocaleDateString('pt-BR')
-                            });
-                            
-                            negativo.saldoRestante -= quantidadeCompensar;
-                            positivo.saldoRestante -= quantidadeCompensar;
+                            // Verificar se podem se compensar (baseado nas datas)
+                            if (podemCompensar(lanc1, lanc2)) {
+                                // Quantidade a compensar é o menor dos saldos
+                                const quantidadeCompensar = Math.min(lanc1.saldoRestante, lanc2.saldoRestante);
+                                
+                                if (quantidadeCompensar > 0) {
+                                    // Registrar compensação de forma bidirecional
+                                    lanc1.compensacoes.push({
+                                        lancamentoId: lanc2.id,
+                                        quantidade: quantidadeCompensar,
+                                        data: new Date().toLocaleDateString('pt-BR'),
+                                        tipo: lanc2.tipo
+                                    });
+                                    
+                                    lanc2.compensadoPor.push({
+                                        lancamentoId: lanc1.id,
+                                        quantidade: quantidadeCompensar,
+                                        data: new Date().toLocaleDateString('pt-BR'),
+                                        tipo: lanc1.tipo
+                                    });
+                                    
+                                    // Registrar também no sentido oposto para completude
+                                    lanc2.compensacoes.push({
+                                        lancamentoId: lanc1.id,
+                                        quantidade: quantidadeCompensar,
+                                        data: new Date().toLocaleDateString('pt-BR'),
+                                        tipo: lanc1.tipo
+                                    });
+                                    
+                                    lanc1.compensadoPor.push({
+                                        lancamentoId: lanc2.id,
+                                        quantidade: quantidadeCompensar,
+                                        data: new Date().toLocaleDateString('pt-BR'),
+                                        tipo: lanc2.tipo
+                                    });
+                                    
+                                    // Reduzir os saldos
+                                    lanc1.saldoRestante -= quantidadeCompensar;
+                                    lanc2.saldoRestante -= quantidadeCompensar;
+                                    
+                                    houveCompensacao = true;
+                                    
+                                    // Se o lanc1 acabou, sair do loop interno
+                                    if (lanc1.saldoRestante <= 0) break;
+                                }
+                            }
                         }
                     }
                 }
             });
 
-            console.log('Processamento de compensações concluído.');
+            console.log('Processamento de compensações simultâneo concluído.');
+        }
+
+        // Função para verificar se dois lançamentos podem se compensar mutuamente
+        // Baseado APENAS nas datas, independentemente de qual é positivo ou negativo
+        function podemCompensar(lanc1, lanc2) {
+            // Verificar se são do mesmo colaborador
+            if (lanc1.colaboradorId !== lanc2.colaboradorId) return false;
+            
+            // Verificar se são de tipos opostos
+            if (lanc1.tipo === lanc2.tipo) return false;
+            
+            // Obter as datas
+            const data1 = dataParaObjeto(lanc1.data);
+            const data2 = dataParaObjeto(lanc2.data);
+            
+            // A diferença entre as datas não pode exceder 1 ano (365 dias)
+            // Isso funciona em qualquer direção (qualquer um pode ser mais antigo)
+            const diffEmDias = Math.abs((data2 - data1) / (1000 * 60 * 60 * 24));
+            
+            return diffEmDias <= 365;
         }
 
         // Função para calcular status do lançamento baseado nas regras
@@ -2552,34 +2565,32 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 return { texto: 'Quitado', classe: 'badge-quitado' };
             }
             
-            // Se for hora zero ou já foi completamente compensada
+            // Se for hora zero ou já foi completamente compensado
             if (lancamento.horas === 0 || lancamento.saldoRestante === 0) {
                 return { texto: 'Compensada', classe: 'badge-compensada' };
             }
 
-            // Se estiver vencida (após 1 ano)
-            if (isHoraVencida(lancamento.mes, lancamento.ano)) {
-                if (lancamento.tipo === 'positiva') {
-                    return { texto: 'Vencida (a receber)', classe: 'badge-warning' };
-                } else {
-                    return { texto: 'Vencida (a pagar)', classe: 'badge-vencida' };
+            // Se for hora negativa e estiver vencida
+            if (lancamento.tipo === 'negativa' && isHoraVencida(lancamento.mes, lancamento.ano)) {
+                return { texto: 'Vencida', classe: 'badge-vencida' };
+            }
+
+            // Para horas negativas não vencidas
+            if (lancamento.tipo === 'negativa') {
+                const dataCompetencia = dataParaObjeto(lancamento.data);
+                const dataVencimento = new Date(dataCompetencia);
+                dataVencimento.setFullYear(dataVencimento.getFullYear() + 1);
+                
+                const hoje = new Date();
+                const diffTime = dataVencimento - hoje;
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+                if (diffDays <= 30) {
+                    return { texto: 'À vencer em 30 dias', classe: 'badge-warning' };
                 }
-            }
-
-            // Para horas não vencidas, verificar proximidade do vencimento
-            const dataCompetencia = dataParaObjeto(lancamento.data);
-            const dataVencimento = new Date(dataCompetencia);
-            dataVencimento.setFullYear(dataVencimento.getFullYear() + 1);
-            
-            const hoje = new Date();
-            const diffTime = dataVencimento - hoje;
-            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-            if (diffDays <= 30) {
-                return { texto: 'À vencer em 30 dias', classe: 'badge-warning' };
-            }
-            if (diffDays <= 60) {
-                return { texto: 'À vencer em 60 dias', classe: 'badge-info' };
+                if (diffDays <= 60) {
+                    return { texto: 'À vencer em 60 dias', classe: 'badge-info' };
+                }
             }
 
             return { texto: 'Em dia', classe: 'badge-success' };
@@ -2611,7 +2622,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             return saldosPorLancamento;
         }
 
-        // Função para gerar tooltip de compensações
+        // Função para gerar tooltip de compensações (atualizada)
         function gerarTooltipCompensacoes(lancamento) {
             let tooltip = '';
             
@@ -2622,7 +2633,8 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                     const lancComp = lancamentos.find(l => l.id === comp.lancamentoId);
                     if (lancComp) {
                         const competencia = formatarCompetencia(lancComp.mes, lancComp.ano);
-                        tooltip += `${competencia}: ${decimalParaHora(comp.quantidade)}\n`;
+                        const tipoIcon = lancComp.tipo === 'positiva' ? '➕' : '➖';
+                        tooltip += `${competencia} ${tipoIcon}: ${decimalParaHora(comp.quantidade)}\n`;
                     }
                 });
             }
@@ -2635,7 +2647,8 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                     const lancComp = lancamentos.find(l => l.id === comp.lancamentoId);
                     if (lancComp) {
                         const competencia = formatarCompetencia(lancComp.mes, lancComp.ano);
-                        tooltip += `${competencia}: ${decimalParaHora(comp.quantidade)}\n`;
+                        const tipoIcon = lancComp.tipo === 'positiva' ? '➕' : '➖';
+                        tooltip += `${competencia} ${tipoIcon}: ${decimalParaHora(comp.quantidade)}\n`;
                     }
                 });
             }
@@ -2911,16 +2924,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             renderizarHorasVencidas();
         }
 
-        // Função para limpar filtros de quitações
-        function limparFiltrosQuitacoes() {
-            document.getElementById('filtroQuitacaoColaborador').value = '';
-            document.getElementById('filtroQuitacaoDepartamento').value = '';
-            document.getElementById('filtroQuitacaoStatus').value = 'todas';
-            document.getElementById('filtroQuitacaoMes').value = '';
-            document.getElementById('filtroQuitacaoAno').value = '';
-            aplicarFiltrosQuitacoes();
-        }
-
         // Função para renderizar tabela de quitações
         function renderizarTabelaQuitacoes(quitacoesFiltradas) {
             const tbody = document.getElementById('quitacoesList');
@@ -2942,17 +2945,11 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 const colaborador = colaboradores.find(c => c.id === quitacao.colaboradorId);
                 const dataQuitacaoFormatada = new Date(quitacao.dataQuitacao).toLocaleDateString('pt-BR');
                 
-                // Determinar se a quitação foi de horas positivas ou negativas
-                const tipos = [...new Set(quitacao.lancamentos.map(l => l.tipo))];
-                const tipoLabel = tipos.includes('positiva') && tipos.includes('negativa') ? 'Misto' :
-                                 tipos.includes('positiva') ? '➕ A Receber' : '➖ A Pagar';
-                
                 tbody.innerHTML += `
                     <tr>
                         <td><strong>${quitacao.colaboradorNome}</strong><br><small style="color: #64748b;">${quitacao.colaboradorDepartamento || ''}</small></td>
                         <td>${dataQuitacaoFormatada}</td>
                         <td>${quitacao.competenciaPagamento}</td>
-                        <td><span class="badge ${tipos.includes('positiva') ? 'badge-warning' : 'badge-danger'}">${tipoLabel}</span></td>
                         <td>${decimalParaHora(quitacao.horasQuitadas)}</td>
                         <td>R$ ${quitacao.valorFolha.toFixed(2).replace('.', ',')}</td>
                         <td>R$ ${quitacao.valorReflexo.toFixed(2).replace('.', ',')}</td>
@@ -3364,8 +3361,8 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 const visualizarBtn = (lanc.compensacoes && lanc.compensacoes.length > 0) || (lanc.compensadoPor && lanc.compensadoPor.length > 0) ?
                     `<button class="btn btn-info btn-small" onclick="showVisualizarCompensacoesModal('${lanc.id}')" title="Ver detalhes das compensações">🔍</button>` : '';
 
-                // Botão de quitar (aparece apenas para horas vencidas - AMBOS OS TIPOS)
-                const quitarBtn = (!lanc.quitado && horasFaltantes > 0 && isHoraVencida(lanc.mes, lanc.ano)) ?
+                // Botão de quitar (aparece apenas para horas negativas vencidas)
+                const quitarBtn = (lanc.tipo === 'negativa' && !lanc.quitado && horasFaltantes > 0 && isHoraVencida(lanc.mes, lanc.ano)) ?
                     `<button class="btn btn-primary btn-small" onclick="showNovaQuitacaoParaColaborador('${lanc.colaboradorId}')" title="Quitar horas vencidas">💰</button>` : '';
 
                 tbody.innerHTML += `
