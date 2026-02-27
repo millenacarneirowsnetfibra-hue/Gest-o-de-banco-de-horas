@@ -2559,38 +2559,15 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             console.log('Processamento de compensações sequencial concluído.');
         }
 
-        // Função para verificar se dois lançamentos podem se compensar mutuamente
-        function podemCompensar(lanc1, lanc2) {
-            // Verificar se são do mesmo colaborador
-            if (lanc1.colaboradorId !== lanc2.colaboradorId) return false;
-            
-            // Verificar se são de tipos opostos
-            if (lanc1.tipo === lanc2.tipo) return false;
-            
-            // Verificar se ambos ainda estão dentro do prazo (não vencidos)
-            if (isHoraVencida(lanc1.mes, lanc1.ano) || isHoraVencida(lanc2.mes, lanc2.ano)) {
-                return false; // Se qualquer um estiver vencido, não podem compensar
-            }
-            
-            // Obter as datas
-            const data1 = dataParaObjeto(lanc1.data);
-            const data2 = dataParaObjeto(lanc2.data);
-            
-            // A diferença entre as datas não pode exceder 1 ano (365 dias)
-            const diffEmDias = Math.abs((data2 - data1) / (1000 * 60 * 60 * 24));
-            
-            return diffEmDias <= 365;
-        }
-
-        // Função para calcular status do lançamento baseado nas regras
+        // Função para calcular status do lançamento baseado nas regras (CORRIGIDA COM TOLERÂNCIA)
         function calcularStatus(lancamento) {
             // Se já foi quitado (pagamento em dinheiro)
             if (lancamento.quitado) {
                 return { texto: 'Quitado', classe: 'badge-quitado' };
             }
             
-            // Se foi totalmente compensada (saldo restante é zero)
-            if (lancamento.saldoRestante === 0) {
+            // Considerar como compensado se o saldo restante for muito próximo de zero (tolerância de 0.001)
+            if (Math.abs(lancamento.saldoRestante) < 0.001) {
                 return { texto: 'Compensada', classe: 'badge-compensada' };
             }
 
