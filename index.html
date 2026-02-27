@@ -2458,7 +2458,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             Object.keys(lancamentosPorColaborador).forEach(colaboradorId => {
                 const lancamentosColab = lancamentosPorColaborador[colaboradorId];
                 
-                // Separar positivas e negativas
+                // Separar positivas e negativas e ordenar por data (mais antigas primeiro)
                 const positivas = lancamentosColab
                     .filter(l => l.tipo === 'positiva')
                     .sort((a, b) => dataParaObjeto(a.data) - dataParaObjeto(b.data));
@@ -2503,9 +2503,9 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                         continue;
                     }
                     
-                    // Verificar se alguma das duas já está vencida
+                    // Verificar se alguma das duas já está vencida (não podem compensar se já venceram)
                     if (isHoraVencida(positiva.mes, positiva.ano) || isHoraVencida(negativa.mes, negativa.ano)) {
-                        // Se alguma estiver vencida, não podem compensar
+                        // Se alguma estiver vencida, não podem compensar - avança a vencida
                         if (isHoraVencida(positiva.mes, positiva.ano)) i++;
                         if (isHoraVencida(negativa.mes, negativa.ano)) j++;
                         continue;
@@ -2554,22 +2554,12 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                     if (positiva.saldoRestante <= 0) i++;
                     if (negativa.saldoRestante <= 0) j++;
                 }
-
-                // Verificar quais lançamentos estão vencidos (após as compensações)
-                lancamentosColab.forEach(lanc => {
-                    if (!lanc.quitado && lanc.saldoRestante > 0) {
-                        if (isHoraVencida(lanc.mes, lanc.ano)) {
-                            // Já está vencido, manter status
-                        }
-                    }
-                });
             });
 
             console.log('Processamento de compensações sequencial concluído.');
         }
 
         // Função para verificar se dois lançamentos podem se compensar mutuamente
-        // Baseado APENAS nas datas, independentemente de qual é positivo ou negativo
         function podemCompensar(lanc1, lanc2) {
             // Verificar se são do mesmo colaborador
             if (lanc1.colaboradorId !== lanc2.colaboradorId) return false;
@@ -2594,22 +2584,22 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
 
         // Função para calcular status do lançamento baseado nas regras
         function calcularStatus(lancamento) {
-            // Se já foi quitado
+            // Se já foi quitado (pagamento em dinheiro)
             if (lancamento.quitado) {
                 return { texto: 'Quitado', classe: 'badge-quitado' };
             }
             
-            // Se for hora zero ou já foi completamente compensado
-            if (lancamento.horas === 0 || lancamento.saldoRestante === 0) {
+            // Se foi totalmente compensada (saldo restante é zero)
+            if (lancamento.saldoRestante === 0) {
                 return { texto: 'Compensada', classe: 'badge-compensada' };
             }
 
-            // Verificar se está vencido (independente de ser positivo ou negativo)
+            // Se ainda tem saldo restante, verificar se está vencido
             if (isHoraVencida(lancamento.mes, lancamento.ano)) {
                 return { texto: 'Vencida', classe: 'badge-vencida' };
             }
 
-            // Para horas não vencidas com saldo restante
+            // Para horas não vencidas com saldo restante, calcular dias até o vencimento
             const dataCompetencia = dataParaObjeto(lancamento.data);
             const dataVencimento = new Date(dataCompetencia);
             dataVencimento.setFullYear(dataVencimento.getFullYear() + 1);
@@ -2628,7 +2618,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             return { texto: 'Em dia', classe: 'badge-success' };
         }
 
-        // Função para calcular saldo acumulado por colaborador (MANTIDO IGUAL)
+        // Função para calcular saldo acumulado por colaborador (MANTIDO IGUAL - usando horas originais)
         function calcularSaldoAcumulado(colaboradorId, lancamentosDoColaborador) {
             // Ordenar lançamentos por data (mais antigos primeiro)
             const lancamentosOrdenados = [...lancamentosDoColaborador].sort((a, b) => {
