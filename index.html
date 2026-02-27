@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Banco de Horas - Sistema de Compensação</title>
     <style>
+        /* (mantido o mesmo CSS da versão anterior - omitido por brevidade, mas deve ser igual ao do código original) */
         * {
             margin: 0;
             padding: 0;
@@ -2431,7 +2432,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
         }
 
         // ============================================================
-        // NOVA FUNÇÃO DE COMPENSAÇÃO - REGRAS DEFINITIVAS
+        // FUNÇÃO DE COMPENSAÇÃO CORRIGIDA - RESPEITA JANELA DE 1 ANO
         // ============================================================
         function processarCompensacoes() {
             console.log('Iniciando processamento de compensações com regras definitivas...');
@@ -2464,10 +2465,10 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 // Ambos possuem saldo a compensar
                 if (a.saldoRestante <= 0 || b.saldoRestante <= 0) return false;
                 
-                // b NÃO pode estar vencido (pois vencido não pode ser compensado)
+                // *** REGRA FUNDAMENTAL: b NÃO pode estar vencido (pois vencido não pode ser compensado) ***
                 if (isHoraVencida(b.mes, b.ano)) return false;
 
-                // Se a NÃO está vencido, b deve estar dentro da janela de a (competência até vencimento)
+                // Se a NÃO está vencido, então b deve estar dentro da janela de a (competência até vencimento)
                 if (!isHoraVencida(a.mes, a.ano)) {
                     const dataA = dataParaObjeto(a.data);
                     const vencimentoA = new Date(dataA);
@@ -2718,7 +2719,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 // Processar compensações
                 processarCompensacoes();
 
-                // Ordenar lançamentos por data (mais recentes primeiro)
+                // Ordenar lançamentos por data (mais recentes primeiro) para exibição
                 lancamentos.sort((a, b) => {
                     try {
                         return dataParaObjeto(b.data) - dataParaObjeto(a.data);
