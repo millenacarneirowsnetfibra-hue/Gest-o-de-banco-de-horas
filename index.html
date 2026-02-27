@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Banco de Horas - Sistema de Compensação</title>
     <style>
-        /* (mantido o mesmo CSS da versão anterior - omitido por brevidade, mas deve ser igual ao do código original) */
+        /* (mesmo CSS da versão anterior - mantido para funcionamento completo) */
         * {
             margin: 0;
             padding: 0;
@@ -2431,114 +2431,99 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             return new Date(parseInt(ano), parseInt(mes) - 1, 1);
         }
 
-// ============================================================
-// FUNÇÃO DE COMPENSAÇÃO DEFINITIVA - RESPEITA JANELA DE 1 ANO
-// ============================================================
-function processarCompensacoes() {
-    console.log('Iniciando processamento de compensações com regra de janela anual.');
+        // ============================================================
+        // FUNÇÃO DE COMPENSAÇÃO CORRIGIDA - REGRA DEFINITIVA
+        // ============================================================
+        function processarCompensacoes() {
+            console.log('Iniciando processamento de compensações com regras definitivas...');
 
-    // 1️⃣ Resetar saldos e registros (somente não quitados)
-    lancamentos.forEach(lanc => {
-        if (!lanc.quitado) {
-            lanc.saldoRestante = lanc.horas;
-            lanc.compensacoes = [];
-            lanc.compensadoPor = [];
-        }
-    });
+            // 1. Resetar saldos e registros de compensação
+            lancamentos.forEach(lanc => {
+                if (!lanc.quitado) {
+                    lanc.saldoRestante = lanc.horas;
+                    lanc.compensacoes = [];      // lançamentos que este compensou
+                    lanc.compensadoPor = [];      // lançamentos que compensaram este
+                }
+            });
 
-    // 2️⃣ Filtrar ativos
-    let ativos = lancamentos.filter(l => !l.quitado);
-    if (ativos.length === 0) return;
+            // 2. Filtrar apenas lançamentos ativos (não quitados) e ordenar por data (mais antigo primeiro)
+            let ativos = lancamentos.filter(l => !l.quitado);
+            if (ativos.length === 0) return;
 
-    // 3️⃣ Ordenar por data (mais antigo primeiro)
-    ativos.sort((a, b) => {
-        return dataParaObjeto(a.data) - dataParaObjeto(b.data);
-    });
+            ativos.sort((a, b) => {
+                const dataA = dataParaObjeto(a.data);
+                const dataB = dataParaObjeto(b.data);
+                return dataA - dataB;
+            });
 
-    // 4️⃣ Função que valida se A pode compensar B
-    function podeCompensar(a, b) {
+            // 3. Função que determina se o lançamento A pode compensar o lançamento B
+            //    A é quem vai ceder horas (origem da ação), B é quem vai receber (ser compensado)
+            function podeCompensar(A, B) {
+                // Mesmo colaborador
+                if (A.colaboradorId !== B.colaboradorId) return false;
+                // Sinais opostos
+                if (A.tipo === B.tipo) return false;
+                // Ambos possuem saldo a compensar
+                if (A.saldoRestante <= 0 || B.saldoRestante <= 0) return false;
 
-        // Mesmo colaborador
-        if (a.colaboradorId !== b.colaboradorId) return false;
+                // Quem está sendo compensado (B) NÃO pode estar vencido
+                if (isHoraVencida(B.mes, B.ano)) return false;
 
-        // Sinais opostos
-        if (a.tipo === b.tipo) return false;
+                // A data de A (quem compensa) deve estar dentro da janela de 1 ano de B (quem é compensado)
+                const dataB = dataParaObjeto(B.data);
+                const vencimentoB = new Date(dataB);
+                vencimentoB.setFullYear(vencimentoB.getFullYear() + 1);
+                const dataA = dataParaObjeto(A.data);
 
-        // Ambos precisam ter saldo
-        if (a.saldoRestante <= 0 || b.saldoRestante <= 0) return false;
-
-        const dataA = dataParaObjeto(a.data);
-        const dataB = dataParaObjeto(b.data);
-
-        // Vencimento de B = competência + 1 ano
-        const vencimentoB = new Date(dataB);
-        vencimentoB.setFullYear(vencimentoB.getFullYear() + 1);
-
-        const hoje = new Date();
-
-        // 🚨 REGRA 1:
-        // Se B já venceu e ainda tem saldo, ele NÃO pode mais ser compensado
-        if (hoje > vencimentoB && b.saldoRestante > 0) {
-            return false;
-        }
-
-        // 🚨 REGRA 2:
-        // A só pode compensar B se estiver dentro da janela de B
-        // (entre competência e vencimento)
-        if (dataA < dataB) return false;
-        if (dataA > vencimentoB) return false;
-
-        return true;
-    }
-
-    // 5️⃣ Loop de compensação progressiva
-    let mudou;
-
-    do {
-        mudou = false;
-
-        for (let i = 0; i < ativos.length; i++) {
-            const a = ativos[i];
-
-            if (a.saldoRestante <= 0) continue;
-
-            for (let j = 0; j < ativos.length; j++) {
-                const b = ativos[j];
-
-                if (i === j) continue;
-
-                if (!podeCompensar(a, b)) continue;
-
-                const quantidade = Math.min(a.saldoRestante, b.saldoRestante);
-
-                // Registrar compensação
-                a.compensacoes.push({
-                    lancamentoId: b.id,
-                    quantidade: quantidade,
-                    data: new Date().toLocaleDateString('pt-BR'),
-                    tipo: b.tipo
-                });
-
-                b.compensadoPor.push({
-                    lancamentoId: a.id,
-                    quantidade: quantidade,
-                    data: new Date().toLocaleDateString('pt-BR'),
-                    tipo: a.tipo
-                });
-
-                a.saldoRestante -= quantidade;
-                b.saldoRestante -= quantidade;
-
-                mudou = true;
-
-                if (a.saldoRestante <= 0) break;
+                // A deve ser >= B e <= vencimento de B
+                return dataA >= dataB && dataA <= vencimentoB;
             }
+
+            // 4. Processamento em loop até que nenhuma nova compensação seja possível
+            let mudou;
+            do {
+                mudou = false;
+                for (let i = 0; i < ativos.length; i++) {
+                    const a = ativos[i]; // a é quem vai ceder horas (compensador)
+                    if (a.saldoRestante <= 0) continue;
+
+                    // Procura um parceiro b que a possa compensar
+                    for (let j = 0; j < ativos.length; j++) {
+                        if (i === j) continue;
+                        const b = ativos[j]; // b é quem será compensado
+                        if (!podeCompensar(a, b)) continue;
+
+                        // Calcula quanto pode ser compensado (mínimo entre os saldos)
+                        const quantidade = Math.min(a.saldoRestante, b.saldoRestante);
+
+                        // Registra a compensação (a compensou b)
+                        a.compensacoes.push({
+                            lancamentoId: b.id,
+                            quantidade: quantidade,
+                            data: new Date().toLocaleDateString('pt-BR'),
+                            tipo: b.tipo
+                        });
+                        b.compensadoPor.push({
+                            lancamentoId: a.id,
+                            quantidade: quantidade,
+                            data: new Date().toLocaleDateString('pt-BR'),
+                            tipo: a.tipo
+                        });
+
+                        // Atualiza os saldos
+                        a.saldoRestante -= quantidade;
+                        b.saldoRestante -= quantidade;
+
+                        mudou = true;
+
+                        // Se a zerou, podemos parar de procurar para este a
+                        if (a.saldoRestante <= 0) break;
+                    }
+                }
+            } while (mudou);
+
+            console.log('Processamento de compensações concluído.');
         }
-
-    } while (mudou);
-
-    console.log('Compensações processadas com sucesso.');
-}
 
         // Função para calcular status do lançamento baseado nas regras
         function calcularStatus(lancamento) {
