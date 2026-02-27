@@ -1644,179 +1644,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
         let sortField = 'nome';
         let sortDirection = 'asc';
 
-        // ==================== FUNÇÕES DE COMPENSAÇÃO CORRIGIDAS ====================
-        // Função para verificar se uma hora está vencida (considerando prazo de 1 ano)
-        function isHoraVencida(mes, ano) {
-            const hoje = new Date();
-            const dataCompetencia = new Date(parseInt(ano), parseInt(mes) - 1, 1);
-            const dataVencimento = new Date(dataCompetencia);
-            dataVencimento.setFullYear(dataVencimento.getFullYear() + 1);
-            return hoje >= dataVencimento;
-        }
-
-        // Função para converter data string para objeto Date (usando primeiro dia do mês)
-        function dataParaObjeto(dataStr) {
-            const [dia, mes, ano] = dataStr.split('/');
-            return new Date(parseInt(ano), parseInt(mes) - 1, 1);
-        }
-
-        // Função principal de compensação - regra correta
-        function processarCompensacoes() {
-            console.log('Iniciando processamento de compensações com regra corrigida...');
-            
-            // Resetar saldos e compensações para todos os lançamentos não quitados
-            lancamentos.forEach(lanc => {
-                if (!lanc.quitado) {
-                    lanc.saldoRestante = lanc.horas;
-                    lanc.compensacoes = [];
-                    lanc.compensadoPor = [];
-                }
-            });
-
-            // Agrupar lançamentos por colaborador
-            const lancamentosPorColaborador = {};
-            lancamentos.forEach(lanc => {
-                if (!lanc.quitado) {
-                    if (!lancamentosPorColaborador[lanc.colaboradorId]) {
-                        lancamentosPorColaborador[lanc.colaboradorId] = [];
-                    }
-                    lancamentosPorColaborador[lanc.colaboradorId].push(lanc);
-                }
-            });
-
-            // Para cada colaborador, aplicar a lógica de compensação
-            Object.values(lancamentosPorColaborador).forEach(lancamentosColab => {
-                // Ordenar todos os lançamentos por data de competência (mais antigo primeiro)
-                lancamentosColab.sort((a, b) => dataParaObjeto(a.data) - dataParaObjeto(b.data));
-
-                let compensacoesRealizadas;
-                do {
-                    compensacoesRealizadas = false;
-
-                    // Encontrar o lançamento mais antigo com saldo > 0 que pode atuar como "ativo" (qualquer um, inclusive vencidos)
-                    const ativo = lancamentosColab.find(l => l.saldoRestante > 0);
-                    if (!ativo) break; // Não há mais saldos
-
-                    // Encontrar o lançamento mais antigo de sinal oposto com saldo > 0 que pode ser alvo (NÃO pode estar vencido)
-                    const alvo = lancamentosColab.find(l => 
-                        l.saldoRestante > 0 && 
-                        l.tipo !== ativo.tipo && 
-                        !isHoraVencida(l.mes, l.ano)  // Alvo não pode estar vencido
-                    );
-
-                    if (!alvo) break; // Não há alvo disponível
-
-                    // Calcular quantidade a compensar
-                    const quantidade = Math.min(ativo.saldoRestante, alvo.saldoRestante);
-                    if (quantidade <= 0) continue;
-
-                    // Registrar compensação bilateral
-                    ativo.compensacoes.push({
-                        lancamentoId: alvo.id,
-                        quantidade: quantidade,
-                        data: new Date().toLocaleDateString('pt-BR'),
-                        tipo: alvo.tipo
-                    });
-                    alvo.compensadoPor.push({
-                        lancamentoId: ativo.id,
-                        quantidade: quantidade,
-                        data: new Date().toLocaleDateString('pt-BR'),
-                        tipo: ativo.tipo
-                    });
-
-                    // Também registrar no sentido oposto para consistência
-                    alvo.compensacoes.push({
-                        lancamentoId: ativo.id,
-                        quantidade: quantidade,
-                        data: new Date().toLocaleDateString('pt-BR'),
-                        tipo: ativo.tipo
-                    });
-                    ativo.compensadoPor.push({
-                        lancamentoId: alvo.id,
-                        quantidade: quantidade,
-                        data: new Date().toLocaleDateString('pt-BR'),
-                        tipo: alvo.tipo
-                    });
-
-                    // Atualizar saldos
-                    ativo.saldoRestante -= quantidade;
-                    alvo.saldoRestante -= quantidade;
-
-                    compensacoesRealizadas = true;
-
-                } while (compensacoesRealizadas);
-            });
-
-            console.log('Processamento de compensações concluído.');
-        }
-
-        // Função para calcular status do lançamento baseado nas regras
-        function calcularStatus(lancamento) {
-            if (lancamento.quitado) {
-                return { texto: 'Quitado', classe: 'badge-quitado' };
-            }
-            if (Math.abs(lancamento.saldoRestante) < 0.001) {
-                return { texto: 'Compensada', classe: 'badge-compensada' };
-            }
-            if (isHoraVencida(lancamento.mes, lancamento.ano)) {
-                return { texto: 'Vencida', classe: 'badge-vencida' };
-            }
-
-            // Se não está vencido e ainda tem saldo, calcular dias até o vencimento
-            const dataCompetencia = dataParaObjeto(lancamento.data);
-            const dataVencimento = new Date(dataCompetencia);
-            dataVencimento.setFullYear(dataVencimento.getFullYear() + 1);
-            
-            const hoje = new Date();
-            const diffTime = dataVencimento - hoje;
-            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-            if (diffDays <= 30) {
-                return { texto: 'À vencer em 30 dias', classe: 'badge-warning' };
-            }
-            if (diffDays <= 60) {
-                return { texto: 'À vencer em 60 dias', classe: 'badge-info' };
-            }
-            return { texto: 'Em dia', classe: 'badge-success' };
-        }
-
-        // Função para gerar tooltip de compensações (atualizada)
-        function gerarTooltipCompensacoes(lancamento) {
-            let tooltip = '';
-            
-            if (lancamento.compensacoes && lancamento.compensacoes.length > 0) {
-                tooltip += 'Compensou outros lançamentos:\n';
-                lancamento.compensacoes.forEach(comp => {
-                    const lancComp = lancamentos.find(l => l.id === comp.lancamentoId);
-                    if (lancComp) {
-                        const competencia = formatarCompetencia(lancComp.mes, lancComp.ano);
-                        const tipoIcon = lancComp.tipo === 'positiva' ? '➕' : '➖';
-                        tooltip += `${competencia} ${tipoIcon}: ${decimalParaHora(comp.quantidade)}\n`;
-                    }
-                });
-            }
-            
-            if (lancamento.compensadoPor && lancamento.compensadoPor.length > 0) {
-                if (tooltip) tooltip += '\n';
-                tooltip += 'Foi compensado por:\n';
-                lancamento.compensadoPor.forEach(comp => {
-                    const lancComp = lancamentos.find(l => l.id === comp.lancamentoId);
-                    if (lancComp) {
-                        const competencia = formatarCompetencia(lancComp.mes, lancComp.ano);
-                        const tipoIcon = lancComp.tipo === 'positiva' ? '➕' : '➖';
-                        tooltip += `${competencia} ${tipoIcon}: ${decimalParaHora(comp.quantidade)}\n`;
-                    }
-                });
-            }
-            
-            if (!tooltip) {
-                tooltip = 'Nenhuma compensação registrada';
-            }
-            
-            return tooltip;
-        }
-        // ==================== FIM DAS FUNÇÕES DE COMPENSAÇÃO ====================
-
         // Funções utilitárias
         function showLoading(show) {
             document.getElementById('loadingOverlay').style.display = show ? 'flex' : 'none';
@@ -2126,6 +1953,21 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
 
         function showImportModal() {
             document.getElementById('importModal').style.display = 'block';
+        }
+
+        // Função para verificar se uma hora está vencida (considerando prazo de 1 ano)
+        function isHoraVencida(mes, ano) {
+            const hoje = new Date();
+            
+            // Data da competência (primeiro dia do mês)
+            const dataCompetencia = new Date(parseInt(ano), parseInt(mes) - 1, 1);
+            
+            // Data de vencimento é 1 ano após a competência
+            const dataVencimento = new Date(dataCompetencia);
+            dataVencimento.setFullYear(dataVencimento.getFullYear() + 1);
+            
+            // Se hoje for maior ou igual à data de vencimento, está vencida
+            return hoje >= dataVencimento;
         }
 
         // Função para calcular dias vencidos
@@ -2582,7 +2424,144 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             return `${meses[dataVencimento.getMonth()]}/${dataVencimento.getFullYear()}`;
         }
 
-        // Função para calcular saldo acumulado por colaborador (mantido original - usando horas originais)
+        // Função para converter data string para objeto Date (usando primeiro dia do mês)
+        function dataParaObjeto(dataStr) {
+            const [dia, mes, ano] = dataStr.split('/');
+            return new Date(parseInt(ano), parseInt(mes) - 1, 1);
+        }
+
+        // ============================================================
+        // NOVA FUNÇÃO DE COMPENSAÇÃO - REGRAS DEFINITIVAS
+        // ============================================================
+        function processarCompensacoes() {
+            console.log('Iniciando processamento de compensações com regras definitivas...');
+
+            // 1. Resetar saldos e registros de compensação
+            lancamentos.forEach(lanc => {
+                if (!lanc.quitado) {
+                    lanc.saldoRestante = lanc.horas;
+                    lanc.compensacoes = [];      // lançamentos que este compensou
+                    lanc.compensadoPor = [];      // lançamentos que compensaram este
+                }
+            });
+
+            // 2. Filtrar apenas lançamentos ativos (não quitados) e ordenar por data (mais antigo primeiro)
+            let ativos = lancamentos.filter(l => !l.quitado);
+            if (ativos.length === 0) return;
+
+            ativos.sort((a, b) => {
+                const dataA = dataParaObjeto(a.data);
+                const dataB = dataParaObjeto(b.data);
+                return dataA - dataB;
+            });
+
+            // 3. Função auxiliar para verificar se 'a' pode compensar 'b'
+            function podeCompensar(a, b) {
+                // Mesmo colaborador
+                if (a.colaboradorId !== b.colaboradorId) return false;
+                // Sinais opostos
+                if (a.tipo === b.tipo) return false;
+                // Ambos possuem saldo a compensar
+                if (a.saldoRestante <= 0 || b.saldoRestante <= 0) return false;
+                
+                // b NÃO pode estar vencido (pois vencido não pode ser compensado)
+                if (isHoraVencida(b.mes, b.ano)) return false;
+
+                // Se a NÃO está vencido, b deve estar dentro da janela de a (competência até vencimento)
+                if (!isHoraVencida(a.mes, a.ano)) {
+                    const dataA = dataParaObjeto(a.data);
+                    const vencimentoA = new Date(dataA);
+                    vencimentoA.setFullYear(vencimentoA.getFullYear() + 1);
+                    const dataB = dataParaObjeto(b.data);
+                    if (dataB < dataA || dataB > vencimentoA) return false;
+                }
+                // Se a está vencido, ele pode compensar b (que não está vencido) sem restrição de data
+                return true;
+            }
+
+            // 4. Processamento em loop até que nenhuma nova compensação seja possível
+            let mudou;
+            do {
+                mudou = false;
+                for (let i = 0; i < ativos.length; i++) {
+                    const a = ativos[i];
+                    if (a.saldoRestante <= 0) continue;
+
+                    // Procura um parceiro b que a possa compensar
+                    for (let j = 0; j < ativos.length; j++) {
+                        if (i === j) continue;
+                        const b = ativos[j];
+                        if (!podeCompensar(a, b)) continue;
+
+                        // Calcula quanto pode ser compensado (mínimo entre os saldos)
+                        const quantidade = Math.min(a.saldoRestante, b.saldoRestante);
+
+                        // Registra a compensação (a compensou b)
+                        a.compensacoes.push({
+                            lancamentoId: b.id,
+                            quantidade: quantidade,
+                            data: new Date().toLocaleDateString('pt-BR'),
+                            tipo: b.tipo
+                        });
+                        b.compensadoPor.push({
+                            lancamentoId: a.id,
+                            quantidade: quantidade,
+                            data: new Date().toLocaleDateString('pt-BR'),
+                            tipo: a.tipo
+                        });
+
+                        // Atualiza os saldos
+                        a.saldoRestante -= quantidade;
+                        b.saldoRestante -= quantidade;
+
+                        mudou = true;
+
+                        // Se a zerou, podemos parar de procurar para este a
+                        if (a.saldoRestante <= 0) break;
+                    }
+                }
+            } while (mudou);
+
+            console.log('Processamento de compensações concluído.');
+        }
+
+        // Função para calcular status do lançamento baseado nas regras
+        function calcularStatus(lancamento) {
+            // Se já foi quitado (pagamento em dinheiro)
+            if (lancamento.quitado) {
+                return { texto: 'Quitado', classe: 'badge-quitado' };
+            }
+            
+            // Considerar como compensado se o saldo restante for muito próximo de zero (tolerância de 0.001)
+            if (Math.abs(lancamento.saldoRestante) < 0.001) {
+                return { texto: 'Compensada', classe: 'badge-compensada' };
+            }
+
+            // Se ainda tem saldo restante, verificar se está vencido
+            if (isHoraVencida(lancamento.mes, lancamento.ano)) {
+                return { texto: 'Vencida', classe: 'badge-vencida' };
+            }
+
+            // Para horas não vencidas com saldo restante, calcular dias até o vencimento
+            const dataCompetencia = dataParaObjeto(lancamento.data);
+            const dataVencimento = new Date(dataCompetencia);
+            dataVencimento.setFullYear(dataVencimento.getFullYear() + 1);
+            
+            const hoje = new Date();
+            const diffTime = dataVencimento - hoje;
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+            if (diffDays <= 30) {
+                return { texto: 'À vencer em 30 dias', classe: 'badge-warning' };
+            }
+            if (diffDays <= 60) {
+                return { texto: 'À vencer em 60 dias', classe: 'badge-info' };
+            }
+
+            return { texto: 'Em dia', classe: 'badge-success' };
+        }
+
+        // Função para calcular saldo acumulado por colaborador (usando horas originais)
         function calcularSaldoAcumulado(colaboradorId, lancamentosDoColaborador) {
             // Ordenar lançamentos por data (mais antigos primeiro)
             const lancamentosOrdenados = [...lancamentosDoColaborador].sort((a, b) => {
@@ -2606,6 +2585,44 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             }
 
             return saldosPorLancamento;
+        }
+
+        // Função para gerar tooltip de compensações
+        function gerarTooltipCompensacoes(lancamento) {
+            let tooltip = '';
+            
+            // Compensações que este lançamento fez em outros
+            if (lancamento.compensacoes && lancamento.compensacoes.length > 0) {
+                tooltip += 'Compensou outros lançamentos:\n';
+                lancamento.compensacoes.forEach(comp => {
+                    const lancComp = lancamentos.find(l => l.id === comp.lancamentoId);
+                    if (lancComp) {
+                        const competencia = formatarCompetencia(lancComp.mes, lancComp.ano);
+                        const tipoIcon = lancComp.tipo === 'positiva' ? '➕' : '➖';
+                        tooltip += `${competencia} ${tipoIcon}: ${decimalParaHora(comp.quantidade)}\n`;
+                    }
+                });
+            }
+            
+            // Lançamentos que compensaram este
+            if (lancamento.compensadoPor && lancamento.compensadoPor.length > 0) {
+                if (tooltip) tooltip += '\n';
+                tooltip += 'Foi compensado por:\n';
+                lancamento.compensadoPor.forEach(comp => {
+                    const lancComp = lancamentos.find(l => l.id === comp.lancamentoId);
+                    if (lancComp) {
+                        const competencia = formatarCompetencia(lancComp.mes, lancComp.ano);
+                        const tipoIcon = lancComp.tipo === 'positiva' ? '➕' : '➖';
+                        tooltip += `${competencia} ${tipoIcon}: ${decimalParaHora(comp.quantidade)}\n`;
+                    }
+                });
+            }
+            
+            if (!tooltip) {
+                tooltip = 'Nenhuma compensação registrada';
+            }
+            
+            return tooltip;
         }
 
         // Função para normalizar dados do lançamento
