@@ -2456,28 +2456,27 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 return dataA - dataB;
             });
 
-            // 3. Função auxiliar para verificar se 'a' pode compensar 'b'
-            function podeCompensar(a, b) {
+            // 3. Função auxiliar para verificar se 'origem' pode compensar 'destino'
+            function podeCompensar(origem, destino) {
                 // Mesmo colaborador
-                if (a.colaboradorId !== b.colaboradorId) return false;
+                if (origem.colaboradorId !== destino.colaboradorId) return false;
                 // Sinais opostos
-                if (a.tipo === b.tipo) return false;
+                if (origem.tipo === destino.tipo) return false;
                 // Ambos possuem saldo a compensar
-                if (a.saldoRestante <= 0 || b.saldoRestante <= 0) return false;
-                
-                // *** REGRA FUNDAMENTAL: b NÃO pode estar vencido (pois vencido não pode ser compensado) ***
-                if (isHoraVencida(b.mes, b.ano)) return false;
+                if (origem.saldoRestante <= 0 || destino.saldoRestante <= 0) return false;
 
-                // Se a NÃO está vencido, então b deve estar dentro da janela de a (competência até vencimento)
-                if (!isHoraVencida(a.mes, a.ano)) {
-                    const dataA = dataParaObjeto(a.data);
-                    const vencimentoA = new Date(dataA);
-                    vencimentoA.setFullYear(vencimentoA.getFullYear() + 1);
-                    const dataB = dataParaObjeto(b.data);
-                    if (dataB < dataA || dataB > vencimentoA) return false;
-                }
-                // Se a está vencido, ele pode compensar b (que não está vencido) sem restrição de data
-                return true;
+                // O destino NÃO pode estar vencido (pois vencido não pode ser compensado)
+                if (isHoraVencida(destino.mes, destino.ano)) return false;
+
+                // A competência da origem deve estar dentro da janela de 1 ano do destino
+                const dataDestino = dataParaObjeto(destino.data);
+                const vencimentoDestino = new Date(dataDestino);
+                vencimentoDestino.setFullYear(vencimentoDestino.getFullYear() + 1);
+                const dataOrigem = dataParaObjeto(origem.data);
+
+                // Origem pode ser de qualquer data (mesmo vencida), desde que esteja dentro da janela do destino
+                // E o destino não está vencido (já verificado)
+                return dataOrigem >= dataDestino && dataOrigem <= vencimentoDestino;
             }
 
             // 4. Processamento em loop até que nenhuma nova compensação seja possível
