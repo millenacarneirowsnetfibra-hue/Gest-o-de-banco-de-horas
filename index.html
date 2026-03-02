@@ -500,7 +500,7 @@
             100% { opacity: 1; }
         }
 
-        /* Tooltip para compensações */
+        /* Tooltip para compensações - Melhorado */
         .compensacoes-tooltip {
             position: relative;
             cursor: help;
@@ -515,16 +515,20 @@
             transform: translateX(-50%);
             background: #1e293b;
             color: white;
-            padding: 8px 12px;
-            border-radius: 8px;
+            padding: 12px 16px;
+            border-radius: 12px;
             font-size: 0.85rem;
             white-space: pre-line;
             z-index: 1000;
-            min-width: 200px;
+            min-width: 280px;
+            max-width: 350px;
             text-align: left;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-            margin-bottom: 5px;
-            line-height: 1.5;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+            margin-bottom: 10px;
+            line-height: 1.6;
+            font-weight: normal;
+            border: 1px solid #334155;
+            pointer-events: none;
         }
 
         .compensacoes-tooltip:hover::before {
@@ -533,10 +537,11 @@
             bottom: 100%;
             left: 50%;
             transform: translateX(-50%);
-            border: 5px solid transparent;
+            border: 8px solid transparent;
             border-top-color: #1e293b;
-            margin-bottom: -5px;
+            margin-bottom: -6px;
             z-index: 1000;
+            pointer-events: none;
         }
 
         /* Header com ações */
@@ -1051,11 +1056,11 @@
                         <span id="contadorLancamentos" style="color: #64748b;">0 lançamentos</span>
                     </div>
                     
-                    <div id="semResultadosMsg" style="text-align: center; padding: 40px; color: #64748b; display: none;">
-                        Nenhum lançamento encontrado com os filtros selecionados.
+                    <div id="semResultadosMsg" style="text-align: center; padding: 40px; color: #64748b; display: block;">
+                        Selecione um colaborador ou filtros para visualizar os lançamentos.
                     </div>
 
-                    <table id="lancamentosTable">
+                    <table id="lancamentosTable" style="display: none;">
                         <thead>
                             <tr>
                                 <th>Colaborador</th>
@@ -1669,7 +1674,10 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             
             if (tabName === 'lancamentos') {
                 carregarFiltros();
-                aplicarFiltros();
+                // Não aplicar filtros automaticamente - manter tela vazia
+                document.getElementById('semResultadosMsg').style.display = 'block';
+                document.getElementById('lancamentosTable').style.display = 'none';
+                document.getElementById('contadorLancamentos').textContent = '0 lançamentos';
             } else if (tabName === 'quitacoes') {
                 carregarFiltrosQuitacoes();
                 aplicarFiltrosQuitacoes();
@@ -1776,7 +1784,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 await loadData();
                 
                 hideModal('novoLancamentoModal');
-                aplicarFiltros();
                 alert('Lançamento realizado com sucesso!');
             } catch (error) {
                 console.error('Erro ao salvar lançamento:', error);
@@ -2601,19 +2608,19 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             return saldosPorLancamento;
         }
 
-        // Função para gerar tooltip de compensações
+        // Função para gerar tooltip de compensações - MELHORADA
         function gerarTooltipCompensacoes(lancamento) {
             let tooltip = '';
             
             // Compensações que este lançamento fez em outros
             if (lancamento.compensacoes && lancamento.compensacoes.length > 0) {
-                tooltip += 'Compensou outros lançamentos:\n';
+                tooltip += '🔽 COMPENSOU:\n';
                 lancamento.compensacoes.forEach(comp => {
                     const lancComp = lancamentos.find(l => l.id === comp.lancamentoId);
                     if (lancComp) {
                         const competencia = formatarCompetencia(lancComp.mes, lancComp.ano);
                         const tipoIcon = lancComp.tipo === 'positiva' ? '➕' : '➖';
-                        tooltip += `${competencia} ${tipoIcon}: ${decimalParaHora(comp.quantidade)}\n`;
+                        tooltip += `  • ${competencia} ${tipoIcon}: ${decimalParaHora(comp.quantidade)}\n`;
                     }
                 });
             }
@@ -2621,19 +2628,22 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             // Lançamentos que compensaram este
             if (lancamento.compensadoPor && lancamento.compensadoPor.length > 0) {
                 if (tooltip) tooltip += '\n';
-                tooltip += 'Foi compensado por:\n';
+                tooltip += '🔼 FOI COMPENSADO POR:\n';
                 lancamento.compensadoPor.forEach(comp => {
                     const lancComp = lancamentos.find(l => l.id === comp.lancamentoId);
                     if (lancComp) {
                         const competencia = formatarCompetencia(lancComp.mes, lancComp.ano);
                         const tipoIcon = lancComp.tipo === 'positiva' ? '➕' : '➖';
-                        tooltip += `${competencia} ${tipoIcon}: ${decimalParaHora(comp.quantidade)}\n`;
+                        tooltip += `  • ${competencia} ${tipoIcon}: ${decimalParaHora(comp.quantidade)}\n`;
                     }
                 });
             }
             
             if (!tooltip) {
                 tooltip = 'Nenhuma compensação registrada';
+            } else {
+                // Adicionar cabeçalho
+                tooltip = '📊 DETALHES DAS COMPENSAÇÕES:\n\n' + tooltip;
             }
             
             return tooltip;
@@ -3139,7 +3149,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
 
                 await loadData();
                 hideModal('editLancamentoModal');
-                aplicarFiltros();
                 alert('Lançamento atualizado com sucesso!');
             } catch (error) {
                 console.error('Erro ao atualizar:', error);
@@ -3155,7 +3164,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             try {
                 await db.collection('lancamentos').doc(id).delete();
                 await loadData();
-                aplicarFiltros();
                 alert('Lançamento excluído com sucesso!');
             } catch (error) {
                 console.error('Erro ao excluir:', error);
@@ -3219,13 +3227,22 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             showLoading(false);
         }
 
-        // Função para aplicar filtros
+        // Função para aplicar filtros - MODIFICADA para não mostrar todos os lançamentos
         function aplicarFiltros() {
             const colaboradorId = document.getElementById('filtroColaborador').value;
             const departamento = document.getElementById('filtroDepartamento').value;
             const status = document.getElementById('filtroStatus').value;
             const mes = document.getElementById('filtroMes').value;
             const ano = document.getElementById('filtroAno').value;
+
+            // Se nenhum filtro específico foi selecionado, não mostrar resultados
+            if (!colaboradorId && !departamento && !mes && !ano && status === 'todos') {
+                document.getElementById('semResultadosMsg').style.display = 'block';
+                document.getElementById('lancamentosTable').style.display = 'none';
+                document.getElementById('contadorLancamentos').textContent = '0 lançamentos';
+                document.getElementById('resumoSaldoContainer').style.display = 'none';
+                return;
+            }
 
             let lancamentosFiltrados = [...lancamentos];
 
@@ -3288,6 +3305,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             if (lancamentosFiltrados.length === 0) {
                 tabela.style.display = 'none';
                 semResultados.style.display = 'block';
+                semResultados.textContent = 'Nenhum lançamento encontrado com os filtros selecionados.';
                 return;
             }
 
@@ -3329,7 +3347,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 // Horas que faltam compensar
                 const horasFaltantes = lanc.saldoRestante !== undefined ? lanc.saldoRestante : lanc.horas;
                 
-                // Gerar tooltip com as compensações
+                // Gerar tooltip com as compensações - MELHORADO
                 const tooltipText = gerarTooltipCompensacoes(lanc);
                 
                 const compensacoesText = horasFaltantes > 0 ? 
@@ -3350,7 +3368,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                         <td><span class="badge ${lanc.tipo === 'positiva' ? 'badge-success' : 'badge-danger'}">${quantidadeIcon} ${decimalParaHora(lanc.horas)}</span></td>
                         <td>${competencia}</td>
                         <td>${vencimento}</td>
-                        <td><span class="badge ${status.classe}">${status.texto}</span></td>
+                        <td><span class="badge ${status.classe} compensacoes-tooltip" data-tooltip="${tooltipText}" style="cursor: help;">${status.texto}</span></td>
                         <td><span class="badge ${saldoAcumulado >= 0 ? 'badge-success' : 'badge-danger'}">${decimalParaHora(saldoAcumulado)}</span></td>
                         <td>${compensacoesText}</td>
                         <td>
@@ -3664,7 +3682,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             updateDashboard();
             carregarFiltros();
             carregarFiltrosQuitacoes();
-            aplicarFiltros();
             aplicarFiltrosQuitacoes();
             filterColaboradores();
             renderizarHorasVencidas();
