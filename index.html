@@ -1,16 +1,3 @@
-Peço desculpas pela confusão anterior. Agora entendi corretamente a regra:
-
-- A **origem** (quem cede as horas) pode ser positiva ou negativa.
-- A origem **não pode estar vencida**.
-- O **destino** (quem recebe a compensação) deve ter sinal oposto ao da origem.
-- O destino **pode estar vencido ou não**, desde que sua competência esteja **dentro da janela de 1 ano da origem** (ou seja, entre a competência da origem e a origem + 1 ano).
-- Não há restrição de que o destino não possa estar vencido.
-
-Ajustei a função `podeCompensar` para refletir exatamente essa lógica. Agora a compensação ocorrerá corretamente: horas de origem (não vencidas) podem compensar horas de destino (mesmo que vencidas) desde que o destino esteja dentro do período de 1 ano após a origem.
-
-Segue o código completo corrigido.
-
-```html
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
@@ -18,7 +5,7 @@ Segue o código completo corrigido.
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Banco de Horas - Sistema de Compensação</title>
     <style>
-        /* (mesmo CSS da versão anterior - mantido para funcionamento completo) */
+        /* (mesmo CSS das versões anteriores - mantido para funcionamento completo) */
         * {
             margin: 0;
             padding: 0;
@@ -2469,25 +2456,26 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 return dataA - dataB;
             });
 
-            // 3. Função que determina se o lançamento A (origem) pode compensar o lançamento B (destino)
-            function podeCompensar(origem, destino) {
+            // 3. Função que determina se o lançamento CEDENTE (fornece horas) pode compensar o RECEPTOR (que terá seu saldo reduzido)
+            //    Receptor não pode estar vencido. Cedente pode estar vencido, desde que sua data esteja dentro da janela do receptor.
+            function podeCompensar(cedente, receptor) {
                 // Mesmo colaborador
-                if (origem.colaboradorId !== destino.colaboradorId) return false;
+                if (cedente.colaboradorId !== receptor.colaboradorId) return false;
                 // Sinais opostos
-                if (origem.tipo === destino.tipo) return false;
+                if (cedente.tipo === receptor.tipo) return false;
                 // Ambos têm saldo
-                if (origem.saldoRestante <= 0 || destino.saldoRestante <= 0) return false;
+                if (cedente.saldoRestante <= 0 || receptor.saldoRestante <= 0) return false;
 
-                // A origem NÃO pode estar vencida
-                if (isHoraVencida(origem.mes, origem.ano)) return false;
+                // O receptor NÃO pode estar vencido
+                if (isHoraVencida(receptor.mes, receptor.ano)) return false;
 
-                // A data do destino deve estar dentro da janela de 1 ano da origem
-                const dataOrigem = dataParaObjeto(origem.data);
-                const vencimentoOrigem = new Date(dataOrigem);
-                vencimentoOrigem.setFullYear(vencimentoOrigem.getFullYear() + 1);
-                const dataDestino = dataParaObjeto(destino.data);
+                // A data do cedente deve estar dentro da janela de 1 ano do receptor
+                const dataReceptor = dataParaObjeto(receptor.data);
+                const vencimentoReceptor = new Date(dataReceptor);
+                vencimentoReceptor.setFullYear(vencimentoReceptor.getFullYear() + 1);
+                const dataCedente = dataParaObjeto(cedente.data);
 
-                return dataDestino >= dataOrigem && dataDestino <= vencimentoOrigem;
+                return dataCedente >= dataReceptor && dataCedente <= vencimentoReceptor;
             }
 
             // 4. Processamento em loop até que nenhuma nova compensação seja possível
@@ -2495,40 +2483,40 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             do {
                 mudou = false;
                 for (let i = 0; i < ativos.length; i++) {
-                    const origem = ativos[i]; // quem cede horas
-                    if (origem.saldoRestante <= 0) continue;
+                    const cedente = ativos[i]; // quem cede horas
+                    if (cedente.saldoRestante <= 0) continue;
 
-                    // Procura um destino que origem possa compensar
+                    // Procura um receptor que este cedente possa compensar
                     for (let j = 0; j < ativos.length; j++) {
                         if (i === j) continue;
-                        const destino = ativos[j];
-                        if (!podeCompensar(origem, destino)) continue;
+                        const receptor = ativos[j];
+                        if (!podeCompensar(cedente, receptor)) continue;
 
                         // Calcula quanto pode ser compensado (mínimo entre os saldos)
-                        const quantidade = Math.min(origem.saldoRestante, destino.saldoRestante);
+                        const quantidade = Math.min(cedente.saldoRestante, receptor.saldoRestante);
 
-                        // Registra a compensação (origem compensou destino)
-                        origem.compensacoes.push({
-                            lancamentoId: destino.id,
+                        // Registra a compensação (cedente compensou receptor)
+                        cedente.compensacoes.push({
+                            lancamentoId: receptor.id,
                             quantidade: quantidade,
                             data: new Date().toLocaleDateString('pt-BR'),
-                            tipo: destino.tipo
+                            tipo: receptor.tipo
                         });
-                        destino.compensadoPor.push({
-                            lancamentoId: origem.id,
+                        receptor.compensadoPor.push({
+                            lancamentoId: cedente.id,
                             quantidade: quantidade,
                             data: new Date().toLocaleDateString('pt-BR'),
-                            tipo: origem.tipo
+                            tipo: cedente.tipo
                         });
 
                         // Atualiza os saldos
-                        origem.saldoRestante -= quantidade;
-                        destino.saldoRestante -= quantidade;
+                        cedente.saldoRestante -= quantidade;
+                        receptor.saldoRestante -= quantidade;
 
                         mudou = true;
 
-                        // Se origem zerou, podemos parar de procurar para este
-                        if (origem.saldoRestante <= 0) break;
+                        // Se cedente zerou, podemos parar de procurar para este
+                        if (cedente.saldoRestante <= 0) break;
                     }
                 }
             } while (mudou);
@@ -3686,4 +3674,3 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
     </script>
 </body>
 </html>
-```
