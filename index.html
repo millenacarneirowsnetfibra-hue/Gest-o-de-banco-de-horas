@@ -2482,8 +2482,8 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 }
             });
 
-            // 2. Filtrar apenas lançamentos ativos (não quitados) e ordenar por data (mais antigo primeiro)
-            let ativos = lancamentos.filter(l => !l.quitado);
+            // 2. Filtrar apenas lançamentos ativos (não quitados) E NÃO VENCIDOS, e ordenar por data (mais antigo primeiro)
+            let ativos = lancamentos.filter(l => !l.quitado && !isHoraVencida(l.mes, l.ano));
             if (ativos.length === 0) return;
 
             ativos.sort((a, b) => {
@@ -2505,12 +2505,18 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 // Ambos têm saldo
                 if (cedente.saldoRestante <= 0 || receptor.saldoRestante <= 0) return false;
 
+                const hoje = new Date();
                 const dataCedente = dataParaObjeto(cedente.data);
                 const dataReceptor = dataParaObjeto(receptor.data);
                 
-                // Data de vencimento do receptor (débito) é 1 ano após sua competência
+                // Data de vencimento do cedente e do receptor
+                const vencimentoCedente = new Date(dataCedente);
+                vencimentoCedente.setFullYear(vencimentoCedente.getFullYear() + 1);
                 const vencimentoReceptor = new Date(dataReceptor);
                 vencimentoReceptor.setFullYear(vencimentoReceptor.getFullYear() + 1);
+
+                // Ambos devem estar dentro do prazo (não vencidos em relação à data atual) - redundância com filtro, mas garantia
+                if (hoje > vencimentoCedente || hoje > vencimentoReceptor) return false;
 
                 // Se o cedente é um crédito (+) e o receptor é um débito (-)
                 if (cedente.tipo === 'positiva' && receptor.tipo === 'negativa') {
@@ -2521,8 +2527,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 // Se o cedente é um débito (-) e o receptor é um crédito (+)
                 if (cedente.tipo === 'negativa' && receptor.tipo === 'positiva') {
                     // O débito deve ser igual ou posterior ao crédito E anterior ao vencimento do débito (cedente)
-                    const vencimentoCedente = new Date(dataCedente);
-                    vencimentoCedente.setFullYear(vencimentoCedente.getFullYear() + 1);
                     return dataCedente >= dataReceptor && dataCedente <= vencimentoCedente;
                 }
 
