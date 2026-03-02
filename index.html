@@ -1,3 +1,4 @@
+```html
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
@@ -2468,10 +2469,10 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
         }
 
         // ============================================================
-        // FUNÇÃO DE COMPENSAÇÃO CORRIGIDA - REGRA DEFINITIVA
+        // NOVA FUNÇÃO DE COMPENSAÇÃO - REGRA DEFINITIVA (APENAS CRÉDITO -> DÉBITO)
         // ============================================================
         function processarCompensacoes() {
-            console.log('Iniciando processamento de compensações com regras definitivas...');
+            console.log('Iniciando processamento de compensações com regras definitivas (crédito -> débito)...');
 
             // 1. Resetar saldos e registros de compensação
             lancamentos.forEach(lanc => {
@@ -2482,92 +2483,67 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 }
             });
 
-            // 2. Filtrar apenas lançamentos ativos (não quitados) e ordenar por data (mais antigo primeiro)
-            let ativos = lancamentos.filter(l => !l.quitado);
-            if (ativos.length === 0) return;
+            // 2. Separar créditos (positivos) e débitos (negativos) ativos (não quitados e com saldo > 0)
+            let creditos = lancamentos.filter(l => !l.quitado && l.tipo === 'positiva' && l.saldoRestante > 0);
+            let debitos = lancamentos.filter(l => !l.quitado && l.tipo === 'negativa' && l.saldoRestante > 0);
 
-            ativos.sort((a, b) => {
-                const dataA = dataParaObjeto(a.data);
-                const dataB = dataParaObjeto(b.data);
-                return dataA - dataB;
-            });
+            // Ordenar créditos por data (mais antigos primeiro) - opcional, mas ajuda na consistência
+            creditos.sort((a, b) => dataParaObjeto(a.data) - dataParaObjeto(b.data));
+            // Ordenar débitos por data (mais antigos primeiro) - para priorizar os mais antigos
+            debitos.sort((a, b) => dataParaObjeto(a.data) - dataParaObjeto(b.data));
 
-            // 3. Função que determina se o lançamento CEDENTE (fornece horas) pode compensar o RECEPTOR (que terá seu saldo reduzido)
-            //    Regra: Um débito só pode ser compensado por um crédito cuja competência seja igual ou posterior à do débito
-            //    e que esteja dentro do prazo de 1 ano (até a data de vencimento do débito).
-            //    Um crédito só pode ser compensado por um débito cuja competência seja igual ou posterior à do crédito
-            //    e que esteja dentro do prazo de 1 ano (até a data de vencimento do débito).
-            function podeCompensar(cedente, receptor) {
-                // Mesmo colaborador
-                if (cedente.colaboradorId !== receptor.colaboradorId) return false;
-                // Sinais opostos
-                if (cedente.tipo === receptor.tipo) return false;
-                // Ambos têm saldo
-                if (cedente.saldoRestante <= 0 || receptor.saldoRestante <= 0) return false;
-
-                const dataCedente = dataParaObjeto(cedente.data);
-                const dataReceptor = dataParaObjeto(receptor.data);
+            // 3. Função que determina se um crédito pode compensar um débito
+            function podeCompensar(credito, debito) {
+                if (credito.saldoRestante <= 0 || debito.saldoRestante <= 0) return false;
                 
-                // Data de vencimento do receptor (débito) é 1 ano após sua competência
-                const vencimentoReceptor = new Date(dataReceptor);
-                vencimentoReceptor.setFullYear(vencimentoReceptor.getFullYear() + 1);
+                const dataCredito = dataParaObjeto(credito.data);
+                const dataDebito = dataParaObjeto(debito.data);
+                const vencimentoDebito = new Date(dataDebito);
+                vencimentoDebito.setFullYear(vencimentoDebito.getFullYear() + 1);
 
-                // Se o cedente é um crédito (+) e o receptor é um débito (-)
-                if (cedente.tipo === 'positiva' && receptor.tipo === 'negativa') {
-                    // O crédito deve ser igual ou posterior ao débito E anterior ao vencimento do débito
-                    return dataCedente >= dataReceptor && dataCedente <= vencimentoReceptor;
-                }
-                
-                // Se o cedente é um débito (-) e o receptor é um crédito (+)
-                if (cedente.tipo === 'negativa' && receptor.tipo === 'positiva') {
-                    // O débito deve ser igual ou posterior ao crédito E anterior ao vencimento do débito (cedente)
-                    const vencimentoCedente = new Date(dataCedente);
-                    vencimentoCedente.setFullYear(vencimentoCedente.getFullYear() + 1);
-                    return dataCedente >= dataReceptor && dataCedente <= vencimentoCedente;
-                }
-
-                return false;
+                // Regra: o crédito pode compensar o débito se a data do crédito for <= vencimento do débito.
+                // Não há restrição de que o crédito precise ser posterior ao débito; um crédito anterior também pode compensar.
+                return dataCredito <= vencimentoDebito;
             }
 
-            // 4. Processamento em loop até que nenhuma nova compensação seja possível
+            // 4. Processamento: percorrer créditos e tentar compensar débitos
             let mudou;
             do {
                 mudou = false;
-                for (let i = 0; i < ativos.length; i++) {
-                    const cedente = ativos[i]; // quem cede horas
-                    if (cedente.saldoRestante <= 0) continue;
+                for (let i = 0; i < creditos.length; i++) {
+                    const credito = creditos[i];
+                    if (credito.saldoRestante <= 0) continue;
 
-                    // Procura um receptor que este cedente possa compensar
-                    for (let j = 0; j < ativos.length; j++) {
-                        if (i === j) continue;
-                        const receptor = ativos[j];
-                        if (!podeCompensar(cedente, receptor)) continue;
+                    for (let j = 0; j < debitos.length; j++) {
+                        const debito = debitos[j];
+                        if (debito.saldoRestante <= 0) continue;
+                        if (!podeCompensar(credito, debito)) continue;
 
                         // Calcula quanto pode ser compensado (mínimo entre os saldos)
-                        const quantidade = Math.min(cedente.saldoRestante, receptor.saldoRestante);
+                        const quantidade = Math.min(credito.saldoRestante, debito.saldoRestante);
 
-                        // Registra a compensação (cedente compensou receptor)
-                        cedente.compensacoes.push({
-                            lancamentoId: receptor.id,
+                        // Registra a compensação (crédito compensou débito)
+                        credito.compensacoes.push({
+                            lancamentoId: debito.id,
                             quantidade: quantidade,
                             data: new Date().toLocaleDateString('pt-BR'),
-                            tipo: receptor.tipo
+                            tipo: debito.tipo
                         });
-                        receptor.compensadoPor.push({
-                            lancamentoId: cedente.id,
+                        debito.compensadoPor.push({
+                            lancamentoId: credito.id,
                             quantidade: quantidade,
                             data: new Date().toLocaleDateString('pt-BR'),
-                            tipo: cedente.tipo
+                            tipo: credito.tipo
                         });
 
                         // Atualiza os saldos
-                        cedente.saldoRestante -= quantidade;
-                        receptor.saldoRestante -= quantidade;
+                        credito.saldoRestante -= quantidade;
+                        debito.saldoRestante -= quantidade;
 
                         mudou = true;
 
-                        // Se cedente zerou, podemos parar de procurar para este
-                        if (cedente.saldoRestante <= 0) break;
+                        // Se o crédito zerou, podemos parar de procurar para este
+                        if (credito.saldoRestante <= 0) break;
                     }
                 }
             } while (mudou);
