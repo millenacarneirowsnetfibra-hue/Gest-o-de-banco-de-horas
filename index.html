@@ -1701,6 +1701,23 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             document.getElementById(modalId).style.display = 'none';
         }
 
+        // ==================== NOVAS FUNÇÕES AUXILIARES ====================
+        function addOneYear(date) {
+            const newDate = new Date(date);
+            newDate.setFullYear(newDate.getFullYear() + 1);
+            return newDate;
+        }
+
+        function isExpirado(lanc) {
+            if (lanc.quitado) return true; // já quitado, não conta como ativo para compensação
+            const dataCompetencia = dataParaObjeto(lanc.data);
+            const dataExpiracao = addOneYear(dataCompetencia);
+            const hoje = new Date();
+            // Considerar expirado se hoje > dataExpiracao (desconsidera horas do próprio dia do vencimento? Usamos >)
+            return hoje > dataExpiracao;
+        }
+        // ==================================================================
+
         function showNovoLancamentoModal() {
             if (!firebaseConnected) {
                 alert('Sem conexão com o Firebase.');
@@ -2477,26 +2494,18 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             lancamentos.forEach(lanc => {
                 if (!lanc.quitado) {
                     lanc.saldoRestante = lanc.horas;
-                    lanc.compensacoes = [];      // lançamentos que este compensou
-                    lanc.compensadoPor = [];      // lançamentos que compensaram este
+                    lanc.compensacoes = [];
+                    lanc.compensadoPor = [];
                 }
             });
 
-            // 2. Filtrar apenas lançamentos ativos (não quitados) e ordenar por data (mais antigo primeiro)
-            let ativos = lancamentos.filter(l => !l.quitado);
+            // 2. Filtrar apenas lançamentos ativos (não quitados e não expirados) e ordenar por data
+            let ativos = lancamentos.filter(l => !l.quitado && !isExpirado(l));
             if (ativos.length === 0) return;
 
-            ativos.sort((a, b) => {
-                const dataA = dataParaObjeto(a.data);
-                const dataB = dataParaObjeto(b.data);
-                return dataA - dataB;
-            });
+            ativos.sort((a, b) => dataParaObjeto(a.data) - dataParaObjeto(b.data));
 
-            // 3. Função que determina se o lançamento CEDENTE (fornece horas) pode compensar o RECEPTOR (que terá seu saldo reduzido)
-            //    Regra: Um débito só pode ser compensado por um crédito cuja competência seja igual ou posterior à do débito
-            //    e que esteja dentro do prazo de 1 ano (até a data de vencimento do débito).
-            //    Um crédito só pode ser compensado por um débito cuja competência seja igual ou posterior à do crédito
-            //    e que esteja dentro do prazo de 1 ano (até a data de vencimento do débito).
+            // 3. Função que determina se pode compensar (nova versão)
             function podeCompensar(cedente, receptor) {
                 // Mesmo colaborador
                 if (cedente.colaboradorId !== receptor.colaboradorId) return false;
@@ -2505,28 +2514,27 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 // Ambos têm saldo
                 if (cedente.saldoRestante <= 0 || receptor.saldoRestante <= 0) return false;
 
-                const dataCedente = dataParaObjeto(cedente.data);
-                const dataReceptor = dataParaObjeto(receptor.data);
-                
-                // Data de vencimento do receptor (débito) é 1 ano após sua competência
-                const vencimentoReceptor = new Date(dataReceptor);
-                vencimentoReceptor.setFullYear(vencimentoReceptor.getFullYear() + 1);
-
-                // Se o cedente é um crédito (+) e o receptor é um débito (-)
+                // Identificar qual é positivo (crédito) e qual é negativo (débito)
+                let positivo, negativo;
                 if (cedente.tipo === 'positiva' && receptor.tipo === 'negativa') {
-                    // O crédito deve ser igual ou posterior ao débito E anterior ao vencimento do débito
-                    return dataCedente >= dataReceptor && dataCedente <= vencimentoReceptor;
-                }
-                
-                // Se o cedente é um débito (-) e o receptor é um crédito (+)
-                if (cedente.tipo === 'negativa' && receptor.tipo === 'positiva') {
-                    // O débito deve ser igual ou posterior ao crédito E anterior ao vencimento do débito (cedente)
-                    const vencimentoCedente = new Date(dataCedente);
-                    vencimentoCedente.setFullYear(vencimentoCedente.getFullYear() + 1);
-                    return dataCedente >= dataReceptor && dataCedente <= vencimentoCedente;
+                    positivo = cedente;
+                    negativo = receptor;
+                } else if (cedente.tipo === 'negativa' && receptor.tipo === 'positiva') {
+                    positivo = receptor;
+                    negativo = cedente;
+                } else {
+                    return false; // não deveria acontecer
                 }
 
-                return false;
+                // Verificar se o crédito pode compensar o débito: as datas devem estar dentro de 1 ano uma da outra
+                const dataPositivo = dataParaObjeto(positivo.data);
+                const dataNegativo = dataParaObjeto(negativo.data);
+
+                const limitePositivo = addOneYear(dataPositivo);
+                const limiteNegativo = addOneYear(dataNegativo);
+
+                // O crédito deve estar dentro do período de validade do débito e vice-versa
+                return dataPositivo <= limiteNegativo && dataNegativo <= limitePositivo;
             }
 
             // 4. Processamento em loop até que nenhuma nova compensação seja possível
