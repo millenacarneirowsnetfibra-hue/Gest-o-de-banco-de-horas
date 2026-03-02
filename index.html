@@ -1659,6 +1659,153 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             ano: ''
         };
 
+        // ================= NOVAS FUNÇÕES DE VENCIMENTO =================
+        function getVencimentoDate(mes, ano) {
+            // Retorna o último dia do mês no ano seguinte
+            const anoNum = parseInt(ano);
+            const mesNum = parseInt(mes) - 1; // 0-11
+            // Primeiro dia do mês seguinte ao ano seguinte (para obter o último dia do mês desejado)
+            // Ex: para jan/2024 -> queremos 31/jan/2025. Criamos 1/fev/2025 e subtraímos 1 dia.
+            let dataVencimento = new Date(anoNum + 1, mesNum + 1, 1); // primeiro dia do mês seguinte ao vencimento
+            dataVencimento.setDate(dataVencimento.getDate() - 1); // volta um dia, caindo no último dia do mês correto
+            return dataVencimento;
+        }
+
+        function isHoraVencida(mes, ano) {
+            const hoje = new Date();
+            hoje.setHours(0, 0, 0, 0); // zerar horas para comparar apenas datas
+            const dataVencimento = getVencimentoDate(mes, ano);
+            return hoje > dataVencimento; // se hoje > vencimento, está vencida
+        }
+
+        function isLancamentoVencido(lanc) {
+            return isHoraVencida(lanc.mes, lanc.ano);
+        }
+
+        // ================= NOVA LÓGICA DE COMPENSAÇÃO =================
+        function processarCompensacoes() {
+            console.log('Iniciando processamento de compensações com regras de vencimento (último dia do mês seguinte)...');
+
+            // 1. Resetar saldos e registros de compensação
+            lancamentos.forEach(lanc => {
+                if (!lanc.quitado) {
+                    lanc.saldoRestante = lanc.horas;
+                    lanc.compensacoes = [];      // lançamentos que este compensou
+                    lanc.compensadoPor = [];      // lançamentos que compensaram este
+                }
+            });
+
+            // 2. Filtrar apenas lançamentos ativos (não quitados) e que NÃO estejam vencidos
+            //    Os vencidos não participam da compensação
+            let ativos = lancamentos.filter(l => !l.quitado && !isLancamentoVencido(l));
+            if (ativos.length === 0) return;
+
+            // 3. Ordenar por competência (mais antiga primeiro) -> FIFO
+            ativos.sort((a, b) => {
+                const dataA = dataParaObjeto(a.data); // primeiro dia da competência
+                const dataB = dataParaObjeto(b.data);
+                return dataA - dataB;
+            });
+
+            // 4. Função que verifica se dois lançamentos podem se compensar
+            function podeCompensar(cedente, receptor) {
+                // Mesmo colaborador
+                if (cedente.colaboradorId !== receptor.colaboradorId) return false;
+                // Sinais opostos
+                if (cedente.tipo === receptor.tipo) return false;
+                // Ambos têm saldo
+                if (cedente.saldoRestante <= 0 || receptor.saldoRestante <= 0) return false;
+
+                // Garantia extra: ambos não estão vencidos (já filtramos, mas reforçar)
+                if (isLancamentoVencido(cedente) || isLancamentoVencido(receptor)) return false;
+
+                return true;
+            }
+
+            // 5. Processamento em loop até que nenhuma nova compensação seja possível
+            let mudou;
+            do {
+                mudou = false;
+                for (let i = 0; i < ativos.length; i++) {
+                    const cedente = ativos[i]; // quem cede horas
+                    if (cedente.saldoRestante <= 0) continue;
+
+                    // Procura um receptor que este cedente possa compensar
+                    for (let j = 0; j < ativos.length; j++) {
+                        if (i === j) continue;
+                        const receptor = ativos[j];
+                        if (!podeCompensar(cedente, receptor)) continue;
+
+                        // Calcula quanto pode ser compensado (mínimo entre os saldos)
+                        const quantidade = Math.min(cedente.saldoRestante, receptor.saldoRestante);
+
+                        // Registra a compensação (cedente compensou receptor)
+                        cedente.compensacoes.push({
+                            lancamentoId: receptor.id,
+                            quantidade: quantidade,
+                            data: new Date().toLocaleDateString('pt-BR'),
+                            tipo: receptor.tipo
+                        });
+                        receptor.compensadoPor.push({
+                            lancamentoId: cedente.id,
+                            quantidade: quantidade,
+                            data: new Date().toLocaleDateString('pt-BR'),
+                            tipo: cedente.tipo
+                        });
+
+                        // Atualiza os saldos
+                        cedente.saldoRestante -= quantidade;
+                        receptor.saldoRestante -= quantidade;
+
+                        mudou = true;
+
+                        // Se cedente zerou, podemos parar de procurar para este
+                        if (cedente.saldoRestante <= 0) break;
+                    }
+                }
+            } while (mudou);
+
+            console.log('Processamento de compensações concluído.');
+        }
+
+        // Função para calcular status do lançamento baseado nas regras
+        function calcularStatus(lancamento) {
+            // Se já foi quitado (pagamento em dinheiro)
+            if (lancamento.quitado) {
+                return { texto: 'Quitado', classe: 'badge-quitado' };
+            }
+            
+            // Considerar como compensado se o saldo restante for muito próximo de zero (tolerância de 0.001)
+            if (Math.abs(lancamento.saldoRestante) < 0.001) {
+                return { texto: 'Compensada', classe: 'badge-compensada' };
+            }
+
+            // Se ainda tem saldo restante, verificar se está vencido
+            if (isLancamentoVencido(lancamento)) {
+                return { texto: 'Vencida', classe: 'badge-vencida' };
+            }
+
+            // Para horas não vencidas com saldo restante, calcular dias até o vencimento
+            const dataVencimento = getVencimentoDate(lancamento.mes, lancamento.ano);
+            const hoje = new Date();
+            hoje.setHours(0, 0, 0, 0);
+            const diffTime = dataVencimento - hoje;
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+            if (diffDays <= 30) {
+                return { texto: 'À vencer em 30 dias', classe: 'badge-warning' };
+            }
+            if (diffDays <= 60) {
+                return { texto: 'À vencer em 60 dias', classe: 'badge-info' };
+            }
+
+            return { texto: 'Em dia', classe: 'badge-success' };
+        }
+
+        // ============================================================
+        // Funções existentes (mantidas) - algumas podem ter sido modificadas acima
+        // ============================================================
+
         // Funções utilitárias
         function showLoading(show) {
             document.getElementById('loadingOverlay').style.display = show ? 'flex' : 'none';
@@ -1992,513 +2139,19 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             document.getElementById('importModal').style.display = 'block';
         }
 
-        // ============================================================
-        // FUNÇÕES DE VENCIMENTO CORRIGIDAS (último dia do mês seguinte)
-        // ============================================================
-        function isHoraVencida(mes, ano) {
-            const hoje = new Date();
-            // Data de vencimento = último dia do mesmo mês no ano seguinte
-            const dataVencimento = new Date(parseInt(ano) + 1, parseInt(mes), 0); // mês é 1-12, no construtor mês 0-11, então usar mês (ex: 1) retorna último dia do mês 1? Na verdade new Date(ano, mes, 0) retorna último dia do mês anterior (mes-1). Para obter último dia do mês desejado, fazemos new Date(ano, mes, 0). Se mes=1, new Date(2025,1,0) = 31/01/2025. Isso está correto.
-            return hoje > dataVencimento;
-        }
+        // Função para verificar se uma hora está vencida (agora usando a nova função isHoraVencida)
+        // Já definida acima, mas manteremos a chamada para compatibilidade
+        // function isHoraVencida(mes, ano) - já implementada
 
-        function calcularVencimento(mes, ano) {
-            const dataVencimento = new Date(parseInt(ano) + 1, parseInt(mes), 0);
-            const meses = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
-            return `${meses[dataVencimento.getMonth()]}/${dataVencimento.getFullYear()}`;
-        }
-
+        // Função para calcular dias vencidos (baseado na nova data de vencimento)
         function calcularDiasVencidos(mes, ano) {
             const hoje = new Date();
-            const dataVencimento = new Date(parseInt(ano) + 1, parseInt(mes), 0);
+            hoje.setHours(0, 0, 0, 0);
+            const dataVencimento = getVencimentoDate(mes, ano);
+            
             const diffTime = hoje - dataVencimento;
             const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
             return diffDays > 0 ? diffDays : 0;
-        }
-
-        // ============================================================
-        // FUNÇÃO DE COMPENSAÇÃO CORRIGIDA (FIFO + ignorar vencidas)
-        // ============================================================
-        function processarCompensacoes() {
-            console.log('Iniciando processamento de compensações com regras definitivas (FIFO + vencimento)...');
-
-            // 1. Resetar saldos e registros de compensação de todos os lançamentos não quitados
-            lancamentos.forEach(lanc => {
-                if (!lanc.quitado) {
-                    lanc.saldoRestante = lanc.horas;
-                    lanc.compensacoes = [];
-                    lanc.compensadoPor = [];
-                }
-            });
-
-            // 2. Filtrar apenas lançamentos não quitados e NÃO vencidos
-            let ativos = lancamentos.filter(l => !l.quitado && !isHoraVencida(l.mes, l.ano));
-            if (ativos.length === 0) return;
-
-            // 3. Ordenar todos por data de competência (crescente)
-            ativos.sort((a, b) => dataParaObjeto(a.data) - dataParaObjeto(b.data));
-
-            // 4. Separar créditos e débitos (ambos ordenados)
-            let creditos = ativos.filter(l => l.tipo === 'positiva' && l.saldoRestante > 0);
-            let debitos = ativos.filter(l => l.tipo === 'negativa' && l.saldoRestante > 0);
-
-            // 5. Função auxiliar para verificar se crédito pode compensar débito
-            function podeCompensar(credito, debito) {
-                // Mesmo colaborador
-                if (credito.colaboradorId !== debito.colaboradorId) return false;
-                // Crédito pode compensar débito se a data do crédito for >= data do débito
-                // e a data do crédito estiver dentro do prazo do débito (até o vencimento)
-                const dataCredito = dataParaObjeto(credito.data);
-                const dataDebito = dataParaObjeto(debito.data);
-                const vencimentoDebito = new Date(parseInt(debito.ano) + 1, parseInt(debito.mes), 0);
-                return dataCredito >= dataDebito && dataCredito <= vencimentoDebito;
-            }
-
-            // 6. Loop de compensação (FIFO)
-            let i = 0, j = 0;
-            while (i < creditos.length && j < debitos.length) {
-                const credito = creditos[i];
-                const debito = debitos[j];
-
-                if (!podeCompensar(credito, debito)) {
-                    // Se não pode, avança o índice do que for mais antigo? Na verdade, se não pode, significa que o crédito é anterior ao débito? A condição já verifica dataCredito >= dataDebito. Se não pode, talvez o crédito seja posterior ao vencimento do débito. Nesse caso, não há como compensar este débito com nenhum crédito futuro? Mas créditos futuros podem compensar débitos passados? A regra permite crédito futuro compensar débito passado, desde que dentro do vencimento. Então, se um crédito é muito posterior ao vencimento do débito, ele não pode compensar. Mas pode haver outro crédito mais antigo que sirva. Como estamos percorrendo em ordem, se o crédito atual não pode compensar o débito atual, significa que o crédito é muito recente (após vencimento) ou o débito é muito antigo (já venceu). Como já filtramos vencidos, resta a possibilidade de o crédito ser posterior ao vencimento? Não, porque o crédito não está vencido, mas pode ser que sua data seja > vencimento do débito? Exemplo: débito jan/2024 vence 31/01/2025, crédito fev/2025 não está vencido (pois vence 28/02/2026) mas é > vencimento do débito, então não pode compensar. Nesse caso, esse débito nunca será compensado por créditos futuros, então devemos avançar o débito (ele fica para quitação). Portanto, se o crédito não pode compensar o débito, avançamos o índice do débito (j++), porque o débito atual não pode ser compensado por este crédito nem por nenhum crédito posterior (todos serão ainda mais futuros). Isso garante que débitos mais antigos sejam tratados primeiro.
-                    j++;
-                    continue;
-                }
-
-                // Pode compensar: calcular quantidade
-                const quantidade = Math.min(credito.saldoRestante, debito.saldoRestante);
-
-                // Registrar compensação
-                credito.compensacoes.push({
-                    lancamentoId: debito.id,
-                    quantidade: quantidade,
-                    data: new Date().toLocaleDateString('pt-BR'),
-                    tipo: debito.tipo
-                });
-                debito.compensadoPor.push({
-                    lancamentoId: credito.id,
-                    quantidade: quantidade,
-                    data: new Date().toLocaleDateString('pt-BR'),
-                    tipo: credito.tipo
-                });
-
-                // Atualizar saldos
-                credito.saldoRestante -= quantidade;
-                debito.saldoRestante -= quantidade;
-
-                // Se o crédito zerou, avançar i
-                if (credito.saldoRestante <= 0) i++;
-                // Se o débito zerou, avançar j
-                if (debito.saldoRestante <= 0) j++;
-            }
-
-            console.log('Processamento de compensações concluído.');
-        }
-
-        // Função para calcular status do lançamento baseado nas regras
-        function calcularStatus(lancamento) {
-            // Se já foi quitado (pagamento em dinheiro)
-            if (lancamento.quitado) {
-                return { texto: 'Quitado', classe: 'badge-quitado' };
-            }
-            
-            // Considerar como compensado se o saldo restante for muito próximo de zero (tolerância de 0.001)
-            if (Math.abs(lancamento.saldoRestante) < 0.001) {
-                return { texto: 'Compensada', classe: 'badge-compensada' };
-            }
-
-            // Se ainda tem saldo restante, verificar se está vencido
-            if (isHoraVencida(lancamento.mes, lancamento.ano)) {
-                return { texto: 'Vencida', classe: 'badge-vencida' };
-            }
-
-            // Para horas não vencidas com saldo restante, calcular dias até o vencimento
-            const dataVencimento = new Date(parseInt(lancamento.ano) + 1, parseInt(lancamento.mes), 0);
-            const hoje = new Date();
-            const diffTime = dataVencimento - hoje;
-            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-            if (diffDays <= 30) {
-                return { texto: 'À vencer em 30 dias', classe: 'badge-warning' };
-            }
-            if (diffDays <= 60) {
-                return { texto: 'À vencer em 60 dias', classe: 'badge-info' };
-            }
-
-            return { texto: 'Em dia', classe: 'badge-success' };
-        }
-
-        // Função para calcular saldo acumulado por colaborador (usando horas originais)
-        function calcularSaldoAcumulado(colaboradorId, lancamentosDoColaborador) {
-            // Ordenar lançamentos por data (mais antigos primeiro)
-            const lancamentosOrdenados = [...lancamentosDoColaborador].sort((a, b) => {
-                return dataParaObjeto(a.data) - dataParaObjeto(b.data);
-            });
-
-            // Calcular saldo acumulado sequencialmente usando o valor original das horas
-            let saldo = 0;
-            const saldosPorLancamento = [];
-
-            for (const lanc of lancamentosOrdenados) {
-                if (lanc.tipo === 'positiva') {
-                    saldo += lanc.horas;
-                } else {
-                    saldo -= lanc.horas;
-                }
-                saldosPorLancamento.push({
-                    id: lanc.id,
-                    saldoAcumulado: saldo
-                });
-            }
-
-            return saldosPorLancamento;
-        }
-
-        // Função para gerar tooltip de compensações - MELHORADA
-        function gerarTooltipCompensacoes(lancamento) {
-            let tooltip = '';
-            
-            // Compensações que este lançamento fez em outros
-            if (lancamento.compensacoes && lancamento.compensacoes.length > 0) {
-                tooltip += '🔽 COMPENSOU:\n';
-                lancamento.compensacoes.forEach(comp => {
-                    const lancComp = lancamentos.find(l => l.id === comp.lancamentoId);
-                    if (lancComp) {
-                        const competencia = formatarCompetencia(lancComp.mes, lancComp.ano);
-                        const tipoIcon = lancComp.tipo === 'positiva' ? '➕' : '➖';
-                        tooltip += `  • ${competencia} ${tipoIcon}: ${decimalParaHora(comp.quantidade)}\n`;
-                    }
-                });
-            }
-            
-            // Lançamentos que compensaram este
-            if (lancamento.compensadoPor && lancamento.compensadoPor.length > 0) {
-                if (tooltip) tooltip += '\n';
-                tooltip += '🔼 FOI COMPENSADO POR:\n';
-                lancamento.compensadoPor.forEach(comp => {
-                    const lancComp = lancamentos.find(l => l.id === comp.lancamentoId);
-                    if (lancComp) {
-                        const competencia = formatarCompetencia(lancComp.mes, lancComp.ano);
-                        const tipoIcon = lancComp.tipo === 'positiva' ? '➕' : '➖';
-                        tooltip += `  • ${competencia} ${tipoIcon}: ${decimalParaHora(comp.quantidade)}\n`;
-                    }
-                });
-            }
-            
-            if (!tooltip) {
-                tooltip = 'Nenhuma compensação registrada';
-            } else {
-                // Adicionar cabeçalho
-                tooltip = '📊 DETALHES DAS COMPENSAÇÕES:\n\n' + tooltip;
-            }
-            
-            return tooltip;
-        }
-
-        // Função para normalizar dados do lançamento
-        function normalizarLancamento(doc) {
-            const data = doc.data();
-            const id = doc.id;
-            
-            const lancamento = {
-                id: id,
-                colaboradorId: data.colaboradorId || data.colaborador_id || '',
-                colaboradorNome: data.colaboradorNome || data.colaborador_nome || '',
-                colaboradorDepartamento: data.colaboradorDepartamento || data.departamento || '',
-                data: data.data || data.date || '01/01/2024',
-                mes: data.mes || data.month || '01',
-                ano: data.ano || data.year || '2024',
-                tipo: data.tipo || data.type || 'positiva',
-                horas: typeof data.horas === 'number' ? data.horas : (typeof data.hours === 'number' ? data.hours : 0),
-                compensacoes: data.compensacoes || [],
-                compensadoPor: data.compensadoPor || [],
-                saldoRestante: data.saldoRestante !== undefined ? data.saldoRestante : (data.horas || 0),
-                quitado: data.quitado || false,
-                quitadoEm: data.quitadoEm || null,
-                quitacaoId: data.quitacaoId || null
-            };
-            
-            if (!lancamento.mes || !lancamento.ano) {
-                const partes = lancamento.data.split('/');
-                if (partes.length === 3) {
-                    lancamento.mes = partes[1];
-                    lancamento.ano = partes[2];
-                }
-            }
-            
-            return lancamento;
-        }
-
-        // Carregar dados do Firebase
-        async function loadData() {
-            if (!firebaseConnected) {
-                showLoading(false);
-                return;
-            }
-            
-            showLoading(true);
-            
-            try {
-                // Carregar empresas
-                const empresasSnapshot = await db.collection('empresas').get();
-                empresasDocs = empresasSnapshot.docs.map(doc => ({
-                    id: doc.id,
-                    nome: doc.data().nome
-                }));
-                empresas = empresasDocs.map(doc => doc.nome);
-
-                // Carregar departamentos
-                const departamentosSnapshot = await db.collection('departamentos').get();
-                departamentosDocs = departamentosSnapshot.docs.map(doc => ({
-                    id: doc.id,
-                    nome: doc.data().nome
-                }));
-                departamentos = departamentosDocs.map(doc => doc.nome);
-
-                // Carregar colaboradores
-                const colaboradoresSnapshot = await db.collection('colaboradores').get();
-                colaboradores = colaboradoresSnapshot.docs.map(doc => ({
-                    id: doc.id,
-                    ...doc.data()
-                }));
-                
-                colaboradores.sort((a, b) => {
-                    const nomeA = (a.nome || '').toLowerCase();
-                    const nomeB = (b.nome || '').toLowerCase();
-                    return nomeA.localeCompare(nomeB);
-                });
-
-                // Carregar lançamentos
-                const lancamentosSnapshot = await db.collection('lancamentos').get();
-                
-                lancamentos = lancamentosSnapshot.docs.map(doc => normalizarLancamento(doc));
-
-                // Carregar quitações
-                const quitacoesSnapshot = await db.collection('quitacoes').get();
-                quitacoes = quitacoesSnapshot.docs.map(doc => ({
-                    id: doc.id,
-                    ...doc.data()
-                }));
-
-                // Ordenar quitações por data (mais recentes primeiro)
-                quitacoes.sort((a, b) => {
-                    return new Date(b.dataQuitacao) - new Date(a.dataQuitacao);
-                });
-
-                // Processar compensações
-                processarCompensacoes();
-
-                // Ordenar lançamentos por data (mais recentes primeiro) para exibição
-                lancamentos.sort((a, b) => {
-                    try {
-                        return dataParaObjeto(b.data) - dataParaObjeto(a.data);
-                    } catch (e) {
-                        return 0;
-                    }
-                });
-
-                updateAllTables();
-                
-            } catch (error) {
-                console.error('Erro ao carregar dados:', error);
-                alert('Erro ao carregar dados: ' + error.message);
-            } finally {
-                showLoading(false);
-            }
-        }
-
-        // Salvar compensações no Firebase
-        async function salvarCompensacoes() {
-            if (!firebaseConnected) return;
-            
-            try {
-                for (const lanc of lancamentos) {
-                    await db.collection('lancamentos').doc(lanc.id).update({
-                        compensacoes: lanc.compensacoes || [],
-                        compensadoPor: lanc.compensadoPor || [],
-                        saldoRestante: lanc.saldoRestante !== undefined ? lanc.saldoRestante : lanc.horas
-                    });
-                }
-            } catch (error) {
-                console.error('Erro ao salvar compensações:', error);
-            }
-        }
-
-        // Preencher anos nos selects
-        function preencherAnos() {
-            const anos = [];
-            for (let i = 2020; i <= 2030; i++) {
-                anos.push(i);
-            }
-            
-            const selects = [
-                'novoLancamentoAno',
-                'filtroAno', 
-                'editLancamentoAno',
-                'quitacaoAnoPagamento',
-                'filtroQuitacaoAno'
-            ];
-            
-            selects.forEach(selectId => {
-                const select = document.getElementById(selectId);
-                if (select) {
-                    select.innerHTML = '';
-                    if (selectId === 'filtroAno' || selectId === 'filtroQuitacaoAno') {
-                        const optionAll = document.createElement('option');
-                        optionAll.value = '';
-                        optionAll.textContent = 'Todos';
-                        select.appendChild(optionAll);
-                    }
-                    anos.forEach(ano => {
-                        const option = document.createElement('option');
-                        option.value = ano;
-                        option.textContent = ano;
-                        if (ano === new Date().getFullYear() && (selectId !== 'filtroAno' && selectId !== 'filtroQuitacaoAno')) {
-                            option.selected = true;
-                        }
-                        select.appendChild(option);
-                    });
-                }
-            });
-        }
-
-        // Carregar selects
-        function loadSelects() {
-            const deptoSelect = document.getElementById('colaboradorDepartamento');
-            const empresaSelect = document.getElementById('colaboradorEmpresa');
-            
-            deptoSelect.innerHTML = '<option value="">Selecione...</option>';
-            empresaSelect.innerHTML = '<option value="">Selecione...</option>';
-            
-            departamentos.sort().forEach(depto => {
-                deptoSelect.innerHTML += `<option value="${depto}">${depto}</option>`;
-            });
-            
-            empresas.sort().forEach(empresa => {
-                empresaSelect.innerHTML += `<option value="${empresa}">${empresa}</option>`;
-            });
-        }
-
-        function carregarFiltros() {
-            const filtroColab = document.getElementById('filtroColaborador');
-            filtroColab.innerHTML = '<option value="">Todos os colaboradores</option>';
-            
-            colaboradores.sort((a, b) => a.nome.localeCompare(b.nome)).forEach(colab => {
-                const status = colab.ativo !== false ? '' : ' (Inativo)';
-                const optionText = `${colab.nome}${status}`;
-                filtroColab.innerHTML += `<option value="${colab.id}">${optionText}</option>`;
-            });
-
-            const filtroDepto = document.getElementById('filtroDepartamento');
-            filtroDepto.innerHTML = '<option value="">Todos os departamentos</option>';
-            const deptosUnicos = [...new Set(colaboradores.map(c => c.departamento))];
-            deptosUnicos.sort().forEach(depto => {
-                filtroDepto.innerHTML += `<option value="${depto}">${depto}</option>`;
-            });
-
-            preencherAnos();
-        }
-
-        function carregarFiltrosQuitacoes() {
-            const filtroColab = document.getElementById('filtroQuitacaoColaborador');
-            filtroColab.innerHTML = '<option value="">Todos os colaboradores</option>';
-            
-            colaboradores.sort((a, b) => a.nome.localeCompare(b.nome)).forEach(colab => {
-                const status = colab.ativo !== false ? '' : ' (Inativo)';
-                const optionText = `${colab.nome}${status}`;
-                filtroColab.innerHTML += `<option value="${colab.id}">${optionText}</option>`;
-            });
-
-            const filtroDepto = document.getElementById('filtroQuitacaoDepartamento');
-            filtroDepto.innerHTML = '<option value="">Todos os departamentos</option>';
-            const deptosUnicos = [...new Set(colaboradores.map(c => c.departamento))];
-            deptosUnicos.sort().forEach(depto => {
-                filtroDepto.innerHTML += `<option value="${depto}">${depto}</option>`;
-            });
-
-            preencherAnos();
-        }
-
-        // Função para aplicar filtros nas quitações
-        function aplicarFiltrosQuitacoes() {
-            const colaboradorId = document.getElementById('filtroQuitacaoColaborador').value;
-            const departamento = document.getElementById('filtroQuitacaoDepartamento').value;
-            const status = document.getElementById('filtroQuitacaoStatus').value;
-            const mes = document.getElementById('filtroQuitacaoMes').value;
-            const ano = document.getElementById('filtroQuitacaoAno').value;
-
-            let quitacoesFiltradas = [...quitacoes];
-
-            if (colaboradorId) {
-                quitacoesFiltradas = quitacoesFiltradas.filter(q => q.colaboradorId === colaboradorId);
-            }
-
-            if (departamento) {
-                quitacoesFiltradas = quitacoesFiltradas.filter(q => q.colaboradorDepartamento === departamento);
-            }
-
-            if (status === 'quitadas') {
-                // Já são todas quitadas
-            } else if (status === 'vencidas') {
-                // Mostrar apenas horas vencidas não quitadas (será mostrado em outra tabela)
-                renderizarHorasVencidas();
-                return;
-            }
-
-            if (mes) {
-                quitacoesFiltradas = quitacoesFiltradas.filter(q => q.mesPagamento === mes);
-            }
-
-            if (ano) {
-                quitacoesFiltradas = quitacoesFiltradas.filter(q => q.anoPagamento === ano);
-            }
-
-            document.getElementById('contadorQuitacoes').textContent = `${quitacoesFiltradas.length} quitações`;
-
-            renderizarTabelaQuitacoes(quitacoesFiltradas);
-            renderizarHorasVencidas();
-        }
-
-        // Função para renderizar tabela de quitações
-        function renderizarTabelaQuitacoes(quitacoesFiltradas) {
-            const tbody = document.getElementById('quitacoesList');
-            const tabela = document.getElementById('quitacoesTable');
-            const semResultados = document.getElementById('semQuitacoesMsg');
-
-            if (quitacoesFiltradas.length === 0) {
-                tabela.style.display = 'none';
-                semResultados.style.display = 'block';
-                return;
-            }
-
-            tabela.style.display = 'table';
-            semResultados.style.display = 'none';
-
-            tbody.innerHTML = '';
-
-            quitacoesFiltradas.forEach(quitacao => {
-                const colaborador = colaboradores.find(c => c.id === quitacao.colaboradorId);
-                const dataQuitacaoFormatada = new Date(quitacao.dataQuitacao).toLocaleDateString('pt-BR');
-                
-                tbody.innerHTML += `
-                    <tr>
-                        <td><strong>${quitacao.colaboradorNome}</strong><br><small style="color: #64748b;">${quitacao.colaboradorDepartamento || ''}</small></td>
-                        <td>${dataQuitacaoFormatada}</td>
-                        <td>${quitacao.competenciaPagamento}</td>
-                        <td>${decimalParaHora(quitacao.horasQuitadas)}</td>
-                        <td>R$ ${quitacao.valorFolha.toFixed(2).replace('.', ',')}</td>
-                        <td>R$ ${quitacao.valorReflexo.toFixed(2).replace('.', ',')}</td>
-                        <td><strong>R$ ${quitacao.totalPago.toFixed(2).replace('.', ',')}</strong></td>
-                        <td>
-                            <div class="action-buttons">
-                                <button class="btn btn-info btn-small" onclick="showVisualizarQuitacaoModal('${quitacao.id}')" title="Ver detalhes">🔍</button>
-                                <button class="btn btn-danger btn-small" onclick="deleteQuitacao('${quitacao.id}')" title="Excluir">🗑️</button>
-                            </div>
-                        </td>
-                    </tr>
-                `;
-            });
         }
 
         // Função para mostrar modal de nova quitação
@@ -2569,7 +2222,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 l.tipo === 'negativa' && 
                 l.saldoRestante > 0 &&
                 !l.quitado &&
-                isHoraVencida(l.mes, l.ano)
+                isHoraVencida(l.mes, l.ano)  // usa nova função
             );
 
             if (lancamentosColab.length === 0) {
@@ -2933,10 +2586,613 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             return `${meses[parseInt(mes) - 1]}/${ano}`;
         }
 
+        // Função para calcular vencimento (1 ano após a competência, último dia do mês)
+        function calcularVencimento(mes, ano) {
+            const dataVencimento = getVencimentoDate(mes, ano);
+            const meses = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+            return `${meses[dataVencimento.getMonth()]}/${dataVencimento.getFullYear()}`;
+        }
+
         // Função para converter data string para objeto Date (usando primeiro dia do mês)
         function dataParaObjeto(dataStr) {
             const [dia, mes, ano] = dataStr.split('/');
             return new Date(parseInt(ano), parseInt(mes) - 1, 1);
+        }
+
+        // Função para normalizar dados do lançamento
+        function normalizarLancamento(doc) {
+            const data = doc.data();
+            const id = doc.id;
+            
+            const lancamento = {
+                id: id,
+                colaboradorId: data.colaboradorId || data.colaborador_id || '',
+                colaboradorNome: data.colaboradorNome || data.colaborador_nome || '',
+                colaboradorDepartamento: data.colaboradorDepartamento || data.departamento || '',
+                data: data.data || data.date || '01/01/2024',
+                mes: data.mes || data.month || '01',
+                ano: data.ano || data.year || '2024',
+                tipo: data.tipo || data.type || 'positiva',
+                horas: typeof data.horas === 'number' ? data.horas : (typeof data.hours === 'number' ? data.hours : 0),
+                compensacoes: data.compensacoes || [],
+                compensadoPor: data.compensadoPor || [],
+                saldoRestante: data.saldoRestante !== undefined ? data.saldoRestante : (data.horas || 0),
+                quitado: data.quitado || false,
+                quitadoEm: data.quitadoEm || null,
+                quitacaoId: data.quitacaoId || null
+            };
+            
+            if (!lancamento.mes || !lancamento.ano) {
+                const partes = lancamento.data.split('/');
+                if (partes.length === 3) {
+                    lancamento.mes = partes[1];
+                    lancamento.ano = partes[2];
+                }
+            }
+            
+            return lancamento;
+        }
+
+        // Carregar dados do Firebase
+        async function loadData() {
+            if (!firebaseConnected) {
+                showLoading(false);
+                return;
+            }
+            
+            showLoading(true);
+            
+            try {
+                // Carregar empresas
+                const empresasSnapshot = await db.collection('empresas').get();
+                empresasDocs = empresasSnapshot.docs.map(doc => ({
+                    id: doc.id,
+                    nome: doc.data().nome
+                }));
+                empresas = empresasDocs.map(doc => doc.nome);
+
+                // Carregar departamentos
+                const departamentosSnapshot = await db.collection('departamentos').get();
+                departamentosDocs = departamentosSnapshot.docs.map(doc => ({
+                    id: doc.id,
+                    nome: doc.data().nome
+                }));
+                departamentos = departamentosDocs.map(doc => doc.nome);
+
+                // Carregar colaboradores
+                const colaboradoresSnapshot = await db.collection('colaboradores').get();
+                colaboradores = colaboradoresSnapshot.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data()
+                }));
+                
+                colaboradores.sort((a, b) => {
+                    const nomeA = (a.nome || '').toLowerCase();
+                    const nomeB = (b.nome || '').toLowerCase();
+                    return nomeA.localeCompare(nomeB);
+                });
+
+                // Carregar lançamentos
+                const lancamentosSnapshot = await db.collection('lancamentos').get();
+                
+                lancamentos = lancamentosSnapshot.docs.map(doc => normalizarLancamento(doc));
+
+                // Carregar quitações
+                const quitacoesSnapshot = await db.collection('quitacoes').get();
+                quitacoes = quitacoesSnapshot.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data()
+                }));
+
+                // Ordenar quitações por data (mais recentes primeiro)
+                quitacoes.sort((a, b) => {
+                    return new Date(b.dataQuitacao) - new Date(a.dataQuitacao);
+                });
+
+                // Processar compensações com a nova lógica
+                processarCompensacoes();
+
+                // Ordenar lançamentos por data (mais recentes primeiro) para exibição
+                lancamentos.sort((a, b) => {
+                    try {
+                        return dataParaObjeto(b.data) - dataParaObjeto(a.data);
+                    } catch (e) {
+                        return 0;
+                    }
+                });
+
+                updateAllTables();
+                
+            } catch (error) {
+                console.error('Erro ao carregar dados:', error);
+                alert('Erro ao carregar dados: ' + error.message);
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // Salvar compensações no Firebase
+        async function salvarCompensacoes() {
+            if (!firebaseConnected) return;
+            
+            try {
+                for (const lanc of lancamentos) {
+                    await db.collection('lancamentos').doc(lanc.id).update({
+                        compensacoes: lanc.compensacoes || [],
+                        compensadoPor: lanc.compensadoPor || [],
+                        saldoRestante: lanc.saldoRestante !== undefined ? lanc.saldoRestante : lanc.horas
+                    });
+                }
+            } catch (error) {
+                console.error('Erro ao salvar compensações:', error);
+            }
+        }
+
+        // Preencher anos nos selects
+        function preencherAnos() {
+            const anos = [];
+            for (let i = 2020; i <= 2030; i++) {
+                anos.push(i);
+            }
+            
+            const selects = [
+                'novoLancamentoAno',
+                'filtroAno', 
+                'editLancamentoAno',
+                'quitacaoAnoPagamento',
+                'filtroQuitacaoAno'
+            ];
+            
+            selects.forEach(selectId => {
+                const select = document.getElementById(selectId);
+                if (select) {
+                    select.innerHTML = '';
+                    if (selectId === 'filtroAno' || selectId === 'filtroQuitacaoAno') {
+                        const optionAll = document.createElement('option');
+                        optionAll.value = '';
+                        optionAll.textContent = 'Todos';
+                        select.appendChild(optionAll);
+                    }
+                    anos.forEach(ano => {
+                        const option = document.createElement('option');
+                        option.value = ano;
+                        option.textContent = ano;
+                        if (ano === new Date().getFullYear() && (selectId !== 'filtroAno' && selectId !== 'filtroQuitacaoAno')) {
+                            option.selected = true;
+                        }
+                        select.appendChild(option);
+                    });
+                }
+            });
+        }
+
+        // Carregar selects
+        function loadSelects() {
+            const deptoSelect = document.getElementById('colaboradorDepartamento');
+            const empresaSelect = document.getElementById('colaboradorEmpresa');
+            
+            deptoSelect.innerHTML = '<option value="">Selecione...</option>';
+            empresaSelect.innerHTML = '<option value="">Selecione...</option>';
+            
+            departamentos.sort().forEach(depto => {
+                deptoSelect.innerHTML += `<option value="${depto}">${depto}</option>`;
+            });
+            
+            empresas.sort().forEach(empresa => {
+                empresaSelect.innerHTML += `<option value="${empresa}">${empresa}</option>`;
+            });
+        }
+
+        function carregarFiltros() {
+            const filtroColab = document.getElementById('filtroColaborador');
+            filtroColab.innerHTML = '<option value="">Todos os colaboradores</option>';
+            
+            colaboradores.sort((a, b) => a.nome.localeCompare(b.nome)).forEach(colab => {
+                const status = colab.ativo !== false ? '' : ' (Inativo)';
+                const optionText = `${colab.nome}${status}`;
+                filtroColab.innerHTML += `<option value="${colab.id}">${optionText}</option>`;
+            });
+
+            const filtroDepto = document.getElementById('filtroDepartamento');
+            filtroDepto.innerHTML = '<option value="">Todos os departamentos</option>';
+            const deptosUnicos = [...new Set(colaboradores.map(c => c.departamento))];
+            deptosUnicos.sort().forEach(depto => {
+                filtroDepto.innerHTML += `<option value="${depto}">${depto}</option>`;
+            });
+
+            preencherAnos();
+        }
+
+        function carregarFiltrosQuitacoes() {
+            const filtroColab = document.getElementById('filtroQuitacaoColaborador');
+            filtroColab.innerHTML = '<option value="">Todos os colaboradores</option>';
+            
+            colaboradores.sort((a, b) => a.nome.localeCompare(b.nome)).forEach(colab => {
+                const status = colab.ativo !== false ? '' : ' (Inativo)';
+                const optionText = `${colab.nome}${status}`;
+                filtroColab.innerHTML += `<option value="${colab.id}">${optionText}</option>`;
+            });
+
+            const filtroDepto = document.getElementById('filtroQuitacaoDepartamento');
+            filtroDepto.innerHTML = '<option value="">Todos os departamentos</option>';
+            const deptosUnicos = [...new Set(colaboradores.map(c => c.departamento))];
+            deptosUnicos.sort().forEach(depto => {
+                filtroDepto.innerHTML += `<option value="${depto}">${depto}</option>`;
+            });
+
+            preencherAnos();
+        }
+
+        // Função para aplicar filtros nas quitações
+        function aplicarFiltrosQuitacoes() {
+            const colaboradorId = document.getElementById('filtroQuitacaoColaborador').value;
+            const departamento = document.getElementById('filtroQuitacaoDepartamento').value;
+            const status = document.getElementById('filtroQuitacaoStatus').value;
+            const mes = document.getElementById('filtroQuitacaoMes').value;
+            const ano = document.getElementById('filtroQuitacaoAno').value;
+
+            let quitacoesFiltradas = [...quitacoes];
+
+            if (colaboradorId) {
+                quitacoesFiltradas = quitacoesFiltradas.filter(q => q.colaboradorId === colaboradorId);
+            }
+
+            if (departamento) {
+                quitacoesFiltradas = quitacoesFiltradas.filter(q => q.colaboradorDepartamento === departamento);
+            }
+
+            if (status === 'quitadas') {
+                // Já são todas quitadas
+            } else if (status === 'vencidas') {
+                // Mostrar apenas horas vencidas não quitadas (será mostrado em outra tabela)
+                renderizarHorasVencidas();
+                return;
+            }
+
+            if (mes) {
+                quitacoesFiltradas = quitacoesFiltradas.filter(q => q.mesPagamento === mes);
+            }
+
+            if (ano) {
+                quitacoesFiltradas = quitacoesFiltradas.filter(q => q.anoPagamento === ano);
+            }
+
+            document.getElementById('contadorQuitacoes').textContent = `${quitacoesFiltradas.length} quitações`;
+
+            renderizarTabelaQuitacoes(quitacoesFiltradas);
+            renderizarHorasVencidas();
+        }
+
+        // Função para renderizar tabela de quitações
+        function renderizarTabelaQuitacoes(quitacoesFiltradas) {
+            const tbody = document.getElementById('quitacoesList');
+            const tabela = document.getElementById('quitacoesTable');
+            const semResultados = document.getElementById('semQuitacoesMsg');
+
+            if (quitacoesFiltradas.length === 0) {
+                tabela.style.display = 'none';
+                semResultados.style.display = 'block';
+                return;
+            }
+
+            tabela.style.display = 'table';
+            semResultados.style.display = 'none';
+
+            tbody.innerHTML = '';
+
+            quitacoesFiltradas.forEach(quitacao => {
+                const colaborador = colaboradores.find(c => c.id === quitacao.colaboradorId);
+                const dataQuitacaoFormatada = new Date(quitacao.dataQuitacao).toLocaleDateString('pt-BR');
+                
+                tbody.innerHTML += `
+                    <tr>
+                        <td><strong>${quitacao.colaboradorNome}</strong><br><small style="color: #64748b;">${quitacao.colaboradorDepartamento || ''}</small></td>
+                        <td>${dataQuitacaoFormatada}</td>
+                        <td>${quitacao.competenciaPagamento}</td>
+                        <td>${decimalParaHora(quitacao.horasQuitadas)}</td>
+                        <td>R$ ${quitacao.valorFolha.toFixed(2).replace('.', ',')}</td>
+                        <td>R$ ${quitacao.valorReflexo.toFixed(2).replace('.', ',')}</td>
+                        <td><strong>R$ ${quitacao.totalPago.toFixed(2).replace('.', ',')}</strong></td>
+                        <td>
+                            <div class="action-buttons">
+                                <button class="btn btn-info btn-small" onclick="showVisualizarQuitacaoModal('${quitacao.id}')" title="Ver detalhes">🔍</button>
+                                <button class="btn btn-danger btn-small" onclick="deleteQuitacao('${quitacao.id}')" title="Excluir">🗑️</button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            });
+        }
+
+        // Funções CRUD
+        async function saveEmpresa() {
+            const id = document.getElementById('empresaId').value;
+            const nome = document.getElementById('empresaNome').value.trim();
+            const nomeOriginal = document.getElementById('empresaNomeOriginal').value;
+
+            if (!nome) {
+                alert('Digite um nome para a empresa');
+                return;
+            }
+
+            if ((!id || nome !== nomeOriginal) && empresas.includes(nome)) {
+                alert('Esta empresa já está cadastrada!');
+                return;
+            }
+
+            showLoading(true);
+            try {
+                if (id) {
+                    await db.collection('empresas').doc(id).update({ 
+                        nome,
+                        updatedAt: new Date().toISOString()
+                    });
+                    
+                    if (nome !== nomeOriginal) {
+                        const colaboradoresEmpresa = colaboradores.filter(c => c.empresa === nomeOriginal);
+                        for (const colab of colaboradoresEmpresa) {
+                            await db.collection('colaboradores').doc(colab.id).update({
+                                empresa: nome,
+                                updatedAt: new Date().toISOString()
+                            });
+                        }
+                    }
+                } else {
+                    await db.collection('empresas').add({ 
+                        nome,
+                        createdAt: new Date().toISOString()
+                    });
+                }
+                
+                await loadData();
+                hideModal('empresaModal');
+            } catch (error) {
+                console.error('Erro ao salvar empresa:', error);
+                alert('Erro ao salvar: ' + error.message);
+            }
+            showLoading(false);
+        }
+
+        async function saveDepartamento() {
+            const id = document.getElementById('departamentoId').value;
+            const nome = document.getElementById('departamentoNome').value.trim();
+            const nomeOriginal = document.getElementById('departamentoNomeOriginal').value;
+
+            if (!nome) {
+                alert('Digite um nome para o departamento');
+                return;
+            }
+
+            if ((!id || nome !== nomeOriginal) && departamentos.includes(nome)) {
+                alert('Este departamento já está cadastrado!');
+                return;
+            }
+
+            showLoading(true);
+            try {
+                if (id) {
+                    await db.collection('departamentos').doc(id).update({ 
+                        nome,
+                        updatedAt: new Date().toISOString()
+                    });
+                    
+                    if (nome !== nomeOriginal) {
+                        const colaboradoresDepto = colaboradores.filter(c => c.departamento === nomeOriginal);
+                        for (const colab of colaboradoresDepto) {
+                            await db.collection('colaboradores').doc(colab.id).update({
+                                departamento: nome,
+                                updatedAt: new Date().toISOString()
+                            });
+                        }
+                    }
+                } else {
+                    await db.collection('departamentos').add({ 
+                        nome,
+                        createdAt: new Date().toISOString()
+                    });
+                }
+                
+                await loadData();
+                hideModal('departamentoModal');
+            } catch (error) {
+                console.error('Erro ao salvar departamento:', error);
+                alert('Erro ao salvar: ' + error.message);
+            }
+            showLoading(false);
+        }
+
+        async function saveColaborador() {
+            const id = document.getElementById('colaboradorId').value;
+            const nome = document.getElementById('colaboradorNome').value.trim();
+            const data = document.getElementById('colaboradorData').value;
+            const departamento = document.getElementById('colaboradorDepartamento').value;
+            const empresa = document.getElementById('colaboradorEmpresa').value;
+            const ativo = document.getElementById('colaboradorAtivo').checked;
+
+            if (!nome || !data || !departamento || !empresa) {
+                alert('Preencha todos os campos!');
+                return;
+            }
+
+            if (!isValidDate(data)) {
+                alert('Data inválida! Use o formato DD/MM/AAAA');
+                return;
+            }
+
+            showLoading(true);
+            try {
+                const colaboradorData = {
+                    nome,
+                    dataAdmissao: data,
+                    departamento,
+                    empresa,
+                    horasPositivas: 0,
+                    horasNegativas: 0,
+                    ativo: ativo,
+                    updatedAt: new Date().toISOString()
+                };
+
+                if (id) {
+                    await db.collection('colaboradores').doc(id).update(colaboradorData);
+                } else {
+                    colaboradorData.createdAt = new Date().toISOString();
+                    await db.collection('colaboradores').add(colaboradorData);
+                }
+
+                await loadData();
+                hideModal('colaboradorModal');
+            } catch (error) {
+                console.error('Erro ao salvar colaborador:', error);
+                alert('Erro ao salvar: ' + error.message);
+            }
+            showLoading(false);
+        }
+
+        async function updateLancamento() {
+            const id = document.getElementById('editLancamentoId').value;
+            const colaboradorId = document.getElementById('editLancamentoColaborador').value;
+            const tipo = document.getElementById('editLancamentoTipo').value;
+            const horaStr = document.getElementById('editLancamentoHoras').value;
+            const mes = document.getElementById('editLancamentoMes').value;
+            const ano = document.getElementById('editLancamentoAno').value;
+
+            if (!colaboradorId || !tipo || !horaStr || !mes || !ano) {
+                alert('Preencha todos os campos!');
+                return;
+            }
+
+            if (!isValidHora(horaStr)) {
+                alert('Formato de hora inválido!');
+                return;
+            }
+
+            const horas = horaParaDecimal(horaStr);
+            if (horas < 0) {
+                alert('A quantidade de horas não pode ser negativa!');
+                return;
+            }
+
+            const colaborador = colaboradores.find(c => c.id === colaboradorId);
+            if (!colaborador) {
+                alert('Colaborador não encontrado!');
+                return;
+            }
+
+            const data = `01/${mes}/${ano}`;
+
+            showLoading(true);
+            try {
+                await db.collection('lancamentos').doc(id).update({
+                    colaboradorId: colaboradorId,
+                    colaboradorNome: colaborador.nome || '',
+                    colaboradorDepartamento: colaborador.departamento || '',
+                    data: data,
+                    mes: mes,
+                    ano: ano,
+                    tipo: tipo,
+                    horas: horas,
+                    saldoRestante: horas,
+                    compensacoes: [],
+                    compensadoPor: [],
+                    updatedAt: new Date().toISOString()
+                });
+
+                await loadData();
+                hideModal('editLancamentoModal');
+                
+                // Manter os filtros e reaplicar
+                document.getElementById('filtroColaborador').value = filtrosAtuais.colaboradorId || '';
+                document.getElementById('filtroDepartamento').value = filtrosAtuais.departamento || '';
+                document.getElementById('filtroStatus').value = filtrosAtuais.status || 'ativos';
+                document.getElementById('filtroMes').value = filtrosAtuais.mes || '';
+                document.getElementById('filtroAno').value = filtrosAtuais.ano || '';
+                aplicarFiltros();
+                
+                alert('Lançamento atualizado com sucesso!');
+            } catch (error) {
+                console.error('Erro ao atualizar:', error);
+                alert('Erro ao atualizar: ' + error.message);
+            }
+            showLoading(false);
+        }
+
+        async function deleteLancamento(id) {
+            if (!confirm('Tem certeza que deseja excluir este lançamento?')) return;
+
+            showLoading(true);
+            try {
+                await db.collection('lancamentos').doc(id).delete();
+                await loadData();
+                
+                // Manter os filtros e reaplicar
+                document.getElementById('filtroColaborador').value = filtrosAtuais.colaboradorId || '';
+                document.getElementById('filtroDepartamento').value = filtrosAtuais.departamento || '';
+                document.getElementById('filtroStatus').value = filtrosAtuais.status || 'ativos';
+                document.getElementById('filtroMes').value = filtrosAtuais.mes || '';
+                document.getElementById('filtroAno').value = filtrosAtuais.ano || '';
+                aplicarFiltros();
+                
+                alert('Lançamento excluído com sucesso!');
+            } catch (error) {
+                console.error('Erro ao excluir:', error);
+                alert('Erro ao excluir: ' + error.message);
+            }
+            showLoading(false);
+        }
+
+        async function importColaboradores() {
+            const data = document.getElementById('importData').value;
+            const lines = data.split('\n');
+            let imported = 0;
+            let errors = 0;
+
+            showLoading(true);
+            try {
+                for (let i = 0; i < lines.length; i++) {
+                    const line = lines[i].trim();
+                    if (line) {
+                        const [nome, dataAdmissao, departamento, empresa] = line.split(',').map(item => item.trim());
+                        
+                        if (nome && dataAdmissao && departamento && empresa) {
+                            if (!departamentos.includes(departamento)) {
+                                errors++;
+                                continue;
+                            }
+                            
+                            if (!empresas.includes(empresa)) {
+                                errors++;
+                                continue;
+                            }
+                            
+                            if (isValidDate(dataAdmissao)) {
+                                await db.collection('colaboradores').add({
+                                    nome,
+                                    dataAdmissao,
+                                    departamento,
+                                    empresa,
+                                    horasPositivas: 0,
+                                    horasNegativas: 0,
+                                    ativo: true,
+                                    createdAt: new Date().toISOString()
+                                });
+                                imported++;
+                            } else {
+                                errors++;
+                            }
+                        } else {
+                            errors++;
+                        }
+                    }
+                }
+
+                await loadData();
+                alert(`${imported} colaborador(es) importado(s) com sucesso! ${errors} erro(s).`);
+                hideModal('importModal');
+            } catch (error) {
+                console.error('Erro ao importar:', error);
+                alert('Erro ao importar: ' + error.message);
+            }
+            showLoading(false);
         }
 
         // Função para aplicar filtros - MODIFICADA para salvar estado e não mostrar todos os lançamentos
@@ -3397,6 +3653,73 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             }).join('');
         }
 
+        // Função para calcular saldo acumulado por colaborador (usando horas originais)
+        function calcularSaldoAcumulado(colaboradorId, lancamentosDoColaborador) {
+            // Ordenar lançamentos por data (mais antigos primeiro)
+            const lancamentosOrdenados = [...lancamentosDoColaborador].sort((a, b) => {
+                return dataParaObjeto(a.data) - dataParaObjeto(b.data);
+            });
+
+            // Calcular saldo acumulado sequencialmente usando o valor original das horas
+            let saldo = 0;
+            const saldosPorLancamento = [];
+
+            for (const lanc of lancamentosOrdenados) {
+                if (lanc.tipo === 'positiva') {
+                    saldo += lanc.horas;
+                } else {
+                    saldo -= lanc.horas;
+                }
+                saldosPorLancamento.push({
+                    id: lanc.id,
+                    saldoAcumulado: saldo
+                });
+            }
+
+            return saldosPorLancamento;
+        }
+
+        // Função para gerar tooltip de compensações - MELHORADA
+        function gerarTooltipCompensacoes(lancamento) {
+            let tooltip = '';
+            
+            // Compensações que este lançamento fez em outros
+            if (lancamento.compensacoes && lancamento.compensacoes.length > 0) {
+                tooltip += '🔽 COMPENSOU:\n';
+                lancamento.compensacoes.forEach(comp => {
+                    const lancComp = lancamentos.find(l => l.id === comp.lancamentoId);
+                    if (lancComp) {
+                        const competencia = formatarCompetencia(lancComp.mes, lancComp.ano);
+                        const tipoIcon = lancComp.tipo === 'positiva' ? '➕' : '➖';
+                        tooltip += `  • ${competencia} ${tipoIcon}: ${decimalParaHora(comp.quantidade)}\n`;
+                    }
+                });
+            }
+            
+            // Lançamentos que compensaram este
+            if (lancamento.compensadoPor && lancamento.compensadoPor.length > 0) {
+                if (tooltip) tooltip += '\n';
+                tooltip += '🔼 FOI COMPENSADO POR:\n';
+                lancamento.compensadoPor.forEach(comp => {
+                    const lancComp = lancamentos.find(l => l.id === comp.lancamentoId);
+                    if (lancComp) {
+                        const competencia = formatarCompetencia(lancComp.mes, lancComp.ano);
+                        const tipoIcon = lancComp.tipo === 'positiva' ? '➕' : '➖';
+                        tooltip += `  • ${competencia} ${tipoIcon}: ${decimalParaHora(comp.quantidade)}\n`;
+                    }
+                });
+            }
+            
+            if (!tooltip) {
+                tooltip = 'Nenhuma compensação registrada';
+            } else {
+                // Adicionar cabeçalho
+                tooltip = '📊 DETALHES DAS COMPENSAÇÕES:\n\n' + tooltip;
+            }
+            
+            return tooltip;
+        }
+
         function updateAllTables() {
             updateEmpresasTable();
             updateDepartamentosTable();
@@ -3409,153 +3732,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             
             // Salvar compensações no Firebase
             salvarCompensacoes();
-        }
-
-        async function updateLancamento() {
-            const id = document.getElementById('editLancamentoId').value;
-            const colaboradorId = document.getElementById('editLancamentoColaborador').value;
-            const tipo = document.getElementById('editLancamentoTipo').value;
-            const horaStr = document.getElementById('editLancamentoHoras').value;
-            const mes = document.getElementById('editLancamentoMes').value;
-            const ano = document.getElementById('editLancamentoAno').value;
-
-            if (!colaboradorId || !tipo || !horaStr || !mes || !ano) {
-                alert('Preencha todos os campos!');
-                return;
-            }
-
-            if (!isValidHora(horaStr)) {
-                alert('Formato de hora inválido!');
-                return;
-            }
-
-            const horas = horaParaDecimal(horaStr);
-            if (horas < 0) {
-                alert('A quantidade de horas não pode ser negativa!');
-                return;
-            }
-
-            const colaborador = colaboradores.find(c => c.id === colaboradorId);
-            if (!colaborador) {
-                alert('Colaborador não encontrado!');
-                return;
-            }
-
-            const data = `01/${mes}/${ano}`;
-
-            showLoading(true);
-            try {
-                await db.collection('lancamentos').doc(id).update({
-                    colaboradorId: colaboradorId,
-                    colaboradorNome: colaborador.nome || '',
-                    colaboradorDepartamento: colaborador.departamento || '',
-                    data: data,
-                    mes: mes,
-                    ano: ano,
-                    tipo: tipo,
-                    horas: horas,
-                    saldoRestante: horas,
-                    compensacoes: [],
-                    compensadoPor: [],
-                    updatedAt: new Date().toISOString()
-                });
-
-                await loadData();
-                hideModal('editLancamentoModal');
-                
-                // Manter os filtros e reaplicar
-                document.getElementById('filtroColaborador').value = filtrosAtuais.colaboradorId || '';
-                document.getElementById('filtroDepartamento').value = filtrosAtuais.departamento || '';
-                document.getElementById('filtroStatus').value = filtrosAtuais.status || 'ativos';
-                document.getElementById('filtroMes').value = filtrosAtuais.mes || '';
-                document.getElementById('filtroAno').value = filtrosAtuais.ano || '';
-                aplicarFiltros();
-                
-                alert('Lançamento atualizado com sucesso!');
-            } catch (error) {
-                console.error('Erro ao atualizar:', error);
-                alert('Erro ao atualizar: ' + error.message);
-            }
-            showLoading(false);
-        }
-
-        async function deleteLancamento(id) {
-            if (!confirm('Tem certeza que deseja excluir este lançamento?')) return;
-
-            showLoading(true);
-            try {
-                await db.collection('lancamentos').doc(id).delete();
-                await loadData();
-                
-                // Manter os filtros e reaplicar
-                document.getElementById('filtroColaborador').value = filtrosAtuais.colaboradorId || '';
-                document.getElementById('filtroDepartamento').value = filtrosAtuais.departamento || '';
-                document.getElementById('filtroStatus').value = filtrosAtuais.status || 'ativos';
-                document.getElementById('filtroMes').value = filtrosAtuais.mes || '';
-                document.getElementById('filtroAno').value = filtrosAtuais.ano || '';
-                aplicarFiltros();
-                
-                alert('Lançamento excluído com sucesso!');
-            } catch (error) {
-                console.error('Erro ao excluir:', error);
-                alert('Erro ao excluir: ' + error.message);
-            }
-            showLoading(false);
-        }
-
-        async function importColaboradores() {
-            const data = document.getElementById('importData').value;
-            const lines = data.split('\n');
-            let imported = 0;
-            let errors = 0;
-
-            showLoading(true);
-            try {
-                for (let i = 0; i < lines.length; i++) {
-                    const line = lines[i].trim();
-                    if (line) {
-                        const [nome, dataAdmissao, departamento, empresa] = line.split(',').map(item => item.trim());
-                        
-                        if (nome && dataAdmissao && departamento && empresa) {
-                            if (!departamentos.includes(departamento)) {
-                                errors++;
-                                continue;
-                            }
-                            
-                            if (!empresas.includes(empresa)) {
-                                errors++;
-                                continue;
-                            }
-                            
-                            if (isValidDate(dataAdmissao)) {
-                                await db.collection('colaboradores').add({
-                                    nome,
-                                    dataAdmissao,
-                                    departamento,
-                                    empresa,
-                                    horasPositivas: 0,
-                                    horasNegativas: 0,
-                                    ativo: true,
-                                    createdAt: new Date().toISOString()
-                                });
-                                imported++;
-                            } else {
-                                errors++;
-                            }
-                        } else {
-                            errors++;
-                        }
-                    }
-                }
-
-                await loadData();
-                alert(`${imported} colaborador(es) importado(s) com sucesso! ${errors} erro(s).`);
-                hideModal('importModal');
-            } catch (error) {
-                console.error('Erro ao importar:', error);
-                alert('Erro ao importar: ' + error.message);
-            }
-            showLoading(false);
         }
 
         // Fechar modais ao clicar fora
