@@ -1,3 +1,16 @@
+Peço desculpas pela confusão anterior. Agora entendi corretamente a regra:
+
+- A **origem** (quem cede as horas) pode ser positiva ou negativa.
+- A origem **não pode estar vencida**.
+- O **destino** (quem recebe a compensação) deve ter sinal oposto ao da origem.
+- O destino **pode estar vencido ou não**, desde que sua competência esteja **dentro da janela de 1 ano da origem** (ou seja, entre a competência da origem e a origem + 1 ano).
+- Não há restrição de que o destino não possa estar vencido.
+
+Ajustei a função `podeCompensar` para refletir exatamente essa lógica. Agora a compensação ocorrerá corretamente: horas de origem (não vencidas) podem compensar horas de destino (mesmo que vencidas) desde que o destino esteja dentro do período de 1 ano após a origem.
+
+Segue o código completo corrigido.
+
+```html
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
@@ -2456,27 +2469,25 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 return dataA - dataB;
             });
 
-            // 3. Função que determina se o lançamento A pode compensar o lançamento B
-            //    A é quem vai ceder horas (origem da ação), B é quem vai receber (ser compensado)
-            function podeCompensar(A, B) {
+            // 3. Função que determina se o lançamento A (origem) pode compensar o lançamento B (destino)
+            function podeCompensar(origem, destino) {
                 // Mesmo colaborador
-                if (A.colaboradorId !== B.colaboradorId) return false;
+                if (origem.colaboradorId !== destino.colaboradorId) return false;
                 // Sinais opostos
-                if (A.tipo === B.tipo) return false;
-                // Ambos possuem saldo a compensar
-                if (A.saldoRestante <= 0 || B.saldoRestante <= 0) return false;
+                if (origem.tipo === destino.tipo) return false;
+                // Ambos têm saldo
+                if (origem.saldoRestante <= 0 || destino.saldoRestante <= 0) return false;
 
-                // Quem está sendo compensado (B) NÃO pode estar vencido
-                if (isHoraVencida(B.mes, B.ano)) return false;
+                // A origem NÃO pode estar vencida
+                if (isHoraVencida(origem.mes, origem.ano)) return false;
 
-                // A data de A (quem compensa) deve estar dentro da janela de 1 ano de B (quem é compensado)
-                const dataB = dataParaObjeto(B.data);
-                const vencimentoB = new Date(dataB);
-                vencimentoB.setFullYear(vencimentoB.getFullYear() + 1);
-                const dataA = dataParaObjeto(A.data);
+                // A data do destino deve estar dentro da janela de 1 ano da origem
+                const dataOrigem = dataParaObjeto(origem.data);
+                const vencimentoOrigem = new Date(dataOrigem);
+                vencimentoOrigem.setFullYear(vencimentoOrigem.getFullYear() + 1);
+                const dataDestino = dataParaObjeto(destino.data);
 
-                // A deve ser >= B e <= vencimento de B
-                return dataA >= dataB && dataA <= vencimentoB;
+                return dataDestino >= dataOrigem && dataDestino <= vencimentoOrigem;
             }
 
             // 4. Processamento em loop até que nenhuma nova compensação seja possível
@@ -2484,40 +2495,40 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             do {
                 mudou = false;
                 for (let i = 0; i < ativos.length; i++) {
-                    const a = ativos[i]; // a é quem vai ceder horas (compensador)
-                    if (a.saldoRestante <= 0) continue;
+                    const origem = ativos[i]; // quem cede horas
+                    if (origem.saldoRestante <= 0) continue;
 
-                    // Procura um parceiro b que a possa compensar
+                    // Procura um destino que origem possa compensar
                     for (let j = 0; j < ativos.length; j++) {
                         if (i === j) continue;
-                        const b = ativos[j]; // b é quem será compensado
-                        if (!podeCompensar(a, b)) continue;
+                        const destino = ativos[j];
+                        if (!podeCompensar(origem, destino)) continue;
 
                         // Calcula quanto pode ser compensado (mínimo entre os saldos)
-                        const quantidade = Math.min(a.saldoRestante, b.saldoRestante);
+                        const quantidade = Math.min(origem.saldoRestante, destino.saldoRestante);
 
-                        // Registra a compensação (a compensou b)
-                        a.compensacoes.push({
-                            lancamentoId: b.id,
+                        // Registra a compensação (origem compensou destino)
+                        origem.compensacoes.push({
+                            lancamentoId: destino.id,
                             quantidade: quantidade,
                             data: new Date().toLocaleDateString('pt-BR'),
-                            tipo: b.tipo
+                            tipo: destino.tipo
                         });
-                        b.compensadoPor.push({
-                            lancamentoId: a.id,
+                        destino.compensadoPor.push({
+                            lancamentoId: origem.id,
                             quantidade: quantidade,
                             data: new Date().toLocaleDateString('pt-BR'),
-                            tipo: a.tipo
+                            tipo: origem.tipo
                         });
 
                         // Atualiza os saldos
-                        a.saldoRestante -= quantidade;
-                        b.saldoRestante -= quantidade;
+                        origem.saldoRestante -= quantidade;
+                        destino.saldoRestante -= quantidade;
 
                         mudou = true;
 
-                        // Se a zerou, podemos parar de procurar para este a
-                        if (a.saldoRestante <= 0) break;
+                        // Se origem zerou, podemos parar de procurar para este
+                        if (origem.saldoRestante <= 0) break;
                     }
                 }
             } while (mudou);
@@ -3675,3 +3686,4 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
     </script>
 </body>
 </html>
+```
