@@ -1650,6 +1650,15 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
         let sortField = 'nome';
         let sortDirection = 'asc';
 
+        // Variáveis para manter estado dos filtros
+        let filtrosAtuais = {
+            colaboradorId: '',
+            departamento: '',
+            status: 'ativos',
+            mes: '',
+            ano: ''
+        };
+
         // Funções utilitárias
         function showLoading(show) {
             document.getElementById('loadingOverlay').style.display = show ? 'flex' : 'none';
@@ -1674,10 +1683,13 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             
             if (tabName === 'lancamentos') {
                 carregarFiltros();
-                // Não aplicar filtros automaticamente - manter tela vazia
-                document.getElementById('semResultadosMsg').style.display = 'block';
-                document.getElementById('lancamentosTable').style.display = 'none';
-                document.getElementById('contadorLancamentos').textContent = '0 lançamentos';
+                // Restaurar filtros salvos
+                document.getElementById('filtroColaborador').value = filtrosAtuais.colaboradorId || '';
+                document.getElementById('filtroDepartamento').value = filtrosAtuais.departamento || '';
+                document.getElementById('filtroStatus').value = filtrosAtuais.status || 'ativos';
+                document.getElementById('filtroMes').value = filtrosAtuais.mes || '';
+                document.getElementById('filtroAno').value = filtrosAtuais.ano || '';
+                aplicarFiltros();
             } else if (tabName === 'quitacoes') {
                 carregarFiltrosQuitacoes();
                 aplicarFiltrosQuitacoes();
@@ -1708,6 +1720,14 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 const status = colab.ativo !== false ? '' : ' (Inativo)';
                 select.innerHTML += `<option value="${colab.id}">${colab.nome}${status}</option>`;
             });
+            
+            // Se houver um colaborador selecionado nos filtros, pré-selecionar no modal
+            if (filtrosAtuais.colaboradorId) {
+                const option = select.querySelector(`option[value="${filtrosAtuais.colaboradorId}"]`);
+                if (option) {
+                    option.selected = true;
+                }
+            }
             
             // Preencher anos
             const anoSelect = document.getElementById('novoLancamentoAno');
@@ -1784,6 +1804,15 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 await loadData();
                 
                 hideModal('novoLancamentoModal');
+                
+                // Manter os filtros e reaplicar
+                document.getElementById('filtroColaborador').value = filtrosAtuais.colaboradorId || '';
+                document.getElementById('filtroDepartamento').value = filtrosAtuais.departamento || '';
+                document.getElementById('filtroStatus').value = filtrosAtuais.status || 'ativos';
+                document.getElementById('filtroMes').value = filtrosAtuais.mes || '';
+                document.getElementById('filtroAno').value = filtrosAtuais.ano || '';
+                aplicarFiltros();
+                
                 alert('Lançamento realizado com sucesso!');
             } catch (error) {
                 console.error('Erro ao salvar lançamento:', error);
@@ -3149,6 +3178,15 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
 
                 await loadData();
                 hideModal('editLancamentoModal');
+                
+                // Manter os filtros e reaplicar
+                document.getElementById('filtroColaborador').value = filtrosAtuais.colaboradorId || '';
+                document.getElementById('filtroDepartamento').value = filtrosAtuais.departamento || '';
+                document.getElementById('filtroStatus').value = filtrosAtuais.status || 'ativos';
+                document.getElementById('filtroMes').value = filtrosAtuais.mes || '';
+                document.getElementById('filtroAno').value = filtrosAtuais.ano || '';
+                aplicarFiltros();
+                
                 alert('Lançamento atualizado com sucesso!');
             } catch (error) {
                 console.error('Erro ao atualizar:', error);
@@ -3164,6 +3202,15 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             try {
                 await db.collection('lancamentos').doc(id).delete();
                 await loadData();
+                
+                // Manter os filtros e reaplicar
+                document.getElementById('filtroColaborador').value = filtrosAtuais.colaboradorId || '';
+                document.getElementById('filtroDepartamento').value = filtrosAtuais.departamento || '';
+                document.getElementById('filtroStatus').value = filtrosAtuais.status || 'ativos';
+                document.getElementById('filtroMes').value = filtrosAtuais.mes || '';
+                document.getElementById('filtroAno').value = filtrosAtuais.ano || '';
+                aplicarFiltros();
+                
                 alert('Lançamento excluído com sucesso!');
             } catch (error) {
                 console.error('Erro ao excluir:', error);
@@ -3227,13 +3274,22 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             showLoading(false);
         }
 
-        // Função para aplicar filtros - MODIFICADA para não mostrar todos os lançamentos
+        // Função para aplicar filtros - MODIFICADA para salvar estado e não mostrar todos os lançamentos
         function aplicarFiltros() {
             const colaboradorId = document.getElementById('filtroColaborador').value;
             const departamento = document.getElementById('filtroDepartamento').value;
             const status = document.getElementById('filtroStatus').value;
             const mes = document.getElementById('filtroMes').value;
             const ano = document.getElementById('filtroAno').value;
+
+            // Salvar estado dos filtros
+            filtrosAtuais = {
+                colaboradorId,
+                departamento,
+                status,
+                mes,
+                ano
+            };
 
             // Se nenhum filtro específico foi selecionado, não mostrar resultados
             if (!colaboradorId && !departamento && !mes && !ano && status === 'todos') {
