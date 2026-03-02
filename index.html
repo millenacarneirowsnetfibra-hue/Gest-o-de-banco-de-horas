@@ -2457,7 +2457,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             });
 
             // 3. Função que determina se o lançamento CEDENTE (fornece horas) pode compensar o RECEPTOR (que terá seu saldo reduzido)
-            //    Receptor não pode estar vencido. Cedente pode estar vencido, desde que sua data esteja dentro da janela do receptor.
+            //    A regra foi ajustada para permitir compensação mesmo se o receptor estiver vencido (descomentando a linha).
             function podeCompensar(cedente, receptor) {
                 // Mesmo colaborador
                 if (cedente.colaboradorId !== receptor.colaboradorId) return false;
@@ -2465,9 +2465,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 if (cedente.tipo === receptor.tipo) return false;
                 // Ambos têm saldo
                 if (cedente.saldoRestante <= 0 || receptor.saldoRestante <= 0) return false;
-
-                // O receptor NÃO pode estar vencido
-                if (isHoraVencida(receptor.mes, receptor.ano)) return false;
 
                 // A data do cedente deve estar dentro da janela de 1 ano do receptor
                 const dataReceptor = dataParaObjeto(receptor.data);
