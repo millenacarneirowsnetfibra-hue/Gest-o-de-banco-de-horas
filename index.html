@@ -2457,7 +2457,10 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             });
 
             // 3. Função que determina se o lançamento CEDENTE (fornece horas) pode compensar o RECEPTOR (que terá seu saldo reduzido)
-            //    A regra foi ajustada para permitir compensação mesmo se o receptor estiver vencido (descomentando a linha).
+            //    Regra: Um débito só pode ser compensado por um crédito cuja competência seja igual ou posterior à do débito
+            //    e que esteja dentro do prazo de 1 ano (até a data de vencimento do débito).
+            //    Um crédito só pode ser compensado por um débito cuja competência seja igual ou posterior à do crédito
+            //    e que esteja dentro do prazo de 1 ano (até a data de vencimento do débito).
             function podeCompensar(cedente, receptor) {
                 // Mesmo colaborador
                 if (cedente.colaboradorId !== receptor.colaboradorId) return false;
@@ -2466,13 +2469,28 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 // Ambos têm saldo
                 if (cedente.saldoRestante <= 0 || receptor.saldoRestante <= 0) return false;
 
-                // A data do cedente deve estar dentro da janela de 1 ano do receptor
+                const dataCedente = dataParaObjeto(cedente.data);
                 const dataReceptor = dataParaObjeto(receptor.data);
+                
+                // Data de vencimento do receptor (débito) é 1 ano após sua competência
                 const vencimentoReceptor = new Date(dataReceptor);
                 vencimentoReceptor.setFullYear(vencimentoReceptor.getFullYear() + 1);
-                const dataCedente = dataParaObjeto(cedente.data);
 
-                return dataCedente >= dataReceptor && dataCedente <= vencimentoReceptor;
+                // Se o cedente é um crédito (+) e o receptor é um débito (-)
+                if (cedente.tipo === 'positiva' && receptor.tipo === 'negativa') {
+                    // O crédito deve ser igual ou posterior ao débito E anterior ao vencimento do débito
+                    return dataCedente >= dataReceptor && dataCedente <= vencimentoReceptor;
+                }
+                
+                // Se o cedente é um débito (-) e o receptor é um crédito (+)
+                if (cedente.tipo === 'negativa' && receptor.tipo === 'positiva') {
+                    // O débito deve ser igual ou posterior ao crédito E anterior ao vencimento do débito (cedente)
+                    const vencimentoCedente = new Date(dataCedente);
+                    vencimentoCedente.setFullYear(vencimentoCedente.getFullYear() + 1);
+                    return dataCedente >= dataReceptor && dataCedente <= vencimentoCedente;
+                }
+
+                return false;
             }
 
             // 4. Processamento em loop até que nenhuma nova compensação seja possível
