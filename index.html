@@ -1699,7 +1699,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
         let dataReferencia = new Date();
         dataReferencia.setHours(0, 0, 0, 0);
 
-        // ================= NOVAS FUNÇÕES DE VENCIMENTO COM DATA DE REFERÊNCIA =================
+        // ================= NOVAS FUNÇÕES DE SIMULAÇÃO CRONOLÓGICA =================
         function getVencimentoDate(mes, ano) {
             // Retorna o último dia do mês no ano seguinte
             const anoNum = parseInt(ano);
@@ -1711,154 +1711,209 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             return dataVencimento;
         }
 
-        function isHoraVencida(mes, ano, dataRef = null) {
-            // Se não informou dataRef, usa a data de referência global
-            const dataComparacao = dataRef ? new Date(dataRef) : new Date(dataReferencia);
-            dataComparacao.setHours(0, 0, 0, 0);
+        function dataParaObjeto(dataStr) {
+            const [dia, mes, ano] = dataStr.split('/');
+            return new Date(parseInt(ano), parseInt(mes) - 1, parseInt(dia));
+        }
+
+        function formatarCompetencia(mes, ano) {
+            const meses = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+            return `${meses[parseInt(mes) - 1]}/${ano}`;
+        }
+
+        function calcularVencimento(mes, ano) {
             const dataVencimento = getVencimentoDate(mes, ano);
-            return dataComparacao > dataVencimento;
+            const meses = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+            return `${meses[dataVencimento.getMonth()]}/${dataVencimento.getFullYear()}`;
         }
 
-        function isLancamentoVencido(lanc, dataRef = null) {
-            return isHoraVencida(lanc.mes, lanc.ano, dataRef);
-        }
+        // Função principal de simulação cronológica
+        function simularLinhaDoTempo(dataLimite) {
+            console.log('Iniciando simulação cronológica até', dataLimite.toISOString().split('T')[0]);
 
-        // ================= NOVA LÓGICA DE COMPENSAÇÃO (mantida, mas usa data atual para registrar) =================
-        function processarCompensacoes() {
-            console.log('Iniciando processamento de compensações com regras de vencimento...');
+            // Para cada colaborador, processar seus lançamentos e quitações
+            const colaboradoresIds = [...new Set(lancamentos.map(l => l.colaboradorId))];
 
-            // 1. Resetar saldos e registros de compensação
-            lancamentos.forEach(lanc => {
-                if (!lanc.quitado) {
-                    lanc.saldoRestante = lanc.horas;
-                    lanc.compensacoes = [];      // lançamentos que este compensou
-                    lanc.compensadoPor = [];      // lançamentos que compensaram este
+            // Resetar campos de simulação em todos os lançamentos
+            lancamentos.forEach(l => {
+                l.saldoRestante = l.horas; // reinicia com o valor original
+                l.compensacoes = [];
+                l.compensadoPor = [];
+                l.vencido = false; // novo campo para indicar se venceu na simulação
+                // Se o lançamento já foi quitado por dinheiro, ele será zerado no evento de quitação
+            });
+
+            // Para cada colaborador, rodar simulação
+            colaboradoresIds.forEach(colabId => {
+                const lancamentosColab = lancamentos.filter(l => l.colaboradorId === colabId);
+                const quitacoesColab = quitacoes.filter(q => q.colaboradorId === colabId);
+
+                // Coletar todas as datas de eventos: competências dos lançamentos, datas de quitação e vencimentos
+                let datasEventos = new Set();
+
+                // Adicionar datas de competência (primeiro dia do mês)
+                lancamentosColab.forEach(l => {
+                    const dataComp = dataParaObjeto(l.data);
+                    datasEventos.add(dataComp.getTime());
+                });
+
+                // Adicionar datas de quitação
+                quitacoesColab.forEach(q => {
+                    const dataQuit = new Date(q.dataQuitacao);
+                    dataQuit.setHours(0, 0, 0, 0);
+                    datasEventos.add(dataQuit.getTime());
+                });
+
+                // Adicionar datas de vencimento de cada lançamento (precisamos verificar nessas datas)
+                lancamentosColab.forEach(l => {
+                    const dataVenc = getVencimentoDate(l.mes, l.ano);
+                    datasEventos.add(dataVenc.getTime());
+                });
+
+                // Adicionar a data limite
+                datasEventos.add(dataLimite.getTime());
+
+                // Converter para array e ordenar
+                let datasOrdenadas = Array.from(datasEventos).map(t => new Date(t)).sort((a, b) => a - b);
+
+                // Estruturas para controle durante a simulação
+                // Vamos manter listas separadas de lançamentos ativos (não vencidos, não quitados)
+                // Inicialmente, todos os lançamentos estão ativos, mas serão desativados conforme eventos
+                // Precisamos de um mapa de lançamentos por id para acesso rápido
+                const lancamentosMap = new Map();
+                lancamentosColab.forEach(l => lancamentosMap.set(l.id, l));
+
+                // Função para obter lançamentos ativos (não quitados e não vencidos)
+                function getAtivos() {
+                    return Array.from(lancamentosMap.values()).filter(l => 
+                        !l.quitado && !l.vencido && l.saldoRestante > 0
+                    );
                 }
-            });
 
-            // 2. Filtrar apenas lançamentos ativos (não quitados) e que NÃO estejam vencidos na data atual (hoje)
-            //    Os vencidos não participam da compensação
-            let ativos = lancamentos.filter(l => !l.quitado && !isLancamentoVencido(l, new Date()));
-            if (ativos.length === 0) return;
+                // Processar cada data em ordem
+                for (let i = 0; i < datasOrdenadas.length; i++) {
+                    const dataAtual = datasOrdenadas[i];
+                    
+                    // Se ultrapassou a data limite, paramos (mas como incluímos a data limite, isso não deve acontecer)
+                    if (dataAtual > dataLimite) break;
 
-            // 3. Ordenar por competência (mais antiga primeiro) -> FIFO
-            ativos.sort((a, b) => {
-                const dataA = dataParaObjeto(a.data); // primeiro dia da competência
-                const dataB = dataParaObjeto(b.data);
-                return dataA - dataB;
-            });
+                    // 1. Verificar vencimentos: todos os lançamentos ativos cuja data de vencimento <= dataAtual
+                    const ativos = getAtivos();
+                    ativos.forEach(l => {
+                        const dataVenc = getVencimentoDate(l.mes, l.ano);
+                        if (dataVenc <= dataAtual && !l.vencido) {
+                            l.vencido = true; // marca como vencido
+                            // Não remove da lista de ativos? Na verdade, ao vencer, não pode mais compensar, então deve ser removido.
+                            // Mas vamos manter a flag e filtrar nos próximos passos.
+                        }
+                    });
 
-            // 4. Função que verifica se dois lançamentos podem se compensar
-            function podeCompensar(cedente, receptor) {
-                // Mesmo colaborador
-                if (cedente.colaboradorId !== receptor.colaboradorId) return false;
-                // Sinais opostos
-                if (cedente.tipo === receptor.tipo) return false;
-                // Ambos têm saldo
-                if (cedente.saldoRestante <= 0 || receptor.saldoRestante <= 0) return false;
+                    // 2. Processar eventos que ocorrem exatamente nesta data
+                    // Eventos de lançamento (competência)
+                    lancamentosColab.forEach(l => {
+                        const dataComp = dataParaObjeto(l.data);
+                        if (dataComp.getTime() === dataAtual.getTime()) {
+                            // Lançamento é adicionado (já está no mapa, mas resetamos saldo se necessário? Já foi resetado no início)
+                            // Não precisa fazer nada, ele já está no mapa com saldo inicial.
+                        }
+                    });
 
-                // Garantia extra: ambos não estão vencidos na data atual (já filtramos, mas reforçar)
-                if (isLancamentoVencido(cedente, new Date()) || isLancamentoVencido(receptor, new Date())) return false;
+                    // Eventos de quitação
+                    quitacoesColab.forEach(q => {
+                        const dataQuit = new Date(q.dataQuitacao);
+                        dataQuit.setHours(0, 0, 0, 0);
+                        if (dataQuit.getTime() === dataAtual.getTime()) {
+                            // Quitação: marcar os lançamentos listados como quitados
+                            q.lancamentos.forEach(lancQuit => {
+                                const lanc = lancamentosMap.get(lancQuit.id);
+                                if (lanc && !lanc.quitado) {
+                                    lanc.quitado = true;
+                                    lanc.saldoRestante = 0; // zera
+                                }
+                            });
+                        }
+                    });
 
-                return true;
-            }
+                    // 3. Executar compensações FIFO entre os ativos (não vencidos, não quitados, com saldo > 0)
+                    // Obter ativos atualizados (após eventos e vencimentos)
+                    let ativosPos = getAtivos().filter(l => l.tipo === 'positiva').sort((a, b) => dataParaObjeto(a.data) - dataParaObjeto(b.data));
+                    let ativosNeg = getAtivos().filter(l => l.tipo === 'negativa').sort((a, b) => dataParaObjeto(a.data) - dataParaObjeto(b.data));
 
-            // 5. Processamento em loop até que nenhuma nova compensação seja possível
-            let mudou;
-            do {
-                mudou = false;
-                for (let i = 0; i < ativos.length; i++) {
-                    const cedente = ativos[i]; // quem cede horas
-                    if (cedente.saldoRestante <= 0) continue;
+                    let iPos = 0, iNeg = 0;
+                    while (iPos < ativosPos.length && iNeg < ativosNeg.length) {
+                        const pos = ativosPos[iPos];
+                        const neg = ativosNeg[iNeg];
+                        
+                        // Verificar se ambos ainda estão ativos (podem ter sido modificados em iterações anteriores)
+                        if (pos.saldoRestante <= 0) { iPos++; continue; }
+                        if (neg.saldoRestante <= 0) { iNeg++; continue; }
 
-                    // Procura um receptor que este cedente possa compensar
-                    for (let j = 0; j < ativos.length; j++) {
-                        if (i === j) continue;
-                        const receptor = ativos[j];
-                        if (!podeCompensar(cedente, receptor)) continue;
-
-                        // Calcula quanto pode ser compensado (mínimo entre os saldos)
-                        const quantidade = Math.min(cedente.saldoRestante, receptor.saldoRestante);
-
-                        // Registra a compensação (cedente compensou receptor)
-                        cedente.compensacoes.push({
-                            lancamentoId: receptor.id,
+                        const quantidade = Math.min(pos.saldoRestante, neg.saldoRestante);
+                        
+                        // Registrar compensação
+                        pos.compensacoes.push({
+                            lancamentoId: neg.id,
                             quantidade: quantidade,
-                            data: new Date().toLocaleDateString('pt-BR'),
-                            tipo: receptor.tipo
+                            data: dataAtual.toLocaleDateString('pt-BR'),
+                            tipo: neg.tipo
                         });
-                        receptor.compensadoPor.push({
-                            lancamentoId: cedente.id,
+                        neg.compensadoPor.push({
+                            lancamentoId: pos.id,
                             quantidade: quantidade,
-                            data: new Date().toLocaleDateString('pt-BR'),
-                            tipo: cedente.tipo
+                            data: dataAtual.toLocaleDateString('pt-BR'),
+                            tipo: pos.tipo
                         });
 
-                        // Atualiza os saldos
-                        cedente.saldoRestante -= quantidade;
-                        receptor.saldoRestante -= quantidade;
+                        pos.saldoRestante -= quantidade;
+                        neg.saldoRestante -= quantidade;
 
-                        mudou = true;
-
-                        // Se cedente zerou, podemos parar de procurar para este
-                        if (cedente.saldoRestante <= 0) break;
+                        if (pos.saldoRestante === 0) iPos++;
+                        if (neg.saldoRestante === 0) iNeg++;
                     }
                 }
-            } while (mudou);
 
-            console.log('Processamento de compensações concluído.');
+                // Após percorrer todas as datas até a data limite, temos o estado final
+                // Os campos saldoRestante, compensacoes, compensadoPor e vencido já estão atualizados
+            });
+
+            console.log('Simulação concluída.');
         }
 
-        // Função para calcular status do lançamento baseado nas regras e na data de referência
-        function calcularStatus(lancamento, dataRef = null) {
-            // Se já foi quitado (pagamento em dinheiro)
+        // Função para calcular status do lançamento baseado na simulação
+        function calcularStatus(lancamento) {
             if (lancamento.quitado) {
                 return { texto: 'Quitado', classe: 'badge-quitado' };
             }
-            
-            // Considerar como compensado se o saldo restante for muito próximo de zero (tolerância de 0.001)
-            if (Math.abs(lancamento.saldoRestante) < 0.001) {
+            if (lancamento.saldoRestante === 0) {
                 return { texto: 'Compensada', classe: 'badge-compensada' };
             }
-
-            // Se ainda tem saldo restante, verificar se está vencido na data de referência
-            if (isLancamentoVencido(lancamento, dataRef)) {
+            if (lancamento.vencido) {
                 return { texto: 'Vencida', classe: 'badge-vencida' };
             }
-
-            // Para horas não vencidas com saldo restante, calcular dias até o vencimento em relação à data de referência
+            // Se não venceu e tem saldo, calcular dias até o vencimento
             const dataVencimento = getVencimentoDate(lancamento.mes, lancamento.ano);
-            const dataComp = dataRef ? new Date(dataRef) : new Date(dataReferencia);
-            dataComp.setHours(0, 0, 0, 0);
-            const diffTime = dataVencimento - dataComp;
+            const diffTime = dataVencimento - dataReferencia;
             const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
             if (diffDays <= 30) {
                 return { texto: 'À vencer em 30 dias', classe: 'badge-warning' };
             }
             if (diffDays <= 60) {
                 return { texto: 'À vencer em 60 dias', classe: 'badge-info' };
             }
-
             return { texto: 'Em dia', classe: 'badge-success' };
         }
 
-        // Função para calcular dias vencidos em relação à data de referência
-        function calcularDiasVencidos(mes, ano, dataRef = null) {
-            const dataComp = dataRef ? new Date(dataRef) : new Date(dataReferencia);
-            dataComp.setHours(0, 0, 0, 0);
+        function calcularDiasVencidos(mes, ano) {
             const dataVencimento = getVencimentoDate(mes, ano);
-            
-            const diffTime = dataComp - dataVencimento;
+            const diffTime = dataReferencia - dataVencimento;
             const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
             return diffDays > 0 ? diffDays : 0;
         }
 
         // ============================================================
-        // Funções existentes (adaptadas para usar dataReferencia)
+        // Funções existentes (adaptadas)
         // ============================================================
 
-        // Funções utilitárias
         function showLoading(show) {
             document.getElementById('loadingOverlay').style.display = show ? 'flex' : 'none';
         }
@@ -1882,7 +1937,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             
             if (tabName === 'lancamentos') {
                 carregarFiltros();
-                // Restaurar filtros salvos
                 document.getElementById('filtroColaborador').value = filtrosAtuais.colaboradorId || '';
                 document.getElementById('filtroDepartamento').value = filtrosAtuais.departamento || '';
                 document.getElementById('filtroStatus').value = filtrosAtuais.status || 'ativos';
@@ -1912,7 +1966,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 return;
             }
             
-            // Carregar colaboradores no select
             const select = document.getElementById('novoLancamentoColaborador');
             select.innerHTML = '<option value="">Selecione um colaborador</option>';
             colaboradores.sort((a, b) => a.nome.localeCompare(b.nome)).forEach(colab => {
@@ -1920,15 +1973,11 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 select.innerHTML += `<option value="${colab.id}">${colab.nome}${status}</option>`;
             });
             
-            // Se houver um colaborador selecionado nos filtros, pré-selecionar no modal
             if (filtrosAtuais.colaboradorId) {
                 const option = select.querySelector(`option[value="${filtrosAtuais.colaboradorId}"]`);
-                if (option) {
-                    option.selected = true;
-                }
+                if (option) option.selected = true;
             }
             
-            // Preencher anos
             const anoSelect = document.getElementById('novoLancamentoAno');
             anoSelect.innerHTML = '';
             for (let i = 2020; i <= 2030; i++) {
@@ -1939,7 +1988,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 anoSelect.appendChild(option);
             }
             
-            // Resetar formulário
             document.getElementById('novoLancamentoForm').reset();
             document.getElementById('novoLancamentoHoras').value = '00:00';
             
@@ -1989,9 +2037,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                     ano: ano,
                     tipo: tipo,
                     horas: horas,
-                    saldoRestante: horas,
-                    compensacoes: [],
-                    compensadoPor: [],
                     quitado: false,
                     quitadoEm: null,
                     quitacaoId: null,
@@ -2004,7 +2049,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 
                 hideModal('novoLancamentoModal');
                 
-                // Manter os filtros e reaplicar
                 document.getElementById('filtroColaborador').value = filtrosAtuais.colaboradorId || '';
                 document.getElementById('filtroDepartamento').value = filtrosAtuais.departamento || '';
                 document.getElementById('filtroStatus').value = filtrosAtuais.status || 'ativos';
@@ -2028,7 +2072,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             }
         }
 
-        // Funções para modais
+        // Funções para modais (mantidas)
         function showColaboradorModal(editId = null) {
             if (!firebaseConnected) {
                 alert('Sem conexão com o Firebase.');
@@ -2067,7 +2111,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             const lanc = lancamentos.find(l => l.id === id);
             if (!lanc) return;
 
-            // Carregar colaboradores no select
             const select = document.getElementById('editLancamentoColaborador');
             select.innerHTML = '<option value="">Selecione...</option>';
             colaboradores.sort((a, b) => a.nome.localeCompare(b.nome)).forEach(colab => {
@@ -2075,17 +2118,14 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 select.innerHTML += `<option value="${colab.id}">${colab.nome}${status}</option>`;
             });
 
-            // Preencher dados
             document.getElementById('editLancamentoId').value = lanc.id;
             document.getElementById('editLancamentoColaborador').value = lanc.colaboradorId;
             document.getElementById('editLancamentoTipo').value = lanc.tipo;
             
-            // Converter horas decimais para HH:MM
             const horas = Math.floor(Math.abs(lanc.horas));
             const minutos = Math.round((Math.abs(lanc.horas) - horas) * 60);
             document.getElementById('editLancamentoHoras').value = `${horas.toString().padStart(2, '0')}:${minutos.toString().padStart(2, '0')}`;
             
-            // Extrair mês e ano da data (DD/MM/AAAA)
             const [dia, mes, ano] = lanc.data.split('/');
             document.getElementById('editLancamentoMes').value = mes;
             document.getElementById('editLancamentoAno').value = ano;
@@ -2111,7 +2151,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 </div>
             `;
 
-            // Compensações que este lançamento fez em outros
             if (lanc.compensacoes && lanc.compensacoes.length > 0) {
                 html += '<h4 style="margin-bottom: 16px;">Compensou outros lançamentos:</h4>';
                 lanc.compensacoes.forEach(comp => {
@@ -2129,7 +2168,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 });
             }
 
-            // Lançamentos que compensaram este
             if (lanc.compensadoPor && lanc.compensadoPor.length > 0) {
                 html += '<h4 style="margin-bottom: 16px; margin-top: 20px;">Foi compensado por:</h4>';
                 lanc.compensadoPor.forEach(comp => {
@@ -2191,7 +2229,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             document.getElementById('importModal').style.display = 'block';
         }
 
-        // Função para mostrar modal de nova quitação
         function showNovaQuitacaoModal() {
             if (!firebaseConnected) {
                 alert('Sem conexão com o Firebase.');
@@ -2204,7 +2241,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 return;
             }
 
-            // Preencher select de colaboradores
             const selectColab = document.getElementById('quitacaoColaborador');
             selectColab.innerHTML = '<option value="">Selecione um funcionário</option>';
             colaboradores.sort((a, b) => a.nome.localeCompare(b.nome)).forEach(colab => {
@@ -2212,7 +2248,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 selectColab.innerHTML += `<option value="${colab.id}">${colab.nome}${status}</option>`;
             });
 
-            // Preencher anos
             const anoSelect = document.getElementById('quitacaoAnoPagamento');
             anoSelect.innerHTML = '';
             for (let i = 2020; i <= 2030; i++) {
@@ -2223,7 +2258,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 anoSelect.appendChild(option);
             }
 
-            // Resetar formulário
             document.getElementById('novaQuitacaoForm').reset();
             document.getElementById('quitacaoData').value = new Date().toISOString().split('T')[0];
             document.getElementById('quitacaoValorReflexo').value = '0.00';
@@ -2237,7 +2271,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             document.getElementById('novaQuitacaoModal').style.display = 'block';
         }
 
-        // Função para carregar horas vencidas do colaborador (usando data de referência para determinar vencimento)
         function carregarHorasVencidasColaborador() {
             const colaboradorId = document.getElementById('quitacaoColaborador').value;
             
@@ -2253,13 +2286,13 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 document.getElementById('quitacaoDepartamento').value = colaborador.departamento || '';
             }
 
-            // Filtrar lançamentos do colaborador que são negativos (débitos), estão vencidos na data de referência e não quitados
+            // Filtrar lançamentos do colaborador que são negativos, estão vencidos na data de referência e não quitados
             const lancamentosColab = lancamentos.filter(l => 
                 l.colaboradorId === colaboradorId && 
                 l.tipo === 'negativa' && 
                 l.saldoRestante > 0 &&
                 !l.quitado &&
-                isHoraVencida(l.mes, l.ano, dataReferencia)  // usa data de referência
+                l.vencido // usa o campo vencido da simulação
             );
 
             if (lancamentosColab.length === 0) {
@@ -2268,7 +2301,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 return;
             }
 
-            // Ordenar por data de vencimento (mais antigos primeiro)
             lancamentosColab.sort((a, b) => {
                 return dataParaObjeto(a.data) - dataParaObjeto(b.data);
             });
@@ -2277,7 +2309,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             lancamentosColab.forEach(lanc => {
                 const competencia = formatarCompetencia(lanc.mes, lanc.ano);
                 const vencimento = calcularVencimento(lanc.mes, lanc.ano);
-                const diasVencidos = calcularDiasVencidos(lanc.mes, lanc.ano, dataReferencia);
+                const diasVencidos = calcularDiasVencidos(lanc.mes, lanc.ano);
                 
                 html += `
                     <div class="checkbox-item">
@@ -2304,7 +2336,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             atualizarTotalHorasSelecionadas();
         }
 
-        // Função para atualizar total de horas selecionadas
         function atualizarTotalHorasSelecionadas() {
             const checkboxes = document.querySelectorAll('.lancamento-checkbox:checked');
             let totalSelecionado = 0;
@@ -2323,7 +2354,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             calcularValoresQuitacao();
         }
 
-        // Função para calcular valores da quitação
         function calcularValoresQuitacao() {
             const checkboxes = document.querySelectorAll('.lancamento-checkbox:checked');
             let totalHoras = 0;
@@ -2343,7 +2373,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             document.getElementById('resumoTotalPago').textContent = total.toFixed(2).replace('.', ',');
         }
 
-        // Função para salvar nova quitação
         async function salvarNovaQuitacao() {
             const colaboradorId = document.getElementById('quitacaoColaborador').value;
             const mesPagamento = document.getElementById('quitacaoMesPagamento').value;
@@ -2352,20 +2381,17 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             const valorHora = parseFloat(document.getElementById('quitacaoValorHora').value) || 0;
             const valorReflexo = parseFloat(document.getElementById('quitacaoValorReflexo').value) || 0;
 
-            // Validar campos obrigatórios
             if (!colaboradorId || !mesPagamento || !anoPagamento || !dataQuitacao) {
                 alert('Preencha todos os campos obrigatórios!');
                 return;
             }
 
-            // Validar se pelo menos um lançamento foi selecionado
             const checkboxes = document.querySelectorAll('.lancamento-checkbox:checked');
             if (checkboxes.length === 0) {
                 alert('Selecione pelo menos uma hora vencida para quitar!');
                 return;
             }
 
-            // Validar valor da hora
             if (valorHora <= 0) {
                 alert('O valor por hora deve ser maior que zero!');
                 return;
@@ -2377,7 +2403,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 return;
             }
 
-            // Calcular total de horas selecionadas
             let totalHoras = 0;
             const lancamentosSelecionados = [];
             checkboxes.forEach(cb => {
@@ -2388,17 +2413,14 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 });
             });
 
-            // Formatar competência de pagamento
             const competenciaPagamento = `${mesPagamento}/${anoPagamento}`;
 
             showLoading(true);
 
             try {
-                // Calcular valores
                 const valorFolha = totalHoras * valorHora;
                 const totalPago = valorFolha + valorReflexo;
 
-                // Criar registro de quitação
                 const quitacaoData = {
                     colaboradorId: colaboradorId,
                     colaboradorNome: colaborador.nome,
@@ -2418,7 +2440,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
 
                 const quitacaoRef = await db.collection('quitacoes').add(quitacaoData);
 
-                // Atualizar lançamentos quitados
                 for (const lanc of lancamentosSelecionados) {
                     await db.collection('lancamentos').doc(lanc.id).update({
                         quitado: true,
@@ -2442,7 +2463,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             showLoading(false);
         }
 
-        // Função para visualizar detalhes da quitação
         function showVisualizarQuitacaoModal(id) {
             const quitacao = quitacoes.find(q => q.id === id);
             if (!quitacao) return;
@@ -2464,7 +2484,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 </div>
             `;
 
-            // Listar lançamentos quitados
             const lancamentosQuitados = document.getElementById('lancamentosQuitadosList');
             let lancHtml = '<h4 style="margin-bottom: 16px;">Lançamentos Quitados:</h4>';
             
@@ -2484,7 +2503,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             document.getElementById('visualizarQuitacaoModal').style.display = 'block';
         }
 
-        // Função para excluir quitação
         async function deleteQuitacao(id) {
             if (!confirm('Tem certeza que deseja excluir esta quitação? Isso reverterá o status dos lançamentos quitados.')) return;
 
@@ -2493,7 +2511,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 const quitacao = quitacoes.find(q => q.id === id);
                 if (!quitacao) return;
 
-                // Reverter status dos lançamentos
                 for (const lanc of quitacao.lancamentos) {
                     await db.collection('lancamentos').doc(lanc.id).update({
                         quitado: false,
@@ -2516,13 +2533,12 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             showLoading(false);
         }
 
-        // Função para renderizar horas vencidas (baseado na data de referência)
         function renderizarHorasVencidas() {
             const horasVencidas = lancamentos.filter(l => 
                 l.tipo === 'negativa' && 
                 !l.quitado && 
                 l.saldoRestante > 0 && 
-                isHoraVencida(l.mes, l.ano, dataReferencia)
+                l.vencido
             );
 
             const totalVencido = horasVencidas.reduce((sum, l) => sum + l.saldoRestante, 0);
@@ -2558,7 +2574,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
 
                 const competencia = formatarCompetencia(lanc.mes, lanc.ano);
                 const vencimento = calcularVencimento(lanc.mes, lanc.ano);
-                const diasVencidos = calcularDiasVencidos(lanc.mes, lanc.ano, dataReferencia);
+                const diasVencidos = calcularDiasVencidos(lanc.mes, lanc.ano);
                 
                 tbody.innerHTML += `
                     <tr>
@@ -2580,15 +2596,12 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
 
         function showNovaQuitacaoParaColaborador(colaboradorId) {
             showNovaQuitacaoModal();
-            
-            // Aguardar o modal carregar e selecionar o colaborador
             setTimeout(() => {
                 document.getElementById('quitacaoColaborador').value = colaboradorId;
                 carregarHorasVencidasColaborador();
             }, 100);
         }
 
-        // Funções de conversão de horas
         function horaParaDecimal(horaStr) {
             const [horas, minutos] = horaStr.split(':').map(Number);
             return horas + (minutos / 60);
@@ -2618,25 +2631,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             return data.getDate() == dia && data.getMonth() == mes - 1;
         }
 
-        function formatarCompetencia(mes, ano) {
-            const meses = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
-            return `${meses[parseInt(mes) - 1]}/${ano}`;
-        }
-
-        // Função para calcular vencimento (1 ano após a competência, último dia do mês)
-        function calcularVencimento(mes, ano) {
-            const dataVencimento = getVencimentoDate(mes, ano);
-            const meses = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
-            return `${meses[dataVencimento.getMonth()]}/${dataVencimento.getFullYear()}`;
-        }
-
-        // Função para converter data string para objeto Date (usando primeiro dia do mês)
-        function dataParaObjeto(dataStr) {
-            const [dia, mes, ano] = dataStr.split('/');
-            return new Date(parseInt(ano), parseInt(mes) - 1, 1);
-        }
-
-        // Função para normalizar dados do lançamento
         function normalizarLancamento(doc) {
             const data = doc.data();
             const id = doc.id;
@@ -2651,9 +2645,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 ano: data.ano || data.year || '2024',
                 tipo: data.tipo || data.type || 'positiva',
                 horas: typeof data.horas === 'number' ? data.horas : (typeof data.hours === 'number' ? data.hours : 0),
-                compensacoes: data.compensacoes || [],
-                compensadoPor: data.compensadoPor || [],
-                saldoRestante: data.saldoRestante !== undefined ? data.saldoRestante : (data.horas || 0),
                 quitado: data.quitado || false,
                 quitadoEm: data.quitadoEm || null,
                 quitacaoId: data.quitacaoId || null
@@ -2670,7 +2661,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             return lancamento;
         }
 
-        // Carregar dados do Firebase
         async function loadData() {
             if (!firebaseConnected) {
                 showLoading(false);
@@ -2680,7 +2670,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             showLoading(true);
             
             try {
-                // Carregar empresas
                 const empresasSnapshot = await db.collection('empresas').get();
                 empresasDocs = empresasSnapshot.docs.map(doc => ({
                     id: doc.id,
@@ -2688,7 +2677,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 }));
                 empresas = empresasDocs.map(doc => doc.nome);
 
-                // Carregar departamentos
                 const departamentosSnapshot = await db.collection('departamentos').get();
                 departamentosDocs = departamentosSnapshot.docs.map(doc => ({
                     id: doc.id,
@@ -2696,7 +2684,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 }));
                 departamentos = departamentosDocs.map(doc => doc.nome);
 
-                // Carregar colaboradores
                 const colaboradoresSnapshot = await db.collection('colaboradores').get();
                 colaboradores = colaboradoresSnapshot.docs.map(doc => ({
                     id: doc.id,
@@ -2709,34 +2696,22 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                     return nomeA.localeCompare(nomeB);
                 });
 
-                // Carregar lançamentos
                 const lancamentosSnapshot = await db.collection('lancamentos').get();
-                
                 lancamentos = lancamentosSnapshot.docs.map(doc => normalizarLancamento(doc));
 
-                // Carregar quitações
                 const quitacoesSnapshot = await db.collection('quitacoes').get();
                 quitacoes = quitacoesSnapshot.docs.map(doc => ({
                     id: doc.id,
                     ...doc.data()
                 }));
 
-                // Ordenar quitações por data (mais recentes primeiro)
-                quitacoes.sort((a, b) => {
-                    return new Date(b.dataQuitacao) - new Date(a.dataQuitacao);
-                });
+                quitacoes.sort((a, b) => new Date(b.dataQuitacao) - new Date(a.dataQuitacao));
 
-                // Processar compensações com a lógica atual (data atual)
-                processarCompensacoes();
+                // Ordenar lançamentos por data (mais antigos primeiro) para simulação
+                lancamentos.sort((a, b) => dataParaObjeto(a.data) - dataParaObjeto(b.data));
 
-                // Ordenar lançamentos por data (mais recentes primeiro) para exibição
-                lancamentos.sort((a, b) => {
-                    try {
-                        return dataParaObjeto(b.data) - dataParaObjeto(a.data);
-                    } catch (e) {
-                        return 0;
-                    }
-                });
+                // Executar simulação com a data de referência atual
+                simularLinhaDoTempo(dataReferencia);
 
                 updateAllTables();
                 
@@ -2748,24 +2723,10 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             }
         }
 
-        // Salvar compensações no Firebase
         async function salvarCompensacoes() {
-            if (!firebaseConnected) return;
-            
-            try {
-                for (const lanc of lancamentos) {
-                    await db.collection('lancamentos').doc(lanc.id).update({
-                        compensacoes: lanc.compensacoes || [],
-                        compensadoPor: lanc.compensadoPor || [],
-                        saldoRestante: lanc.saldoRestante !== undefined ? lanc.saldoRestante : lanc.horas
-                    });
-                }
-            } catch (error) {
-                console.error('Erro ao salvar compensações:', error);
-            }
+            // Não é mais necessário persistir compensações, pois são calculadas em memória
         }
 
-        // Preencher anos nos selects
         function preencherAnos() {
             const anos = [];
             for (let i = 2020; i <= 2030; i++) {
@@ -2803,7 +2764,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             });
         }
 
-        // Carregar selects
         function loadSelects() {
             const deptoSelect = document.getElementById('colaboradorDepartamento');
             const empresaSelect = document.getElementById('colaboradorEmpresa');
@@ -2860,7 +2820,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             preencherAnos();
         }
 
-        // Função para aplicar filtros nas quitações
         function aplicarFiltrosQuitacoes() {
             const colaboradorId = document.getElementById('filtroQuitacaoColaborador').value;
             const departamento = document.getElementById('filtroQuitacaoDepartamento').value;
@@ -2881,7 +2840,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             if (status === 'quitadas') {
                 // Já são todas quitadas
             } else if (status === 'vencidas') {
-                // Mostrar apenas horas vencidas não quitadas (será mostrado em outra tabela)
                 renderizarHorasVencidas();
                 return;
             }
@@ -2900,7 +2858,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             renderizarHorasVencidas();
         }
 
-        // Função para renderizar tabela de quitações
         function renderizarTabelaQuitacoes(quitacoesFiltradas) {
             const tbody = document.getElementById('quitacoesList');
             const tabela = document.getElementById('quitacoesTable');
@@ -2941,7 +2898,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             });
         }
 
-        // Funções CRUD
         async function saveEmpresa() {
             const id = document.getElementById('empresaId').value;
             const nome = document.getElementById('empresaNome').value.trim();
@@ -3128,16 +3084,12 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                     ano: ano,
                     tipo: tipo,
                     horas: horas,
-                    saldoRestante: horas,
-                    compensacoes: [],
-                    compensadoPor: [],
                     updatedAt: new Date().toISOString()
                 });
 
                 await loadData();
                 hideModal('editLancamentoModal');
                 
-                // Manter os filtros e reaplicar
                 document.getElementById('filtroColaborador').value = filtrosAtuais.colaboradorId || '';
                 document.getElementById('filtroDepartamento').value = filtrosAtuais.departamento || '';
                 document.getElementById('filtroStatus').value = filtrosAtuais.status || 'ativos';
@@ -3161,7 +3113,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 await db.collection('lancamentos').doc(id).delete();
                 await loadData();
                 
-                // Manter os filtros e reaplicar
                 document.getElementById('filtroColaborador').value = filtrosAtuais.colaboradorId || '';
                 document.getElementById('filtroDepartamento').value = filtrosAtuais.departamento || '';
                 document.getElementById('filtroStatus').value = filtrosAtuais.status || 'ativos';
@@ -3232,7 +3183,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             showLoading(false);
         }
 
-        // Função para aplicar filtros - MODIFICADA para salvar estado e não mostrar todos os lançamentos
         function aplicarFiltros() {
             const colaboradorId = document.getElementById('filtroColaborador').value;
             const departamento = document.getElementById('filtroDepartamento').value;
@@ -3240,7 +3190,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             const mes = document.getElementById('filtroMes').value;
             const ano = document.getElementById('filtroAno').value;
 
-            // Salvar estado dos filtros
             filtrosAtuais = {
                 colaboradorId,
                 departamento,
@@ -3249,7 +3198,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 ano
             };
 
-            // Se nenhum filtro específico foi selecionado, não mostrar resultados
             if (!colaboradorId && !departamento && !mes && !ano && status === 'todos') {
                 document.getElementById('semResultadosMsg').style.display = 'block';
                 document.getElementById('lancamentosTable').style.display = 'none';
@@ -3292,7 +3240,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 if (colaborador) {
                     document.getElementById('resumoColaboradorNome').textContent = colaborador.nome;
                     
-                    // Calcular saldo total (usando horas originais)
                     const saldoTotal = lancamentos
                         .filter(l => l.colaboradorId === colaboradorId)
                         .reduce((sum, l) => {
@@ -3310,7 +3257,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             renderizarTabelaLancamentos(lancamentosFiltrados);
         }
 
-        // Função para renderizar tabela de lançamentos (agora usando dataReferencia)
         function renderizarTabelaLancamentos(lancamentosFiltrados) {
             const tbody = document.getElementById('lancamentosList');
             const tabela = document.getElementById('lancamentosTable');
@@ -3328,7 +3274,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
 
             tbody.innerHTML = '';
 
-            // Agrupar lançamentos por colaborador para calcular saldo acumulado
             const lancamentosPorColaborador = {};
             lancamentosFiltrados.forEach(lanc => {
                 if (!lancamentosPorColaborador[lanc.colaboradorId]) {
@@ -3337,7 +3282,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 lancamentosPorColaborador[lanc.colaboradorId].push(lanc);
             });
 
-            // Calcular saldo acumulado para cada colaborador (usando horas originais)
             const saldosAcumulados = {};
             Object.keys(lancamentosPorColaborador).forEach(colaboradorId => {
                 const lancamentosColab = lancamentosPorColaborador[colaboradorId];
@@ -3351,29 +3295,24 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
 
                 const competencia = formatarCompetencia(lanc.mes, lanc.ano);
                 const vencimento = calcularVencimento(lanc.mes, lanc.ano);
-                const status = calcularStatus(lanc, dataReferencia);
+                const status = calcularStatus(lanc);
                 
                 const quantidadeIcon = lanc.tipo === 'positiva' ? '➕' : '➖';
                 
-                // Obter saldo acumulado para este lançamento
                 const saldoAcumulado = saldosAcumulados[lanc.colaboradorId]?.get(lanc.id) || 0;
                 
-                // Horas que faltam compensar
                 const horasFaltantes = lanc.saldoRestante !== undefined ? lanc.saldoRestante : lanc.horas;
                 
-                // Gerar tooltip com as compensações - MELHORADO
                 const tooltipText = gerarTooltipCompensacoes(lanc);
                 
                 const compensacoesText = horasFaltantes > 0 ? 
                     `<span class="badge badge-warning compensacoes-tooltip" data-tooltip="${tooltipText}">Falta ${decimalParaHora(horasFaltantes)}</span>` : 
                     `<span class="badge badge-success compensacoes-tooltip" data-tooltip="${tooltipText}">Completo</span>`;
 
-                // Botão de visualizar compensações
                 const visualizarBtn = (lanc.compensacoes && lanc.compensacoes.length > 0) || (lanc.compensadoPor && lanc.compensadoPor.length > 0) ?
                     `<button class="btn btn-info btn-small" onclick="showVisualizarCompensacoesModal('${lanc.id}')" title="Ver detalhes das compensações">🔍</button>` : '';
 
-                // Botão de quitar (aparece apenas para horas negativas vencidas na data de referência)
-                const quitarBtn = (lanc.tipo === 'negativa' && !lanc.quitado && horasFaltantes > 0 && isHoraVencida(lanc.mes, lanc.ano, dataReferencia)) ?
+                const quitarBtn = (lanc.tipo === 'negativa' && !lanc.quitado && horasFaltantes > 0 && lanc.vencido) ?
                     `<button class="btn btn-primary btn-small" onclick="showNovaQuitacaoParaColaborador('${lanc.colaboradorId}')" title="Quitar horas vencidas">💰</button>` : '';
 
                 tbody.innerHTML += `
@@ -3398,7 +3337,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             });
         }
 
-        // Funções de filtro para colaboradores
         function filterColaboradores() {
             const searchTerm = document.getElementById('searchColaborador').value.toLowerCase();
             const statusFilter = document.getElementById('filterStatus').value;
@@ -3480,7 +3418,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
 
             paginatedColabs.forEach(colab => {
                 const lancamentosColab = lancamentos.filter(l => l.colaboradorId === colab.id);
-                // Calcular saldo total usando horas originais
                 const saldoTotal = lancamentosColab.reduce((sum, l) => {
                     return l.tipo === 'positiva' ? sum + l.horas : sum - l.horas;
                 }, 0);
@@ -3669,13 +3606,13 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 return;
             }
 
-            activities.innerHTML = lancamentos.slice(0, 5).map(lanc => {
+            activities.innerHTML = lancamentos.slice(-5).reverse().map(lanc => {
                 const colaborador = colaboradores.find(c => c.id === lanc.colaboradorId);
                 if (!colaborador) return '';
                 
                 const tipoClass = lanc.tipo === 'positiva' ? 'badge-success' : 'badge-danger';
                 const tipoIcon = lanc.tipo === 'positiva' ? '➕' : '➖';
-                const status = calcularStatus(lanc, dataReferencia);
+                const status = calcularStatus(lanc);
                 
                 return `
                     <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px; border-bottom: 1px solid #f1f5f9;">
@@ -3690,14 +3627,11 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             }).join('');
         }
 
-        // Função para calcular saldo acumulado por colaborador (usando horas originais)
         function calcularSaldoAcumulado(colaboradorId, lancamentosDoColaborador) {
-            // Ordenar lançamentos por data (mais antigos primeiro)
             const lancamentosOrdenados = [...lancamentosDoColaborador].sort((a, b) => {
                 return dataParaObjeto(a.data) - dataParaObjeto(b.data);
             });
 
-            // Calcular saldo acumulado sequencialmente usando o valor original das horas
             let saldo = 0;
             const saldosPorLancamento = [];
 
@@ -3716,11 +3650,9 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             return saldosPorLancamento;
         }
 
-        // Função para gerar tooltip de compensações - MELHORADA
         function gerarTooltipCompensacoes(lancamento) {
             let tooltip = '';
             
-            // Compensações que este lançamento fez em outros
             if (lancamento.compensacoes && lancamento.compensacoes.length > 0) {
                 tooltip += '🔽 COMPENSOU:\n';
                 lancamento.compensacoes.forEach(comp => {
@@ -3733,7 +3665,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 });
             }
             
-            // Lançamentos que compensaram este
             if (lancamento.compensadoPor && lancamento.compensadoPor.length > 0) {
                 if (tooltip) tooltip += '\n';
                 tooltip += '🔼 FOI COMPENSADO POR:\n';
@@ -3750,7 +3681,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             if (!tooltip) {
                 tooltip = 'Nenhuma compensação registrada';
             } else {
-                // Adicionar cabeçalho
                 tooltip = '📊 DETALHES DAS COMPENSAÇÕES:\n\n' + tooltip;
             }
             
@@ -3766,12 +3696,8 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             aplicarFiltrosQuitacoes();
             filterColaboradores();
             renderizarHorasVencidas();
-            
-            // Salvar compensações no Firebase
-            salvarCompensacoes();
         }
 
-        // Função para aplicar a data de referência
         function aplicarDataReferencia() {
             const input = document.getElementById('dataReferenciaInput');
             if (input.value) {
@@ -3782,22 +3708,20 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 dataReferencia.setHours(0, 0, 0, 0);
                 input.value = dataReferencia.toISOString().split('T')[0];
             }
-            // Atualizar todas as visualizações
+            // Reexecutar simulação com nova data
+            simularLinhaDoTempo(dataReferencia);
             updateAllTables();
         }
 
-        // Fechar modais ao clicar fora
         window.onclick = function(event) {
             if (event.target.classList.contains('modal')) {
                 event.target.style.display = 'none';
             }
         }
 
-        // Inicialização
         document.addEventListener('DOMContentLoaded', function() {
             preencherAnos();
             document.getElementById('quitacaoData').value = new Date().toISOString().split('T')[0];
-            // Inicializar data de referência
             const hoje = new Date();
             hoje.setHours(0, 0, 0, 0);
             dataReferencia = hoje;
