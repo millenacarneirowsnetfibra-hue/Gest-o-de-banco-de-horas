@@ -812,6 +812,34 @@
             color: #dc2626;
             font-size: 1.5rem;
         }
+
+        /* Data de referência */
+        .data-referencia-bar {
+            background: white;
+            border-radius: 20px;
+            padding: 16px 24px;
+            margin-bottom: 24px;
+            display: flex;
+            align-items: center;
+            gap: 24px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+            border: 2px solid #3b82f6;
+        }
+        .data-referencia-label {
+            font-weight: 600;
+            color: #0f172a;
+        }
+        .data-referencia-input {
+            padding: 8px 12px;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            font-size: 1rem;
+        }
+        .data-referencia-info {
+            color: #475569;
+            font-size: 0.9rem;
+            margin-left: auto;
+        }
     </style>
 </head>
 <body>
@@ -984,6 +1012,14 @@
                             + Novo Lançamento
                         </button>
                     </div>
+                </div>
+
+                <!-- Data de Referência -->
+                <div class="data-referencia-bar">
+                    <span class="data-referencia-label">📅 Data de referência:</span>
+                    <input type="date" id="dataReferenciaInput" class="data-referencia-input" value="">
+                    <button class="btn btn-primary btn-small" onclick="aplicarDataReferencia()">Aplicar</button>
+                    <span class="data-referencia-info">Use esta data para simular o status histórico</span>
                 </div>
 
                 <!-- Filtros Automáticos -->
@@ -1659,7 +1695,11 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             ano: ''
         };
 
-        // ================= NOVAS FUNÇÕES DE VENCIMENTO =================
+        // Data de referência global (inicializada com hoje)
+        let dataReferencia = new Date();
+        dataReferencia.setHours(0, 0, 0, 0);
+
+        // ================= NOVAS FUNÇÕES DE VENCIMENTO COM DATA DE REFERÊNCIA =================
         function getVencimentoDate(mes, ano) {
             // Retorna o último dia do mês no ano seguinte
             const anoNum = parseInt(ano);
@@ -1671,20 +1711,21 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             return dataVencimento;
         }
 
-        function isHoraVencida(mes, ano) {
-            const hoje = new Date();
-            hoje.setHours(0, 0, 0, 0); // zerar horas para comparar apenas datas
+        function isHoraVencida(mes, ano, dataRef = null) {
+            // Se não informou dataRef, usa a data de referência global
+            const dataComparacao = dataRef ? new Date(dataRef) : new Date(dataReferencia);
+            dataComparacao.setHours(0, 0, 0, 0);
             const dataVencimento = getVencimentoDate(mes, ano);
-            return hoje > dataVencimento; // se hoje > vencimento, está vencida
+            return dataComparacao > dataVencimento;
         }
 
-        function isLancamentoVencido(lanc) {
-            return isHoraVencida(lanc.mes, lanc.ano);
+        function isLancamentoVencido(lanc, dataRef = null) {
+            return isHoraVencida(lanc.mes, lanc.ano, dataRef);
         }
 
-        // ================= NOVA LÓGICA DE COMPENSAÇÃO =================
+        // ================= NOVA LÓGICA DE COMPENSAÇÃO (mantida, mas usa data atual para registrar) =================
         function processarCompensacoes() {
-            console.log('Iniciando processamento de compensações com regras de vencimento (último dia do mês seguinte)...');
+            console.log('Iniciando processamento de compensações com regras de vencimento...');
 
             // 1. Resetar saldos e registros de compensação
             lancamentos.forEach(lanc => {
@@ -1695,9 +1736,9 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 }
             });
 
-            // 2. Filtrar apenas lançamentos ativos (não quitados) e que NÃO estejam vencidos
+            // 2. Filtrar apenas lançamentos ativos (não quitados) e que NÃO estejam vencidos na data atual (hoje)
             //    Os vencidos não participam da compensação
-            let ativos = lancamentos.filter(l => !l.quitado && !isLancamentoVencido(l));
+            let ativos = lancamentos.filter(l => !l.quitado && !isLancamentoVencido(l, new Date()));
             if (ativos.length === 0) return;
 
             // 3. Ordenar por competência (mais antiga primeiro) -> FIFO
@@ -1716,8 +1757,8 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 // Ambos têm saldo
                 if (cedente.saldoRestante <= 0 || receptor.saldoRestante <= 0) return false;
 
-                // Garantia extra: ambos não estão vencidos (já filtramos, mas reforçar)
-                if (isLancamentoVencido(cedente) || isLancamentoVencido(receptor)) return false;
+                // Garantia extra: ambos não estão vencidos na data atual (já filtramos, mas reforçar)
+                if (isLancamentoVencido(cedente, new Date()) || isLancamentoVencido(receptor, new Date())) return false;
 
                 return true;
             }
@@ -1768,8 +1809,8 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             console.log('Processamento de compensações concluído.');
         }
 
-        // Função para calcular status do lançamento baseado nas regras
-        function calcularStatus(lancamento) {
+        // Função para calcular status do lançamento baseado nas regras e na data de referência
+        function calcularStatus(lancamento, dataRef = null) {
             // Se já foi quitado (pagamento em dinheiro)
             if (lancamento.quitado) {
                 return { texto: 'Quitado', classe: 'badge-quitado' };
@@ -1780,16 +1821,16 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 return { texto: 'Compensada', classe: 'badge-compensada' };
             }
 
-            // Se ainda tem saldo restante, verificar se está vencido
-            if (isLancamentoVencido(lancamento)) {
+            // Se ainda tem saldo restante, verificar se está vencido na data de referência
+            if (isLancamentoVencido(lancamento, dataRef)) {
                 return { texto: 'Vencida', classe: 'badge-vencida' };
             }
 
-            // Para horas não vencidas com saldo restante, calcular dias até o vencimento
+            // Para horas não vencidas com saldo restante, calcular dias até o vencimento em relação à data de referência
             const dataVencimento = getVencimentoDate(lancamento.mes, lancamento.ano);
-            const hoje = new Date();
-            hoje.setHours(0, 0, 0, 0);
-            const diffTime = dataVencimento - hoje;
+            const dataComp = dataRef ? new Date(dataRef) : new Date(dataReferencia);
+            dataComp.setHours(0, 0, 0, 0);
+            const diffTime = dataVencimento - dataComp;
             const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
             if (diffDays <= 30) {
@@ -1802,8 +1843,19 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             return { texto: 'Em dia', classe: 'badge-success' };
         }
 
+        // Função para calcular dias vencidos em relação à data de referência
+        function calcularDiasVencidos(mes, ano, dataRef = null) {
+            const dataComp = dataRef ? new Date(dataRef) : new Date(dataReferencia);
+            dataComp.setHours(0, 0, 0, 0);
+            const dataVencimento = getVencimentoDate(mes, ano);
+            
+            const diffTime = dataComp - dataVencimento;
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            return diffDays > 0 ? diffDays : 0;
+        }
+
         // ============================================================
-        // Funções existentes (mantidas) - algumas podem ter sido modificadas acima
+        // Funções existentes (adaptadas para usar dataReferencia)
         // ============================================================
 
         // Funções utilitárias
@@ -2139,21 +2191,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             document.getElementById('importModal').style.display = 'block';
         }
 
-        // Função para verificar se uma hora está vencida (agora usando a nova função isHoraVencida)
-        // Já definida acima, mas manteremos a chamada para compatibilidade
-        // function isHoraVencida(mes, ano) - já implementada
-
-        // Função para calcular dias vencidos (baseado na nova data de vencimento)
-        function calcularDiasVencidos(mes, ano) {
-            const hoje = new Date();
-            hoje.setHours(0, 0, 0, 0);
-            const dataVencimento = getVencimentoDate(mes, ano);
-            
-            const diffTime = hoje - dataVencimento;
-            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-            return diffDays > 0 ? diffDays : 0;
-        }
-
         // Função para mostrar modal de nova quitação
         function showNovaQuitacaoModal() {
             if (!firebaseConnected) {
@@ -2200,7 +2237,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             document.getElementById('novaQuitacaoModal').style.display = 'block';
         }
 
-        // Função para carregar horas vencidas do colaborador
+        // Função para carregar horas vencidas do colaborador (usando data de referência para determinar vencimento)
         function carregarHorasVencidasColaborador() {
             const colaboradorId = document.getElementById('quitacaoColaborador').value;
             
@@ -2216,13 +2253,13 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 document.getElementById('quitacaoDepartamento').value = colaborador.departamento || '';
             }
 
-            // Filtrar lançamentos do colaborador que são negativos (débitos), estão vencidos e não quitados
+            // Filtrar lançamentos do colaborador que são negativos (débitos), estão vencidos na data de referência e não quitados
             const lancamentosColab = lancamentos.filter(l => 
                 l.colaboradorId === colaboradorId && 
                 l.tipo === 'negativa' && 
                 l.saldoRestante > 0 &&
                 !l.quitado &&
-                isHoraVencida(l.mes, l.ano)  // usa nova função
+                isHoraVencida(l.mes, l.ano, dataReferencia)  // usa data de referência
             );
 
             if (lancamentosColab.length === 0) {
@@ -2240,7 +2277,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             lancamentosColab.forEach(lanc => {
                 const competencia = formatarCompetencia(lanc.mes, lanc.ano);
                 const vencimento = calcularVencimento(lanc.mes, lanc.ano);
-                const diasVencidos = calcularDiasVencidos(lanc.mes, lanc.ano);
+                const diasVencidos = calcularDiasVencidos(lanc.mes, lanc.ano, dataReferencia);
                 
                 html += `
                     <div class="checkbox-item">
@@ -2479,13 +2516,13 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             showLoading(false);
         }
 
-        // Função para renderizar horas vencidas
+        // Função para renderizar horas vencidas (baseado na data de referência)
         function renderizarHorasVencidas() {
             const horasVencidas = lancamentos.filter(l => 
                 l.tipo === 'negativa' && 
                 !l.quitado && 
                 l.saldoRestante > 0 && 
-                isHoraVencida(l.mes, l.ano)
+                isHoraVencida(l.mes, l.ano, dataReferencia)
             );
 
             const totalVencido = horasVencidas.reduce((sum, l) => sum + l.saldoRestante, 0);
@@ -2521,7 +2558,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
 
                 const competencia = formatarCompetencia(lanc.mes, lanc.ano);
                 const vencimento = calcularVencimento(lanc.mes, lanc.ano);
-                const diasVencidos = calcularDiasVencidos(lanc.mes, lanc.ano);
+                const diasVencidos = calcularDiasVencidos(lanc.mes, lanc.ano, dataReferencia);
                 
                 tbody.innerHTML += `
                     <tr>
@@ -2689,7 +2726,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                     return new Date(b.dataQuitacao) - new Date(a.dataQuitacao);
                 });
 
-                // Processar compensações com a nova lógica
+                // Processar compensações com a lógica atual (data atual)
                 processarCompensacoes();
 
                 // Ordenar lançamentos por data (mais recentes primeiro) para exibição
@@ -3273,7 +3310,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             renderizarTabelaLancamentos(lancamentosFiltrados);
         }
 
-        // Função para renderizar tabela de lançamentos
+        // Função para renderizar tabela de lançamentos (agora usando dataReferencia)
         function renderizarTabelaLancamentos(lancamentosFiltrados) {
             const tbody = document.getElementById('lancamentosList');
             const tabela = document.getElementById('lancamentosTable');
@@ -3314,7 +3351,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
 
                 const competencia = formatarCompetencia(lanc.mes, lanc.ano);
                 const vencimento = calcularVencimento(lanc.mes, lanc.ano);
-                const status = calcularStatus(lanc);
+                const status = calcularStatus(lanc, dataReferencia);
                 
                 const quantidadeIcon = lanc.tipo === 'positiva' ? '➕' : '➖';
                 
@@ -3335,8 +3372,8 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 const visualizarBtn = (lanc.compensacoes && lanc.compensacoes.length > 0) || (lanc.compensadoPor && lanc.compensadoPor.length > 0) ?
                     `<button class="btn btn-info btn-small" onclick="showVisualizarCompensacoesModal('${lanc.id}')" title="Ver detalhes das compensações">🔍</button>` : '';
 
-                // Botão de quitar (aparece apenas para horas negativas vencidas)
-                const quitarBtn = (lanc.tipo === 'negativa' && !lanc.quitado && horasFaltantes > 0 && isHoraVencida(lanc.mes, lanc.ano)) ?
+                // Botão de quitar (aparece apenas para horas negativas vencidas na data de referência)
+                const quitarBtn = (lanc.tipo === 'negativa' && !lanc.quitado && horasFaltantes > 0 && isHoraVencida(lanc.mes, lanc.ano, dataReferencia)) ?
                     `<button class="btn btn-primary btn-small" onclick="showNovaQuitacaoParaColaborador('${lanc.colaboradorId}')" title="Quitar horas vencidas">💰</button>` : '';
 
                 tbody.innerHTML += `
@@ -3638,7 +3675,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 
                 const tipoClass = lanc.tipo === 'positiva' ? 'badge-success' : 'badge-danger';
                 const tipoIcon = lanc.tipo === 'positiva' ? '➕' : '➖';
-                const status = calcularStatus(lanc);
+                const status = calcularStatus(lanc, dataReferencia);
                 
                 return `
                     <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px; border-bottom: 1px solid #f1f5f9;">
@@ -3734,6 +3771,21 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             salvarCompensacoes();
         }
 
+        // Função para aplicar a data de referência
+        function aplicarDataReferencia() {
+            const input = document.getElementById('dataReferenciaInput');
+            if (input.value) {
+                dataReferencia = new Date(input.value);
+                dataReferencia.setHours(0, 0, 0, 0);
+            } else {
+                dataReferencia = new Date();
+                dataReferencia.setHours(0, 0, 0, 0);
+                input.value = dataReferencia.toISOString().split('T')[0];
+            }
+            // Atualizar todas as visualizações
+            updateAllTables();
+        }
+
         // Fechar modais ao clicar fora
         window.onclick = function(event) {
             if (event.target.classList.contains('modal')) {
@@ -3745,6 +3797,11 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
         document.addEventListener('DOMContentLoaded', function() {
             preencherAnos();
             document.getElementById('quitacaoData').value = new Date().toISOString().split('T')[0];
+            // Inicializar data de referência
+            const hoje = new Date();
+            hoje.setHours(0, 0, 0, 0);
+            dataReferencia = hoje;
+            document.getElementById('dataReferenciaInput').value = hoje.toISOString().split('T')[0];
             showTab('dashboard');
         });
     </script>
