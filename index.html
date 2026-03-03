@@ -488,6 +488,11 @@
             color: #065f46;
         }
 
+        .badge-pendente {
+            background: #fed7aa; /* laranja claro */
+            color: #9a3412;
+        }
+
         .badge-vencida {
             background: #fee2e2;
             color: #991b1b;
@@ -1739,7 +1744,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 l.saldoRestante = l.horas; // reinicia com o valor original
                 l.compensacoes = [];
                 l.compensadoPor = [];
-                l.vencido = false; // novo campo para indicar se venceu na simulação
+                l.vencido = false; // agora representa "pendente pagamento"
                 // Se o lançamento já foi quitado por dinheiro, ele será zerado no evento de quitação
             });
 
@@ -1802,9 +1807,8 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                     ativos.forEach(l => {
                         const dataVenc = getVencimentoDate(l.mes, l.ano);
                         if (dataVenc <= dataAtual && !l.vencido) {
-                            l.vencido = true; // marca como vencido
-                            // Não remove da lista de ativos? Na verdade, ao vencer, não pode mais compensar, então deve ser removido.
-                            // Mas vamos manter a flag e filtrar nos próximos passos.
+                            l.vencido = true; // marca como pendente pagamento
+                            // Remove da lista de ativos automaticamente nos próximos getAtivos()
                         }
                     });
 
@@ -1888,7 +1892,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 return { texto: 'Compensada', classe: 'badge-compensada' };
             }
             if (lancamento.vencido) {
-                return { texto: 'Vencida', classe: 'badge-vencida' };
+                return { texto: 'PENDENTE PAGAMENTO', classe: 'badge-pendente' };
             }
             // Se não venceu e tem saldo, calcular dias até o vencimento
             const dataVencimento = getVencimentoDate(lancamento.mes, lancamento.ano);
@@ -2320,7 +2324,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                         <div class="info">
                             <div>
                                 <span class="competencia">${competencia}</span>
-                                <span class="badge badge-danger" style="margin-left: 8px;">VENCIDA</span>
+                                <span class="badge badge-danger" style="margin-left: 8px;">PENDENTE PAGAMENTO</span>
                             </div>
                             <div class="detalhes">
                                 Disponível: ${decimalParaHora(lanc.saldoRestante)} | 
@@ -2582,7 +2586,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                         <td>${colaborador.departamento || 'N/A'}</td>
                         <td>${competencia}</td>
                         <td>${vencimento}</td>
-                        <td><span class="badge badge-danger">${decimalParaHora(lanc.saldoRestante)}</span></td>
+                        <td><span class="badge badge-pendente">${decimalParaHora(lanc.saldoRestante)}</span></td>
                         <td><span class="badge badge-danger">${diasVencidos} dias</span></td>
                         <td>
                             <button class="btn btn-primary btn-small" onclick="showNovaQuitacaoParaColaborador('${lanc.colaboradorId}')">
