@@ -3274,6 +3274,9 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
 
             tbody.innerHTML = '';
 
+            // Ordenar lançamentos por data decrescente (mais recentes primeiro) para exibição
+            lancamentosFiltrados.sort((a, b) => dataParaObjeto(b.data) - dataParaObjeto(a.data));
+
             const lancamentosPorColaborador = {};
             lancamentosFiltrados.forEach(lanc => {
                 if (!lancamentosPorColaborador[lanc.colaboradorId]) {
