@@ -1704,7 +1704,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
         let dataReferencia = new Date();
         dataReferencia.setHours(0, 0, 0, 0);
 
-        // ================= NOVAS FUNÇÕES DE SIMULAÇÃO CRONOLÓGICA =================
+        // ================= FUNÇÕES DE SIMULAÇÃO CRONOLÓGICA CORRIGIDAS =================
         function getVencimentoDate(mes, ano) {
             // Retorna o último dia do mês no ano seguinte
             const anoNum = parseInt(ano);
@@ -1732,12 +1732,9 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             return `${meses[dataVencimento.getMonth()]}/${dataVencimento.getFullYear()}`;
         }
 
-        // Função principal de simulação cronológica
+        // Função principal de simulação cronológica (CORRIGIDA)
         function simularLinhaDoTempo(dataLimite) {
             console.log('Iniciando simulação cronológica até', dataLimite.toISOString().split('T')[0]);
-
-            // Para cada colaborador, processar seus lançamentos e quitações
-            const colaboradoresIds = [...new Set(lancamentos.map(l => l.colaboradorId))];
 
             // Resetar campos de simulação em todos os lançamentos
             lancamentos.forEach(l => {
@@ -1749,44 +1746,36 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             });
 
             // Para cada colaborador, rodar simulação
+            const colaboradoresIds = [...new Set(lancamentos.map(l => l.colaboradorId))];
+
             colaboradoresIds.forEach(colabId => {
                 const lancamentosColab = lancamentos.filter(l => l.colaboradorId === colabId);
                 const quitacoesColab = quitacoes.filter(q => q.colaboradorId === colabId);
 
-                // Coletar todas as datas de eventos: competências dos lançamentos, datas de quitação e vencimentos
+                // Mapa para acesso rápido
+                const lancamentosMap = new Map();
+                lancamentosColab.forEach(l => lancamentosMap.set(l.id, l));
+
+                // Coletar todas as datas de eventos: competências, quitações, vencimentos
                 let datasEventos = new Set();
 
-                // Adicionar datas de competência (primeiro dia do mês)
                 lancamentosColab.forEach(l => {
                     const dataComp = dataParaObjeto(l.data);
                     datasEventos.add(dataComp.getTime());
+                    const dataVenc = getVencimentoDate(l.mes, l.ano);
+                    datasEventos.add(dataVenc.getTime());
                 });
 
-                // Adicionar datas de quitação
                 quitacoesColab.forEach(q => {
                     const dataQuit = new Date(q.dataQuitacao);
                     dataQuit.setHours(0, 0, 0, 0);
                     datasEventos.add(dataQuit.getTime());
                 });
 
-                // Adicionar datas de vencimento de cada lançamento (precisamos verificar nessas datas)
-                lancamentosColab.forEach(l => {
-                    const dataVenc = getVencimentoDate(l.mes, l.ano);
-                    datasEventos.add(dataVenc.getTime());
-                });
-
-                // Adicionar a data limite
                 datasEventos.add(dataLimite.getTime());
 
                 // Converter para array e ordenar
                 let datasOrdenadas = Array.from(datasEventos).map(t => new Date(t)).sort((a, b) => a - b);
-
-                // Estruturas para controle durante a simulação
-                // Vamos manter listas separadas de lançamentos ativos (não vencidos, não quitados)
-                // Inicialmente, todos os lançamentos estão ativos, mas serão desativados conforme eventos
-                // Precisamos de um mapa de lançamentos por id para acesso rápido
-                const lancamentosMap = new Map();
-                lancamentosColab.forEach(l => lancamentosMap.set(l.id, l));
 
                 // Função para obter lançamentos ativos (não quitados e não vencidos)
                 function getAtivos() {
@@ -1799,30 +1788,10 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 for (let i = 0; i < datasOrdenadas.length; i++) {
                     const dataAtual = datasOrdenadas[i];
                     
-                    // Se ultrapassou a data limite, paramos (mas como incluímos a data limite, isso não deve acontecer)
+                    // Se ultrapassou a data limite, paramos
                     if (dataAtual > dataLimite) break;
 
-                    // 1. Verificar vencimentos: todos os lançamentos ativos cuja data de vencimento <= dataAtual
-                    const ativos = getAtivos();
-                    ativos.forEach(l => {
-                        const dataVenc = getVencimentoDate(l.mes, l.ano);
-                        if (dataVenc <= dataAtual && !l.vencido) {
-                            l.vencido = true; // marca como pendente pagamento
-                            // Remove da lista de ativos automaticamente nos próximos getAtivos()
-                        }
-                    });
-
-                    // 2. Processar eventos que ocorrem exatamente nesta data
-                    // Eventos de lançamento (competência)
-                    lancamentosColab.forEach(l => {
-                        const dataComp = dataParaObjeto(l.data);
-                        if (dataComp.getTime() === dataAtual.getTime()) {
-                            // Lançamento é adicionado (já está no mapa, mas resetamos saldo se necessário? Já foi resetado no início)
-                            // Não precisa fazer nada, ele já está no mapa com saldo inicial.
-                        }
-                    });
-
-                    // Eventos de quitação
+                    // 1. Processar quitações que ocorrem exatamente nesta data
                     quitacoesColab.forEach(q => {
                         const dataQuit = new Date(q.dataQuitacao);
                         dataQuit.setHours(0, 0, 0, 0);
@@ -1838,8 +1807,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                         }
                     });
 
-                    // 3. Executar compensações FIFO entre os ativos (não vencidos, não quitados, com saldo > 0)
-                    // Obter ativos atualizados (após eventos e vencimentos)
+                    // 2. Executar compensações FIFO entre os ativos (não vencidos, não quitados)
                     let ativosPos = getAtivos().filter(l => l.tipo === 'positiva').sort((a, b) => dataParaObjeto(a.data) - dataParaObjeto(b.data));
                     let ativosNeg = getAtivos().filter(l => l.tipo === 'negativa').sort((a, b) => dataParaObjeto(a.data) - dataParaObjeto(b.data));
 
@@ -1874,6 +1842,15 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                         if (pos.saldoRestante === 0) iPos++;
                         if (neg.saldoRestante === 0) iNeg++;
                     }
+
+                    // 3. Marcar como vencidos os lançamentos que ainda têm saldo e cuja data de vencimento <= dataAtual
+                    lancamentosColab.forEach(l => {
+                        if (l.quitado || l.vencido) return; // já quitado ou já vencido
+                        const dataVenc = getVencimentoDate(l.mes, l.ano);
+                        if (dataVenc <= dataAtual && l.saldoRestante > 0) {
+                            l.vencido = true;
+                        }
+                    });
                 }
 
                 // Após percorrer todas as datas até a data limite, temos o estado final
@@ -1915,7 +1892,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
         }
 
         // ============================================================
-        // Funções existentes (adaptadas)
+        // Funções existentes (mantidas)
         // ============================================================
 
         function showLoading(show) {
