@@ -516,48 +516,82 @@
             100% { opacity: 1; }
         }
 
-        /* Tooltip para compensações */
-        .compensacoes-tooltip {
+        /* Tooltip melhorado para compensações */
+        .status-tooltip {
             position: relative;
             cursor: help;
-            border-bottom: 1px dotted #64748b;
         }
 
-        .compensacoes-tooltip:hover::after {
-            content: attr(data-tooltip);
+        .status-tooltip .tooltip-content {
+            visibility: hidden;
             position: absolute;
             bottom: 100%;
             left: 50%;
             transform: translateX(-50%);
             background: #1e293b;
             color: white;
-            padding: 12px 16px;
+            padding: 16px;
             border-radius: 12px;
             font-size: 0.85rem;
             white-space: pre-line;
             z-index: 1000;
-            min-width: 280px;
-            max-width: 350px;
+            min-width: 300px;
+            max-width: 400px;
             text-align: left;
             box-shadow: 0 8px 20px rgba(0,0,0,0.3);
             margin-bottom: 10px;
             line-height: 1.6;
-            font-weight: normal;
             border: 1px solid #334155;
             pointer-events: none;
         }
 
-        .compensacoes-tooltip:hover::before {
+        .status-tooltip:hover .tooltip-content {
+            visibility: visible;
+        }
+
+        .status-tooltip .tooltip-content::after {
             content: '';
             position: absolute;
-            bottom: 100%;
+            top: 100%;
             left: 50%;
             transform: translateX(-50%);
             border: 8px solid transparent;
             border-top-color: #1e293b;
-            margin-bottom: -6px;
-            z-index: 1000;
             pointer-events: none;
+        }
+
+        .tooltip-section {
+            margin-bottom: 12px;
+            border-bottom: 1px solid #334155;
+            padding-bottom: 8px;
+        }
+
+        .tooltip-section:last-child {
+            margin-bottom: 0;
+            border-bottom: none;
+            padding-bottom: 0;
+        }
+
+        .tooltip-title {
+            font-weight: 600;
+            color: #94a3b8;
+            margin-bottom: 4px;
+        }
+
+        .tooltip-item {
+            display: flex;
+            justify-content: space-between;
+            gap: 16px;
+            margin-bottom: 4px;
+        }
+
+        .tooltip-competencia {
+            color: #e2e8f0;
+        }
+
+        .tooltip-quantidade {
+            color: #fbbf24;
+            font-weight: 600;
         }
 
         /* Header com ações */
@@ -670,7 +704,7 @@
         @media print {
             .sidebar, .page-header, .filters-bar, .header-with-actions, 
             .btn, .action-buttons, .resumo-info, .modal, .loading-overlay,
-            .compensacoes-tooltip:hover::after, .compensacoes-tooltip:hover::before {
+            .status-tooltip .tooltip-content {
                 display: none !important;
             }
 
@@ -818,33 +852,7 @@
             font-size: 1.5rem;
         }
 
-        /* Data de referência */
-        .data-referencia-bar {
-            background: white;
-            border-radius: 20px;
-            padding: 16px 24px;
-            margin-bottom: 24px;
-            display: flex;
-            align-items: center;
-            gap: 24px;
-            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
-            border: 2px solid #3b82f6;
-        }
-        .data-referencia-label {
-            font-weight: 600;
-            color: #0f172a;
-        }
-        .data-referencia-input {
-            padding: 8px 12px;
-            border: 2px solid #e2e8f0;
-            border-radius: 12px;
-            font-size: 1rem;
-        }
-        .data-referencia-info {
-            color: #475569;
-            font-size: 0.9rem;
-            margin-left: auto;
-        }
+        /* Data de referência removida conforme solicitado */
     </style>
 </head>
 <body>
@@ -1017,14 +1025,6 @@
                             + Novo Lançamento
                         </button>
                     </div>
-                </div>
-
-                <!-- Data de Referência (apenas visual, não interfere na compensação) -->
-                <div class="data-referencia-bar">
-                    <span class="data-referencia-label">📅 Data de referência (visual):</span>
-                    <input type="date" id="dataReferenciaInput" class="data-referencia-input" value="">
-                    <button class="btn btn-primary btn-small" onclick="aplicarDataReferencia()">Aplicar</button>
-                    <span class="data-referencia-info">Compensação respeita vencimento (1 ano após competência)</span>
                 </div>
 
                 <!-- Filtros -->
@@ -1696,7 +1696,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             ano: ''
         };
 
-        // Data de referência (apenas visual)
+        // Data de referência para cálculo de vencimento
         let dataReferencia = new Date();
         dataReferencia.setHours(0, 0, 0, 0);
 
@@ -2075,38 +2075,51 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
         }
 
         function gerarTooltipCompensacoes(lancamento) {
-            let tooltip = '';
+            let tooltipHtml = '';
             
             if (lancamento.compensacoes && lancamento.compensacoes.length > 0) {
-                tooltip += '🔽 COMPENSOU:\n';
+                tooltipHtml += '<div class="tooltip-section">';
+                tooltipHtml += '<div class="tooltip-title">🔽 COMPENSOU:</div>';
                 lancamento.compensacoes.forEach(comp => {
                     const lancComp = lancamentos.find(l => l.id === comp.lancamentoId);
                     if (lancComp) {
                         const competencia = formatarCompetencia(lancComp.mes, lancComp.ano);
                         const tipoIcon = lancComp.tipo === 'positiva' ? '➕' : '➖';
-                        tooltip += `  • ${competencia} ${tipoIcon}: ${decimalParaHora(comp.quantidade)}\n`;
+                        tooltipHtml += `
+                            <div class="tooltip-item">
+                                <span class="tooltip-competencia">${competencia} ${tipoIcon}</span>
+                                <span class="tooltip-quantidade">${decimalParaHora(comp.quantidade)}</span>
+                            </div>
+                        `;
                     }
                 });
+                tooltipHtml += '</div>';
             }
             
             if (lancamento.compensadoPor && lancamento.compensadoPor.length > 0) {
-                if (tooltip) tooltip += '\n';
-                tooltip += '🔼 FOI COMPENSADO POR:\n';
+                tooltipHtml += '<div class="tooltip-section">';
+                tooltipHtml += '<div class="tooltip-title">🔼 FOI COMPENSADO POR:</div>';
                 lancamento.compensadoPor.forEach(comp => {
                     const lancComp = lancamentos.find(l => l.id === comp.lancamentoId);
                     if (lancComp) {
                         const competencia = formatarCompetencia(lancComp.mes, lancComp.ano);
                         const tipoIcon = lancComp.tipo === 'positiva' ? '➕' : '➖';
-                        tooltip += `  • ${competencia} ${tipoIcon}: ${decimalParaHora(comp.quantidade)}\n`;
+                        tooltipHtml += `
+                            <div class="tooltip-item">
+                                <span class="tooltip-competencia">${competencia} ${tipoIcon}</span>
+                                <span class="tooltip-quantidade">${decimalParaHora(comp.quantidade)}</span>
+                            </div>
+                        `;
                     }
                 });
+                tooltipHtml += '</div>';
             }
             
-            if (!tooltip) {
-                tooltip = 'Nenhuma compensação registrada';
+            if (!tooltipHtml) {
+                tooltipHtml = '<div class="tooltip-section">Nenhuma compensação registrada</div>';
             }
             
-            return tooltip;
+            return tooltipHtml;
         }
 
         function calcularDiasVencidos(mes, ano) {
@@ -2252,11 +2265,11 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 
                 const horasFaltantes = lanc.saldoRestante !== undefined ? lanc.saldoRestante : lanc.horas;
                 
-                const tooltipText = gerarTooltipCompensacoes(lanc);
+                const tooltipHtml = gerarTooltipCompensacoes(lanc);
                 
                 const compensacoesText = horasFaltantes > 0 ? 
-                    `<span class="badge badge-warning compensacoes-tooltip" data-tooltip="${tooltipText}">Falta ${decimalParaHora(horasFaltantes)}</span>` : 
-                    `<span class="badge badge-success compensacoes-tooltip" data-tooltip="${tooltipText}">Completo</span>`;
+                    `<span class="badge badge-warning">Falta ${decimalParaHora(horasFaltantes)}</span>` : 
+                    `<span class="badge badge-success">Completo</span>`;
 
                 const visualizarBtn = (lanc.compensacoes && lanc.compensacoes.length > 0) || (lanc.compensadoPor && lanc.compensadoPor.length > 0) ?
                     `<button class="btn btn-info btn-small" onclick="showVisualizarCompensacoesModal('${lanc.id}')" title="Ver detalhes das compensações">🔍</button>` : '';
@@ -2270,7 +2283,14 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                         <td><span class="badge ${lanc.tipo === 'positiva' ? 'badge-success' : 'badge-danger'}">${quantidadeIcon} ${decimalParaHora(lanc.horas)}</span></td>
                         <td>${competencia}</td>
                         <td>${vencimento}</td>
-                        <td><span class="badge ${status.classe} compensacoes-tooltip" data-tooltip="${tooltipText}" style="cursor: help;">${status.texto}</span></td>
+                        <td>
+                            <div class="status-tooltip">
+                                <span class="badge ${status.classe}">${status.texto}</span>
+                                <div class="tooltip-content">
+                                    ${tooltipHtml}
+                                </div>
+                            </div>
+                        </td>
                         <td><span class="badge ${saldoAcumulado >= 0 ? 'badge-success' : 'badge-danger'}">${decimalParaHora(saldoAcumulado)}</span></td>
                         <td>${compensacoesText}</td>
                         <td>
@@ -3428,22 +3448,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             showLoading(false);
         }
 
-        // ========== DATA DE REFERÊNCIA ==========
-        function aplicarDataReferencia() {
-            const input = document.getElementById('dataReferenciaInput');
-            if (input.value) {
-                dataReferencia = new Date(input.value);
-                dataReferencia.setHours(0, 0, 0, 0);
-            } else {
-                dataReferencia = new Date();
-                dataReferencia.setHours(0, 0, 0, 0);
-                input.value = dataReferencia.toISOString().split('T')[0];
-            }
-            // Reexecutar simulação com nova data para atualizar flag 'vencido'
-            simularCompensacoes();
-            updateAllTables();
-        }
-
         // ========== INICIALIZAÇÃO ==========
         window.onclick = function(event) {
             if (event.target.classList.contains('modal')) {
@@ -3457,7 +3461,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             const hoje = new Date();
             hoje.setHours(0, 0, 0, 0);
             dataReferencia = hoje;
-            document.getElementById('dataReferenciaInput').value = hoje.toISOString().split('T')[0];
             showTab('dashboard');
         });
     </script>
