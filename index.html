@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Banco de Horas - Sistema de Compensação</title>
+    <title>Banco de Horas · Compensação por competência</title>
     <style>
-        /* (mesmo CSS das versões anteriores - mantido para funcionamento completo) */
+        /* ==================== CSS COMPLETO ==================== */
         * {
             margin: 0;
             padding: 0;
@@ -267,6 +267,17 @@
             box-shadow: 0 6px 16px rgba(71, 85, 105, 0.4);
         }
 
+        .btn-refresh {
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: white;
+            margin-left: 16px;
+        }
+
+        .btn-refresh:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(16, 185, 129, 0.4);
+        }
+
         /* Modal */
         .modal {
             display: none;
@@ -489,7 +500,7 @@
         }
 
         .badge-pendente {
-            background: #fed7aa; /* laranja claro */
+            background: #fed7aa;
             color: #9a3412;
         }
 
@@ -505,7 +516,7 @@
             100% { opacity: 1; }
         }
 
-        /* Tooltip para compensações - Melhorado */
+        /* Tooltip para compensações */
         .compensacoes-tooltip {
             position: relative;
             cursor: help;
@@ -602,18 +613,7 @@
             gap: 8px;
         }
 
-        /* Botão de recarregar */
-        .btn-refresh {
-            background: linear-gradient(135deg, #10b981, #059669);
-            color: white;
-            margin-left: 16px;
-        }
-
-        .btn-refresh:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 16px rgba(16, 185, 129, 0.4);
-        }
-
+        /* Header com refresh */
         .header-with-refresh {
             display: flex;
             align-items: center;
@@ -1019,15 +1019,15 @@
                     </div>
                 </div>
 
-                <!-- Data de Referência -->
+                <!-- Data de Referência (apenas visual, não interfere na compensação) -->
                 <div class="data-referencia-bar">
-                    <span class="data-referencia-label">📅 Data de referência:</span>
+                    <span class="data-referencia-label">📅 Data de referência (visual):</span>
                     <input type="date" id="dataReferenciaInput" class="data-referencia-input" value="">
                     <button class="btn btn-primary btn-small" onclick="aplicarDataReferencia()">Aplicar</button>
-                    <span class="data-referencia-info">Use esta data para simular o status histórico</span>
+                    <span class="data-referencia-info">Compensação respeita vencimento (1 ano após competência)</span>
                 </div>
 
-                <!-- Filtros Automáticos -->
+                <!-- Filtros -->
                 <div class="filters-bar">
                     <div class="filter-group">
                         <label>Colaborador</label>
@@ -1072,7 +1072,7 @@
                             </select>
                             <select id="filtroAno" onchange="aplicarFiltros()">
                                 <option value="">Todos</option>
-                                <!-- Anos preenchidos via JS (2020-2030) -->
+                                <!-- Anos preenchidos via JS -->
                             </select>
                         </div>
                     </div>
@@ -1181,7 +1181,7 @@
                             </select>
                             <select id="filtroQuitacaoAno" onchange="aplicarFiltrosQuitacoes()">
                                 <option value="">Todos</option>
-                                <!-- Anos preenchidos via JS (2020-2030) -->
+                                <!-- Anos preenchidos via JS -->
                             </select>
                         </div>
                     </div>
@@ -1298,6 +1298,7 @@
         </div>
     </div>
 
+    <!-- MODAIS -->
     <!-- Modal de Novo Lançamento -->
     <div id="novoLancamentoModal" class="modal">
         <div class="modal-content">
@@ -1341,7 +1342,7 @@
                             <option value="12">Dezembro</option>
                         </select>
                         <select id="novoLancamentoAno" required style="flex: 1;">
-                            <!-- Anos preenchidos via JS (2020-2030) -->
+                            <!-- Anos preenchidos via JS -->
                         </select>
                     </div>
                 </div>
@@ -1392,7 +1393,7 @@
                                 <option value="12">Dezembro</option>
                             </select>
                             <select id="quitacaoAnoPagamento" required style="flex: 1;">
-                                <!-- Anos preenchidos via JS (2020-2030) -->
+                                <!-- Anos preenchidos via JS -->
                             </select>
                         </div>
                     </div>
@@ -1470,44 +1471,20 @@
         </div>
     </div>
 
-    <!-- Modais existentes -->
-    <div id="colaboradorModal" class="modal">
-        <div class="modal-content">
-            <h2 id="colaboradorModalTitle">Novo Colaborador</h2>
-            <form id="colaboradorForm" onsubmit="event.preventDefault(); saveColaborador();">
-                <input type="hidden" id="colaboradorId">
-                <div class="form-group">
-                    <label>Nome Completo:</label>
-                    <input type="text" id="colaboradorNome" required>
-                </div>
-                <div class="form-group">
-                    <label>Data de Admissão:</label>
-                    <input type="text" id="colaboradorData" placeholder="DD/MM/AAAA" required>
-                </div>
-                <div class="form-group">
-                    <label>Departamento:</label>
-                    <select id="colaboradorDepartamento" required>
-                        <option value="">Selecione...</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>Empresa:</label>
-                    <select id="colaboradorEmpresa" required>
-                        <option value="">Selecione...</option>
-                    </select>
-                </div>
-                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 24px;">
-                    <input type="checkbox" id="colaboradorAtivo" checked style="width: 18px; height: 18px;">
-                    <label for="colaboradorAtivo" style="color: #334155;">Colaborador Ativo</label>
-                </div>
-                <div style="display: flex; justify-content: flex-end; gap: 12px;">
-                    <button type="button" class="btn btn-secondary" onclick="hideModal('colaboradorModal')">Cancelar</button>
-                    <button type="submit" class="btn btn-success">Salvar</button>
-                </div>
-            </form>
+    <!-- Modal de Visualização de Compensações -->
+    <div id="visualizarCompensacoesModal" class="modal">
+        <div class="modal-content" style="max-width: 700px;">
+            <h2>Detalhes das Compensações</h2>
+            <div id="compensacoesList" style="max-height: 400px; overflow-y: auto;">
+                <!-- Compensações serão inseridas aqui -->
+            </div>
+            <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 20px;">
+                <button type="button" class="btn btn-secondary" onclick="hideModal('visualizarCompensacoesModal')">Fechar</button>
+            </div>
         </div>
     </div>
 
+    <!-- Modal de Edição de Lançamento -->
     <div id="editLancamentoModal" class="modal">
         <div class="modal-content">
             <h2>Editar Lançamento</h2>
@@ -1548,7 +1525,7 @@
                             <option value="12">Dezembro</option>
                         </select>
                         <select id="editLancamentoAno" required>
-                            <!-- Anos preenchidos via JS (2020-2030) -->
+                            <!-- Anos preenchidos via JS -->
                         </select>
                     </div>
                 </div>
@@ -1560,18 +1537,45 @@
         </div>
     </div>
 
-    <div id="visualizarCompensacoesModal" class="modal">
-        <div class="modal-content" style="max-width: 700px;">
-            <h2>Detalhes das Compensações</h2>
-            <div id="compensacoesList" style="max-height: 400px; overflow-y: auto;">
-                <!-- Compensações serão inseridas aqui -->
-            </div>
-            <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 20px;">
-                <button type="button" class="btn btn-secondary" onclick="hideModal('visualizarCompensacoesModal')">Fechar</button>
-            </div>
+    <!-- Modal de Colaborador -->
+    <div id="colaboradorModal" class="modal">
+        <div class="modal-content">
+            <h2 id="colaboradorModalTitle">Novo Colaborador</h2>
+            <form id="colaboradorForm" onsubmit="event.preventDefault(); saveColaborador();">
+                <input type="hidden" id="colaboradorId">
+                <div class="form-group">
+                    <label>Nome Completo:</label>
+                    <input type="text" id="colaboradorNome" required>
+                </div>
+                <div class="form-group">
+                    <label>Data de Admissão:</label>
+                    <input type="text" id="colaboradorData" placeholder="DD/MM/AAAA" required>
+                </div>
+                <div class="form-group">
+                    <label>Departamento:</label>
+                    <select id="colaboradorDepartamento" required>
+                        <option value="">Selecione...</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Empresa:</label>
+                    <select id="colaboradorEmpresa" required>
+                        <option value="">Selecione...</option>
+                    </select>
+                </div>
+                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 24px;">
+                    <input type="checkbox" id="colaboradorAtivo" checked style="width: 18px; height: 18px;">
+                    <label for="colaboradorAtivo" style="color: #334155;">Colaborador Ativo</label>
+                </div>
+                <div style="display: flex; justify-content: flex-end; gap: 12px;">
+                    <button type="button" class="btn btn-secondary" onclick="hideModal('colaboradorModal')">Cancelar</button>
+                    <button type="submit" class="btn btn-success">Salvar</button>
+                </div>
+            </form>
         </div>
     </div>
 
+    <!-- Modal de Empresa -->
     <div id="empresaModal" class="modal">
         <div class="modal-content">
             <h2 id="empresaModalTitle">Nova Empresa</h2>
@@ -1590,6 +1594,7 @@
         </div>
     </div>
 
+    <!-- Modal de Departamento -->
     <div id="departamentoModal" class="modal">
         <div class="modal-content">
             <h2 id="departamentoModalTitle">Novo Departamento</h2>
@@ -1608,6 +1613,7 @@
         </div>
     </div>
 
+    <!-- Modal de Importação -->
     <div id="importModal" class="modal">
         <div class="modal-content">
             <h2>Importar Planilha</h2>
@@ -1637,7 +1643,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
 
     <script>
-        // Configuração do Firebase
+        // ================= CONFIGURAÇÃO FIREBASE =================
         const firebaseConfig = {
             apiKey: "AIzaSyDY6qtn4JJPXggiswJjUZCt866oycv_LHk",
             authDomain: "gestao-de-banco-de-horas.firebaseapp.com",
@@ -1647,36 +1653,27 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             appId: "1:1071713106694:web:0a164293419ba46b6e7c87"
         };
 
-        // Initialize Firebase
-        let app;
-        let db;
-        let firebaseConnected = false;
-
+        let app, db, firebaseConnected = false;
         try {
             app = firebase.initializeApp(firebaseConfig);
             db = firebase.firestore();
-            
-            const settings = { timestampsInSnapshots: true };
-            db.settings(settings);
-            
-            // Testar conexão
+            db.settings({ timestampsInSnapshots: true });
             db.collection('test').limit(1).get()
                 .then(() => {
-                    console.log('Firebase conectado com sucesso!');
+                    console.log('Firebase conectado!');
                     firebaseConnected = true;
                     loadData();
                 })
-                .catch((error) => {
-                    console.error('Erro ao testar conexão:', error);
+                .catch(() => {
                     firebaseConnected = false;
-                    alert('Erro ao conectar com Firebase. Verifique sua conexão.');
+                    alert('Erro ao conectar ao Firebase. Verifique sua conexão.');
                 });
-        } catch (error) {
-            console.error('Erro ao inicializar Firebase:', error);
+        } catch (e) {
+            console.error('Erro Firebase:', e);
             firebaseConnected = false;
         }
 
-        // Variáveis globais
+        // ================= VARIÁVEIS GLOBAIS =================
         let colaboradores = [];
         let lancamentos = [];
         let quitacoes = [];
@@ -1691,7 +1688,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
         let sortField = 'nome';
         let sortDirection = 'asc';
 
-        // Variáveis para manter estado dos filtros
         let filtrosAtuais = {
             colaboradorId: '',
             departamento: '',
@@ -1700,19 +1696,18 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             ano: ''
         };
 
-        // Data de referência global (inicializada com hoje)
+        // Data de referência (apenas visual)
         let dataReferencia = new Date();
         dataReferencia.setHours(0, 0, 0, 0);
 
-        // ================= FUNÇÕES DE SIMULAÇÃO CRONOLÓGICA CORRIGIDAS =================
+        // ================= FUNÇÕES DE VENCIMENTO (1 ano após competência) =================
         function getVencimentoDate(mes, ano) {
             // Retorna o último dia do mês no ano seguinte
             const anoNum = parseInt(ano);
             const mesNum = parseInt(mes) - 1; // 0-11
-            // Primeiro dia do mês seguinte ao ano seguinte (para obter o último dia do mês desejado)
-            // Ex: para jan/2024 -> queremos 31/jan/2025. Criamos 1/fev/2025 e subtraímos 1 dia.
-            let dataVencimento = new Date(anoNum + 1, mesNum + 1, 1); // primeiro dia do mês seguinte ao vencimento
-            dataVencimento.setDate(dataVencimento.getDate() - 1); // volta um dia, caindo no último dia do mês correto
+            // Primeiro dia do mês seguinte ao ano seguinte e subtrai 1 dia
+            let dataVencimento = new Date(anoNum + 1, mesNum + 1, 1);
+            dataVencimento.setDate(dataVencimento.getDate() - 1);
             return dataVencimento;
         }
 
@@ -1732,177 +1727,92 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             return `${meses[dataVencimento.getMonth()]}/${dataVencimento.getFullYear()}`;
         }
 
-        // Função principal de simulação cronológica (CORRIGIDA)
-        function simularLinhaDoTempo(dataLimite) {
-            console.log('Iniciando simulação cronológica até', dataLimite.toISOString().split('T')[0]);
+        // ========== SIMULAÇÃO DE COMPENSAÇÃO (CORRIGIDA: respeita vencimento de 1 ano) ==========
+        function simularCompensacoes() {
+            console.log('Simulando compensações com prazo de 1 ano');
 
-            // Resetar campos de simulação em todos os lançamentos
+            // Resetar campos de simulação
             lancamentos.forEach(l => {
-                l.saldoRestante = l.horas; // reinicia com o valor original
+                l.saldoRestante = l.horas;
                 l.compensacoes = [];
                 l.compensadoPor = [];
-                l.vencido = false; // agora representa "pendente pagamento"
-                // Se o lançamento já foi quitado por dinheiro, ele será zerado no evento de quitação
+                l.vencido = false; // usado apenas para quitação em dinheiro
             });
 
-            // Para cada colaborador, rodar simulação
+            // Agrupar por colaborador
             const colaboradoresIds = [...new Set(lancamentos.map(l => l.colaboradorId))];
 
             colaboradoresIds.forEach(colabId => {
-                const lancamentosColab = lancamentos.filter(l => l.colaboradorId === colabId);
-                const quitacoesColab = quitacoes.filter(q => q.colaboradorId === colabId);
+                // Pegar lançamentos não quitados
+                const lancamentosColab = lancamentos.filter(l => l.colaboradorId === colabId && !l.quitado);
+                
+                // Separar positivos e negativos, ordenados por data
+                let positivos = lancamentosColab.filter(l => l.tipo === 'positiva').sort((a, b) => dataParaObjeto(a.data) - dataParaObjeto(b.data));
+                let negativos = lancamentosColab.filter(l => l.tipo === 'negativa').sort((a, b) => dataParaObjeto(a.data) - dataParaObjeto(b.data));
 
-                // Mapa para acesso rápido
-                const lancamentosMap = new Map();
-                lancamentosColab.forEach(l => lancamentosMap.set(l.id, l));
+                let iPos = 0, iNeg = 0;
 
-                // Coletar todas as datas de eventos: competências, quitações, vencimentos
-                let datasEventos = new Set();
-
-                lancamentosColab.forEach(l => {
-                    const dataComp = dataParaObjeto(l.data);
-                    datasEventos.add(dataComp.getTime());
-                    const dataVenc = getVencimentoDate(l.mes, l.ano);
-                    datasEventos.add(dataVenc.getTime());
-                });
-
-                quitacoesColab.forEach(q => {
-                    const dataQuit = new Date(q.dataQuitacao);
-                    dataQuit.setHours(0, 0, 0, 0);
-                    datasEventos.add(dataQuit.getTime());
-                });
-
-                datasEventos.add(dataLimite.getTime());
-
-                // Converter para array e ordenar
-                let datasOrdenadas = Array.from(datasEventos).map(t => new Date(t)).sort((a, b) => a - b);
-
-                // Função para obter lançamentos ativos (não quitados e não vencidos)
-                function getAtivos() {
-                    return Array.from(lancamentosMap.values()).filter(l => 
-                        !l.quitado && !l.vencido && l.saldoRestante > 0
-                    );
-                }
-
-                // Processar cada data em ordem
-                for (let i = 0; i < datasOrdenadas.length; i++) {
-                    const dataAtual = datasOrdenadas[i];
+                while (iPos < positivos.length && iNeg < negativos.length) {
+                    const pos = positivos[iPos];
+                    const neg = negativos[iNeg];
                     
-                    // Se ultrapassou a data limite, paramos
-                    if (dataAtual > dataLimite) break;
+                    if (pos.saldoRestante <= 0) { iPos++; continue; }
+                    if (neg.saldoRestante <= 0) { iNeg++; continue; }
 
-                    // 1. Processar quitações que ocorrem exatamente nesta data
-                    quitacoesColab.forEach(q => {
-                        const dataQuit = new Date(q.dataQuitacao);
-                        dataQuit.setHours(0, 0, 0, 0);
-                        if (dataQuit.getTime() === dataAtual.getTime()) {
-                            // Quitação: marcar os lançamentos listados como quitados
-                            q.lancamentos.forEach(lancQuit => {
-                                const lanc = lancamentosMap.get(lancQuit.id);
-                                if (lanc && !lanc.quitado) {
-                                    lanc.quitado = true;
-                                    lanc.saldoRestante = 0; // zera
-                                }
-                            });
-                        }
-                    });
+                    // Verificar se a compensação é permitida dentro do prazo de 1 ano
+                    const dataPos = dataParaObjeto(pos.data);
+                    const dataNeg = dataParaObjeto(neg.data);
+                    const vencPos = getVencimentoDate(pos.mes, pos.ano);
+                    const vencNeg = getVencimentoDate(neg.mes, neg.ano);
 
-                    // 2. Executar compensações FIFO entre os ativos (não vencidos, não quitados)
-                    let ativosPos = getAtivos().filter(l => l.tipo === 'positiva').sort((a, b) => dataParaObjeto(a.data) - dataParaObjeto(b.data));
-                    let ativosNeg = getAtivos().filter(l => l.tipo === 'negativa').sort((a, b) => dataParaObjeto(a.data) - dataParaObjeto(b.data));
+                    // Regra: a hora compensadora deve existir antes do vencimento da hora compensada
+                    const posPodeCompensarNeg = dataPos <= vencNeg;
+                    const negPodeCompensarPos = dataNeg <= vencPos;
 
-                    let iPos = 0, iNeg = 0;
-                    while (iPos < ativosPos.length && iNeg < ativosNeg.length) {
-                        const pos = ativosPos[iPos];
-                        const neg = ativosNeg[iNeg];
-                        
-                        // Verificar se ambos ainda estão ativos (podem ter sido modificados em iterações anteriores)
-                        if (pos.saldoRestante <= 0) { iPos++; continue; }
-                        if (neg.saldoRestante <= 0) { iNeg++; continue; }
-
+                    if (posPodeCompensarNeg && negPodeCompensarPos) {
+                        // Pode compensar
                         const quantidade = Math.min(pos.saldoRestante, neg.saldoRestante);
                         
-                        // Registrar compensação
                         pos.compensacoes.push({
                             lancamentoId: neg.id,
                             quantidade: quantidade,
-                            data: dataAtual.toLocaleDateString('pt-BR'),
+                            data: new Date().toLocaleDateString('pt-BR'),
                             tipo: neg.tipo
                         });
                         neg.compensadoPor.push({
                             lancamentoId: pos.id,
                             quantidade: quantidade,
-                            data: dataAtual.toLocaleDateString('pt-BR'),
+                            data: new Date().toLocaleDateString('pt-BR'),
                             tipo: pos.tipo
                         });
 
                         pos.saldoRestante -= quantidade;
                         neg.saldoRestante -= quantidade;
-
-                        if (pos.saldoRestante === 0) iPos++;
-                        if (neg.saldoRestante === 0) iNeg++;
+                    } else {
+                        // Não podem compensar: avança o mais antigo
+                        if (dataPos <= dataNeg) iPos++; else iNeg++;
                     }
-
-                    // 3. Marcar como vencidos os lançamentos que ainda têm saldo e cuja data de vencimento <= dataAtual
-                    lancamentosColab.forEach(l => {
-                        if (l.quitado || l.vencido) return; // já quitado ou já vencido
-                        const dataVenc = getVencimentoDate(l.mes, l.ano);
-                        if (dataVenc <= dataAtual && l.saldoRestante > 0) {
-                            l.vencido = true;
-                        }
-                    });
                 }
 
-                // Após percorrer todas as datas até a data limite, temos o estado final
-                // Os campos saldoRestante, compensacoes, compensadoPor e vencido já estão atualizados
+                // Marcar como vencidos (para quitação em dinheiro) os negativos que ainda têm saldo e cujo vencimento já passou (em relação à dataReferencia)
+                lancamentosColab.forEach(l => {
+                    if (l.tipo === 'negativa' && !l.quitado && l.saldoRestante > 0) {
+                        const venc = getVencimentoDate(l.mes, l.ano);
+                        if (venc < dataReferencia) {
+                            l.vencido = true;
+                        }
+                    }
+                });
             });
-
-            console.log('Simulação concluída.');
         }
 
-        // Função para calcular status do lançamento baseado na simulação
-        function calcularStatus(lancamento) {
-            if (lancamento.quitado) {
-                return { texto: 'Quitado', classe: 'badge-quitado' };
-            }
-            if (lancamento.saldoRestante === 0) {
-                return { texto: 'Compensada', classe: 'badge-compensada' };
-            }
-            if (lancamento.vencido) {
-                return { texto: 'PENDENTE PAGAMENTO', classe: 'badge-pendente' };
-            }
-            // Se não venceu e tem saldo, calcular dias até o vencimento
-            const dataVencimento = getVencimentoDate(lancamento.mes, lancamento.ano);
-            const diffTime = dataVencimento - dataReferencia;
-            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-            if (diffDays <= 30) {
-                return { texto: 'À vencer em 30 dias', classe: 'badge-warning' };
-            }
-            if (diffDays <= 60) {
-                return { texto: 'À vencer em 60 dias', classe: 'badge-info' };
-            }
-            return { texto: 'Em dia', classe: 'badge-success' };
-        }
-
-        function calcularDiasVencidos(mes, ano) {
-            const dataVencimento = getVencimentoDate(mes, ano);
-            const diffTime = dataReferencia - dataVencimento;
-            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-            return diffDays > 0 ? diffDays : 0;
-        }
-
-        // ============================================================
-        // Funções existentes (mantidas)
-        // ============================================================
-
+        // ========== FUNÇÕES AUXILIARES ==========
         function showLoading(show) {
             document.getElementById('loadingOverlay').style.display = show ? 'flex' : 'none';
         }
 
         function showTab(tabName) {
-            document.querySelectorAll('.tab-content').forEach(tab => {
-                tab.classList.remove('active');
-            });
+            document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
             document.getElementById(tabName).classList.add('active');
             
             document.querySelectorAll('.sidebar-nav li').forEach((item, index) => {
@@ -1918,11 +1828,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             
             if (tabName === 'lancamentos') {
                 carregarFiltros();
-                document.getElementById('filtroColaborador').value = filtrosAtuais.colaboradorId || '';
-                document.getElementById('filtroDepartamento').value = filtrosAtuais.departamento || '';
-                document.getElementById('filtroStatus').value = filtrosAtuais.status || 'ativos';
-                document.getElementById('filtroMes').value = filtrosAtuais.mes || '';
-                document.getElementById('filtroAno').value = filtrosAtuais.ano || '';
                 aplicarFiltros();
             } else if (tabName === 'quitacoes') {
                 carregarFiltrosQuitacoes();
@@ -1935,12 +1840,693 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             document.getElementById(modalId).style.display = 'none';
         }
 
-        function showNovoLancamentoModal() {
+        function horaParaDecimal(horaStr) {
+            const [horas, minutos] = horaStr.split(':').map(Number);
+            return horas + (minutos / 60);
+        }
+
+        function decimalParaHora(decimal) {
+            if (decimal === undefined || decimal === null) return '00:00';
+            const sinal = decimal < 0 ? '-' : '';
+            const absDecimal = Math.abs(decimal);
+            const horas = Math.floor(absDecimal);
+            const minutos = Math.round((absDecimal - horas) * 60);
+            return `${sinal}${horas.toString().padStart(2, '0')}:${minutos.toString().padStart(2, '0')}`;
+        }
+
+        function isValidHora(horaStr) {
+            const regex = /^([0-9]{1,2}):([0-9]{2})$/;
+            if (!regex.test(horaStr)) return false;
+            const [horas, minutos] = horaStr.split(':').map(Number);
+            return horas >= 0 && horas < 100 && minutos >= 0 && minutos < 60;
+        }
+
+        function isValidDate(dateStr) {
+            const regex = /^(\d{2})\/(\d{2})\/(\d{4})$/;
+            if (!regex.test(dateStr)) return false;
+            const [_, dia, mes, ano] = dateStr.match(regex);
+            const data = new Date(ano, mes - 1, dia);
+            return data.getDate() == dia && data.getMonth() == mes - 1;
+        }
+
+        function preencherAnos() {
+            const anos = [];
+            for (let i = 2020; i <= 2030; i++) anos.push(i);
+            
+            const selects = [
+                'novoLancamentoAno', 'filtroAno', 'editLancamentoAno',
+                'quitacaoAnoPagamento', 'filtroQuitacaoAno'
+            ];
+            
+            selects.forEach(selectId => {
+                const select = document.getElementById(selectId);
+                if (select) {
+                    select.innerHTML = '';
+                    if (selectId === 'filtroAno' || selectId === 'filtroQuitacaoAno') {
+                        const optionAll = document.createElement('option');
+                        optionAll.value = '';
+                        optionAll.textContent = 'Todos';
+                        select.appendChild(optionAll);
+                    }
+                    anos.forEach(ano => {
+                        const option = document.createElement('option');
+                        option.value = ano;
+                        option.textContent = ano;
+                        if (ano === new Date().getFullYear() && (selectId !== 'filtroAno' && selectId !== 'filtroQuitacaoAno')) {
+                            option.selected = true;
+                        }
+                        select.appendChild(option);
+                    });
+                }
+            });
+        }
+
+        // ========== CARREGAR DADOS DO FIREBASE ==========
+        async function loadData() {
             if (!firebaseConnected) {
-                alert('Sem conexão com o Firebase.');
+                showLoading(false);
                 return;
             }
             
+            showLoading(true);
+            
+            try {
+                const empresasSnapshot = await db.collection('empresas').get();
+                empresasDocs = empresasSnapshot.docs.map(doc => ({ id: doc.id, nome: doc.data().nome }));
+                empresas = empresasDocs.map(doc => doc.nome);
+
+                const departamentosSnapshot = await db.collection('departamentos').get();
+                departamentosDocs = departamentosSnapshot.docs.map(doc => ({ id: doc.id, nome: doc.data().nome }));
+                departamentos = departamentosDocs.map(doc => doc.nome);
+
+                const colaboradoresSnapshot = await db.collection('colaboradores').get();
+                colaboradores = colaboradoresSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                colaboradores.sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
+
+                const lancamentosSnapshot = await db.collection('lancamentos').get();
+                lancamentos = lancamentosSnapshot.docs.map(doc => {
+                    const data = doc.data();
+                    return {
+                        id: doc.id,
+                        colaboradorId: data.colaboradorId || '',
+                        colaboradorNome: data.colaboradorNome || '',
+                        colaboradorDepartamento: data.colaboradorDepartamento || '',
+                        data: data.data || `01/${data.mes}/${data.ano}`,
+                        mes: data.mes || '01',
+                        ano: data.ano || '2024',
+                        tipo: data.tipo || 'positiva',
+                        horas: typeof data.horas === 'number' ? data.horas : 0,
+                        quitado: data.quitado || false,
+                        quitadoEm: data.quitadoEm || null,
+                        quitacaoId: data.quitacaoId || null
+                    };
+                });
+
+                const quitacoesSnapshot = await db.collection('quitacoes').get();
+                quitacoes = quitacoesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                quitacoes.sort((a, b) => new Date(b.dataQuitacao) - new Date(a.dataQuitacao));
+
+                // Ordenar lançamentos por data (mais antigos primeiro) para simulação
+                lancamentos.sort((a, b) => dataParaObjeto(a.data) - dataParaObjeto(b.data));
+
+                // Executar simulação de compensação
+                simularCompensacoes();
+
+                // Atualizar todas as telas
+                updateAllTables();
+                
+            } catch (error) {
+                console.error('Erro ao carregar dados:', error);
+                alert('Erro ao carregar dados: ' + error.message);
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // ========== FUNÇÕES DE RENDERIZAÇÃO ==========
+        function updateAllTables() {
+            updateEmpresasTable();
+            updateDepartamentosTable();
+            updateDashboard();
+            carregarFiltros();
+            carregarFiltrosQuitacoes();
+            aplicarFiltrosQuitacoes();
+            filterColaboradores();
+            renderizarHorasVencidas();
+        }
+
+        function updateEmpresasTable() {
+            const tbody = document.getElementById('empresasList');
+            const alert = document.getElementById('empresasAlert');
+            
+            tbody.innerHTML = '';
+
+            if (empresas.length === 0) {
+                alert.classList.remove('hidden');
+                return;
+            }
+
+            alert.classList.add('hidden');
+            empresas.sort().forEach(empresa => {
+                tbody.innerHTML += `
+                    <tr>
+                        <td>${empresa}</td>
+                        <td>
+                            <button class="btn btn-primary btn-small" onclick="showEmpresaModal('${empresa}')">Editar</button>
+                            <button class="btn btn-danger btn-small" onclick="deleteEmpresa('${empresa}')">Excluir</button>
+                        </td>
+                    </tr>
+                `;
+            });
+        }
+
+        function updateDepartamentosTable() {
+            const tbody = document.getElementById('departamentosList');
+            const alert = document.getElementById('departamentosAlert');
+            
+            tbody.innerHTML = '';
+
+            if (departamentos.length === 0) {
+                alert.classList.remove('hidden');
+                return;
+            }
+
+            alert.classList.add('hidden');
+            departamentos.sort().forEach(depto => {
+                tbody.innerHTML += `
+                    <tr>
+                        <td>${depto}</td>
+                        <td>
+                            <button class="btn btn-primary btn-small" onclick="showDepartamentoModal('${depto}')">Editar</button>
+                            <button class="btn btn-danger btn-small" onclick="deleteDepartamento('${depto}')">Excluir</button>
+                        </td>
+                    </tr>
+                `;
+            });
+        }
+
+        function updateDashboard() {
+            document.getElementById('totalColaboradores').textContent = colaboradores.filter(c => c.ativo !== false).length;
+            
+            let totalPositivas = lancamentos
+                .filter(l => l.tipo === 'positiva')
+                .reduce((sum, l) => sum + l.horas, 0);
+            let totalNegativas = lancamentos
+                .filter(l => l.tipo === 'negativa')
+                .reduce((sum, l) => sum + l.horas, 0);
+            
+            document.getElementById('totalHorasPositivas').textContent = decimalParaHora(totalPositivas);
+            document.getElementById('totalHorasNegativas').textContent = decimalParaHora(totalNegativas);
+            document.getElementById('saldoLiquido').textContent = decimalParaHora(totalPositivas - totalNegativas);
+
+            const activities = document.getElementById('recentActivities');
+            
+            if (lancamentos.length === 0) {
+                activities.innerHTML = '<div style="text-align: center; padding: 20px;">Nenhum lançamento recente</div>';
+                return;
+            }
+
+            activities.innerHTML = lancamentos.slice(-5).reverse().map(lanc => {
+                const colaborador = colaboradores.find(c => c.id === lanc.colaboradorId);
+                if (!colaborador) return '';
+                
+                const tipoClass = lanc.tipo === 'positiva' ? 'badge-success' : 'badge-danger';
+                const tipoIcon = lanc.tipo === 'positiva' ? '➕' : '➖';
+                const status = calcularStatus(lanc);
+                
+                return `
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px; border-bottom: 1px solid #f1f5f9;">
+                        <div>
+                            <strong>${colaborador.nome}</strong>
+                            <span class="badge ${tipoClass}" style="margin-left: 8px;">${tipoIcon} ${decimalParaHora(lanc.horas)}</span>
+                            <span class="badge ${status.classe}" style="margin-left: 8px;">${status.texto}</span>
+                        </div>
+                        <span style="color: #64748b;">${lanc.data}</span>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function calcularStatus(lancamento) {
+            if (lancamento.quitado) return { texto: 'Quitado', classe: 'badge-quitado' };
+            if (lancamento.saldoRestante === 0) return { texto: 'Compensada', classe: 'badge-compensada' };
+            if (lancamento.vencido) return { texto: 'Pendente Pagamento', classe: 'badge-pendente' };
+            return { texto: 'A compensar', classe: 'badge-info' };
+        }
+
+        function gerarTooltipCompensacoes(lancamento) {
+            let tooltip = '';
+            
+            if (lancamento.compensacoes && lancamento.compensacoes.length > 0) {
+                tooltip += '🔽 COMPENSOU:\n';
+                lancamento.compensacoes.forEach(comp => {
+                    const lancComp = lancamentos.find(l => l.id === comp.lancamentoId);
+                    if (lancComp) {
+                        const competencia = formatarCompetencia(lancComp.mes, lancComp.ano);
+                        const tipoIcon = lancComp.tipo === 'positiva' ? '➕' : '➖';
+                        tooltip += `  • ${competencia} ${tipoIcon}: ${decimalParaHora(comp.quantidade)}\n`;
+                    }
+                });
+            }
+            
+            if (lancamento.compensadoPor && lancamento.compensadoPor.length > 0) {
+                if (tooltip) tooltip += '\n';
+                tooltip += '🔼 FOI COMPENSADO POR:\n';
+                lancamento.compensadoPor.forEach(comp => {
+                    const lancComp = lancamentos.find(l => l.id === comp.lancamentoId);
+                    if (lancComp) {
+                        const competencia = formatarCompetencia(lancComp.mes, lancComp.ano);
+                        const tipoIcon = lancComp.tipo === 'positiva' ? '➕' : '➖';
+                        tooltip += `  • ${competencia} ${tipoIcon}: ${decimalParaHora(comp.quantidade)}\n`;
+                    }
+                });
+            }
+            
+            if (!tooltip) {
+                tooltip = 'Nenhuma compensação registrada';
+            }
+            
+            return tooltip;
+        }
+
+        function calcularDiasVencidos(mes, ano) {
+            const dataVencimento = getVencimentoDate(mes, ano);
+            const diffTime = dataReferencia - dataVencimento;
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            return diffDays > 0 ? diffDays : 0;
+        }
+
+        // ========== FUNÇÕES DE FILTRO E RENDER DE LANÇAMENTOS ==========
+        function carregarFiltros() {
+            const filtroColab = document.getElementById('filtroColaborador');
+            filtroColab.innerHTML = '<option value="">Todos os colaboradores</option>';
+            
+            colaboradores.sort((a, b) => a.nome.localeCompare(b.nome)).forEach(colab => {
+                const status = colab.ativo !== false ? '' : ' (Inativo)';
+                filtroColab.innerHTML += `<option value="${colab.id}">${colab.nome}${status}</option>`;
+            });
+
+            const filtroDepto = document.getElementById('filtroDepartamento');
+            filtroDepto.innerHTML = '<option value="">Todos os departamentos</option>';
+            const deptosUnicos = [...new Set(colaboradores.map(c => c.departamento))];
+            deptosUnicos.sort().forEach(depto => {
+                filtroDepto.innerHTML += `<option value="${depto}">${depto}</option>`;
+            });
+
+            preencherAnos();
+        }
+
+        function aplicarFiltros() {
+            const colaboradorId = document.getElementById('filtroColaborador').value;
+            const departamento = document.getElementById('filtroDepartamento').value;
+            const status = document.getElementById('filtroStatus').value;
+            const mes = document.getElementById('filtroMes').value;
+            const ano = document.getElementById('filtroAno').value;
+
+            filtrosAtuais = { colaboradorId, departamento, status, mes, ano };
+
+            if (!colaboradorId && !departamento && !mes && !ano && status === 'todos') {
+                document.getElementById('semResultadosMsg').style.display = 'block';
+                document.getElementById('lancamentosTable').style.display = 'none';
+                document.getElementById('contadorLancamentos').textContent = '0 lançamentos';
+                document.getElementById('resumoSaldoContainer').style.display = 'none';
+                return;
+            }
+
+            let lancamentosFiltrados = [...lancamentos];
+
+            if (colaboradorId) {
+                lancamentosFiltrados = lancamentosFiltrados.filter(l => l.colaboradorId === colaboradorId);
+            }
+
+            if (departamento) {
+                lancamentosFiltrados = lancamentosFiltrados.filter(l => l.colaboradorDepartamento === departamento);
+            }
+
+            if (status !== 'todos') {
+                const statusAtivo = status === 'ativos';
+                lancamentosFiltrados = lancamentosFiltrados.filter(l => {
+                    const colaborador = colaboradores.find(c => c.id === l.colaboradorId);
+                    const colaboradorAtivo = colaborador ? colaborador.ativo !== false : true;
+                    return colaboradorAtivo === statusAtivo;
+                });
+            }
+
+            if (mes) lancamentosFiltrados = lancamentosFiltrados.filter(l => l.mes === mes);
+            if (ano) lancamentosFiltrados = lancamentosFiltrados.filter(l => l.ano === ano);
+
+            document.getElementById('contadorLancamentos').textContent = `${lancamentosFiltrados.length} lançamentos`;
+
+            const resumoContainer = document.getElementById('resumoSaldoContainer');
+            if (colaboradorId) {
+                const colaborador = colaboradores.find(c => c.id === colaboradorId);
+                if (colaborador) {
+                    document.getElementById('resumoColaboradorNome').textContent = colaborador.nome;
+                    
+                    const saldoTotal = lancamentos
+                        .filter(l => l.colaboradorId === colaboradorId)
+                        .reduce((sum, l) => {
+                            return l.tipo === 'positiva' ? sum + l.horas : sum - l.horas;
+                        }, 0);
+                    
+                    document.getElementById('resumoSaldoTotal').textContent = decimalParaHora(saldoTotal);
+                    resumoContainer.style.display = 'flex';
+                }
+            } else {
+                resumoContainer.style.display = 'none';
+            }
+
+            renderizarTabelaLancamentos(lancamentosFiltrados);
+        }
+
+        function renderizarTabelaLancamentos(lancamentosFiltrados) {
+            const tbody = document.getElementById('lancamentosList');
+            const tabela = document.getElementById('lancamentosTable');
+            const semResultados = document.getElementById('semResultadosMsg');
+
+            if (lancamentosFiltrados.length === 0) {
+                tabela.style.display = 'none';
+                semResultados.style.display = 'block';
+                semResultados.textContent = 'Nenhum lançamento encontrado com os filtros selecionados.';
+                return;
+            }
+
+            tabela.style.display = 'table';
+            semResultados.style.display = 'none';
+            tbody.innerHTML = '';
+
+            // Ordenar por data decrescente
+            lancamentosFiltrados.sort((a, b) => dataParaObjeto(b.data) - dataParaObjeto(a.data));
+
+            // Calcular saldo acumulado por colaborador
+            const lancamentosPorColaborador = {};
+            lancamentosFiltrados.forEach(l => {
+                if (!lancamentosPorColaborador[l.colaboradorId]) lancamentosPorColaborador[l.colaboradorId] = [];
+                lancamentosPorColaborador[l.colaboradorId].push(l);
+            });
+
+            const saldosAcumulados = {};
+            Object.keys(lancamentosPorColaborador).forEach(colabId => {
+                const lancs = lancamentosPorColaborador[colabId];
+                let saldo = 0;
+                const saldoMap = new Map();
+                lancs.sort((a, b) => dataParaObjeto(a.data) - dataParaObjeto(b.data)).forEach(l => {
+                    if (l.tipo === 'positiva') saldo += l.horas;
+                    else saldo -= l.horas;
+                    saldoMap.set(l.id, saldo);
+                });
+                saldosAcumulados[colabId] = saldoMap;
+            });
+
+            lancamentosFiltrados.forEach(lanc => {
+                const colaborador = colaboradores.find(c => c.id === lanc.colaboradorId);
+                if (!colaborador) return;
+
+                const competencia = formatarCompetencia(lanc.mes, lanc.ano);
+                const vencimento = calcularVencimento(lanc.mes, lanc.ano);
+                const status = calcularStatus(lanc);
+                
+                const quantidadeIcon = lanc.tipo === 'positiva' ? '➕' : '➖';
+                
+                const saldoAcumulado = saldosAcumulados[lanc.colaboradorId]?.get(lanc.id) || 0;
+                
+                const horasFaltantes = lanc.saldoRestante !== undefined ? lanc.saldoRestante : lanc.horas;
+                
+                const tooltipText = gerarTooltipCompensacoes(lanc);
+                
+                const compensacoesText = horasFaltantes > 0 ? 
+                    `<span class="badge badge-warning compensacoes-tooltip" data-tooltip="${tooltipText}">Falta ${decimalParaHora(horasFaltantes)}</span>` : 
+                    `<span class="badge badge-success compensacoes-tooltip" data-tooltip="${tooltipText}">Completo</span>`;
+
+                const visualizarBtn = (lanc.compensacoes && lanc.compensacoes.length > 0) || (lanc.compensadoPor && lanc.compensadoPor.length > 0) ?
+                    `<button class="btn btn-info btn-small" onclick="showVisualizarCompensacoesModal('${lanc.id}')" title="Ver detalhes das compensações">🔍</button>` : '';
+
+                const quitarBtn = (lanc.tipo === 'negativa' && !lanc.quitado && horasFaltantes > 0 && lanc.vencido) ?
+                    `<button class="btn btn-primary btn-small" onclick="showNovaQuitacaoParaColaborador('${lanc.colaboradorId}')" title="Quitar horas vencidas">💰</button>` : '';
+
+                tbody.innerHTML += `
+                    <tr>
+                        <td><strong>${colaborador.nome}</strong><br><small style="color: #64748b;">${colaborador.departamento}</small></td>
+                        <td><span class="badge ${lanc.tipo === 'positiva' ? 'badge-success' : 'badge-danger'}">${quantidadeIcon} ${decimalParaHora(lanc.horas)}</span></td>
+                        <td>${competencia}</td>
+                        <td>${vencimento}</td>
+                        <td><span class="badge ${status.classe} compensacoes-tooltip" data-tooltip="${tooltipText}" style="cursor: help;">${status.texto}</span></td>
+                        <td><span class="badge ${saldoAcumulado >= 0 ? 'badge-success' : 'badge-danger'}">${decimalParaHora(saldoAcumulado)}</span></td>
+                        <td>${compensacoesText}</td>
+                        <td>
+                            <div class="action-buttons">
+                                ${visualizarBtn}
+                                ${quitarBtn}
+                                <button class="btn btn-warning btn-small" onclick="showEditLancamentoModal('${lanc.id}')">✏️</button>
+                                <button class="btn btn-danger btn-small" onclick="deleteLancamento('${lanc.id}')">🗑️</button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            });
+        }
+
+        // ========== FUNÇÕES DE COLABORADORES ==========
+        function loadSelects() {
+            const deptoSelect = document.getElementById('colaboradorDepartamento');
+            const empresaSelect = document.getElementById('colaboradorEmpresa');
+            
+            deptoSelect.innerHTML = '<option value="">Selecione...</option>';
+            empresaSelect.innerHTML = '<option value="">Selecione...</option>';
+            
+            departamentos.sort().forEach(depto => {
+                deptoSelect.innerHTML += `<option value="${depto}">${depto}</option>`;
+            });
+            
+            empresas.sort().forEach(empresa => {
+                empresaSelect.innerHTML += `<option value="${empresa}">${empresa}</option>`;
+            });
+        }
+
+        function showColaboradorModal(editId = null) {
+            if (!firebaseConnected) { alert('Sem conexão com o Firebase.'); return; }
+            if (empresas.length === 0 || departamentos.length === 0) {
+                alert('Cadastre empresas e departamentos primeiro!');
+                showTab('configuracoes');
+                return;
+            }
+            
+            loadSelects();
+            document.getElementById('colaboradorModal').style.display = 'block';
+            
+            if (editId) {
+                document.getElementById('colaboradorModalTitle').textContent = 'Editar Colaborador';
+                const colab = colaboradores.find(c => c.id === editId);
+                if (colab) {
+                    document.getElementById('colaboradorId').value = colab.id;
+                    document.getElementById('colaboradorNome').value = colab.nome;
+                    document.getElementById('colaboradorData').value = colab.dataAdmissao;
+                    document.getElementById('colaboradorDepartamento').value = colab.departamento;
+                    document.getElementById('colaboradorEmpresa').value = colab.empresa;
+                    document.getElementById('colaboradorAtivo').checked = colab.ativo !== false;
+                }
+            } else {
+                document.getElementById('colaboradorModalTitle').textContent = 'Novo Colaborador';
+                document.getElementById('colaboradorId').value = '';
+                document.getElementById('colaboradorForm').reset();
+                document.getElementById('colaboradorAtivo').checked = true;
+            }
+        }
+
+        async function saveColaborador() {
+            const id = document.getElementById('colaboradorId').value;
+            const nome = document.getElementById('colaboradorNome').value.trim();
+            const data = document.getElementById('colaboradorData').value;
+            const departamento = document.getElementById('colaboradorDepartamento').value;
+            const empresa = document.getElementById('colaboradorEmpresa').value;
+            const ativo = document.getElementById('colaboradorAtivo').checked;
+
+            if (!nome || !data || !departamento || !empresa) {
+                alert('Preencha todos os campos!');
+                return;
+            }
+
+            if (!isValidDate(data)) {
+                alert('Data inválida! Use o formato DD/MM/AAAA');
+                return;
+            }
+
+            showLoading(true);
+            try {
+                const colaboradorData = {
+                    nome,
+                    dataAdmissao: data,
+                    departamento,
+                    empresa,
+                    horasPositivas: 0,
+                    horasNegativas: 0,
+                    ativo: ativo,
+                    updatedAt: new Date().toISOString()
+                };
+
+                if (id) {
+                    await db.collection('colaboradores').doc(id).update(colaboradorData);
+                } else {
+                    colaboradorData.createdAt = new Date().toISOString();
+                    await db.collection('colaboradores').add(colaboradorData);
+                }
+
+                await loadData();
+                hideModal('colaboradorModal');
+            } catch (error) {
+                console.error('Erro ao salvar colaborador:', error);
+                alert('Erro ao salvar: ' + error.message);
+            }
+            showLoading(false);
+        }
+
+        function filterColaboradores() {
+            const searchTerm = document.getElementById('searchColaborador').value.toLowerCase();
+            const statusFilter = document.getElementById('filterStatus').value;
+            const deptoFilter = document.getElementById('filterDepartamento').value;
+            const empresaFilter = document.getElementById('filterEmpresa').value;
+
+            colaboradoresFiltrados = colaboradores.filter(colab => {
+                const matchSearch = colab.nome.toLowerCase().includes(searchTerm) ||
+                                  colab.departamento.toLowerCase().includes(searchTerm) ||
+                                  colab.empresa.toLowerCase().includes(searchTerm);
+                const matchDepto = !deptoFilter || colab.departamento === deptoFilter;
+                const matchEmpresa = !empresaFilter || colab.empresa === empresaFilter;
+                
+                let matchStatus = true;
+                if (statusFilter === 'ativos') matchStatus = colab.ativo !== false;
+                else if (statusFilter === 'inativos') matchStatus = colab.ativo === false;
+                
+                return matchSearch && matchDepto && matchEmpresa && matchStatus;
+            });
+
+            colaboradoresFiltrados.sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
+            sortField = 'nome';
+            sortDirection = 'asc';
+            currentPage = 1;
+            updateColaboradoresTable();
+        }
+
+        function sortColaboradores(field) {
+            if (sortField === field) {
+                sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+            } else {
+                sortField = field;
+                sortDirection = 'asc';
+            }
+
+            colaboradoresFiltrados.sort((a, b) => {
+                let valA = a[field];
+                let valB = b[field];
+                
+                if (field === 'dataAdmissao') {
+                    const [dA, mA, yA] = valA.split('/');
+                    const [dB, mB, yB] = valB.split('/');
+                    valA = new Date(yA, mA - 1, dA);
+                    valB = new Date(yB, mB - 1, dB);
+                } else {
+                    valA = String(valA || '').toLowerCase();
+                    valB = String(valB || '').toLowerCase();
+                }
+                
+                if (valA < valB) return sortDirection === 'asc' ? -1 : 1;
+                if (valA > valB) return sortDirection === 'asc' ? 1 : -1;
+                return 0;
+            });
+
+            updateColaboradoresTable();
+        }
+
+        function updateColaboradoresTable() {
+            const tbody = document.getElementById('colaboradoresList');
+            const start = (currentPage - 1) * itemsPerPage;
+            const end = start + itemsPerPage;
+            const paginatedColabs = colaboradoresFiltrados.slice(start, end);
+
+            tbody.innerHTML = '';
+
+            if (colaboradoresFiltrados.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 40px;">Nenhum colaborador encontrado.</td></tr>';
+                updatePagination();
+                return;
+            }
+
+            paginatedColabs.forEach(colab => {
+                const lancamentosColab = lancamentos.filter(l => l.colaboradorId === colab.id);
+                const saldoTotal = lancamentosColab.reduce((sum, l) => {
+                    return l.tipo === 'positiva' ? sum + l.horas : sum - l.horas;
+                }, 0);
+                
+                const statusClass = saldoTotal >= 0 ? 'badge-success' : 'badge-danger';
+                const statusText = colab.ativo !== false ? 
+                    '<span class="badge badge-success">Ativo</span>' : 
+                    '<span class="badge badge-danger">Inativo</span>';
+                
+                tbody.innerHTML += `
+                    <tr>
+                        <td>${colab.nome}</td>
+                        <td>${colab.dataAdmissao}</td>
+                        <td>${colab.departamento}</td>
+                        <td>${colab.empresa}</td>
+                        <td><span class="badge ${statusClass}">${decimalParaHora(saldoTotal)}</span></td>
+                        <td>${statusText}</td>
+                        <td>
+                            <button class="btn btn-primary btn-small" onclick="showColaboradorModal('${colab.id}')">Editar</button>
+                            <button class="btn btn-danger btn-small" onclick="deleteColaborador('${colab.id}')">Excluir</button>
+                        </td>
+                    </tr>
+                `;
+            });
+
+            updatePagination();
+        }
+
+        function updatePagination() {
+            const totalPages = Math.ceil(colaboradoresFiltrados.length / itemsPerPage);
+            const pagination = document.getElementById('pagination');
+            
+            if (totalPages <= 1) {
+                pagination.innerHTML = '';
+                return;
+            }
+
+            let html = '';
+            for (let i = 1; i <= totalPages; i++) {
+                html += `<button class="btn ${i === currentPage ? 'btn-primary' : 'btn-secondary'}" style="padding: 8px 12px;" onclick="goToPage(${i})">${i}</button>`;
+            }
+            pagination.innerHTML = html;
+        }
+
+        function goToPage(page) {
+            currentPage = page;
+            updateColaboradoresTable();
+        }
+
+        async function deleteColaborador(id) {
+            const colaborador = colaboradores.find(c => c.id === id);
+            if (!colaborador) return;
+
+            if (confirm(`Excluir "${colaborador.nome}"?`)) {
+                showLoading(true);
+                try {
+                    const lancamentosRelacionados = lancamentos.filter(l => l.colaboradorId === id);
+                    for (const lanc of lancamentosRelacionados) {
+                        await db.collection('lancamentos').doc(lanc.id).delete();
+                    }
+                    
+                    await db.collection('colaboradores').doc(id).delete();
+                    await loadData();
+                } catch (error) {
+                    console.error('Erro ao deletar:', error);
+                    alert('Erro ao deletar: ' + error.message);
+                }
+                showLoading(false);
+            }
+        }
+
+        // ========== FUNÇÕES DE LANÇAMENTOS ==========
+        function showNovoLancamentoModal() {
+            if (!firebaseConnected) { alert('Sem conexão com o Firebase.'); return; }
             if (colaboradores.length === 0) {
                 alert('Cadastre colaboradores primeiro!');
                 showTab('colaboradores');
@@ -1959,16 +2545,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 if (option) option.selected = true;
             }
             
-            const anoSelect = document.getElementById('novoLancamentoAno');
-            anoSelect.innerHTML = '';
-            for (let i = 2020; i <= 2030; i++) {
-                const option = document.createElement('option');
-                option.value = i;
-                option.textContent = i;
-                if (i === new Date().getFullYear()) option.selected = true;
-                anoSelect.appendChild(option);
-            }
-            
+            preencherAnos();
             document.getElementById('novoLancamentoForm').reset();
             document.getElementById('novoLancamentoHoras').value = '00:00';
             
@@ -2045,49 +2622,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             showLoading(false);
         }
 
-        function recarregarDados() {
-            if (firebaseConnected) {
-                loadData();
-            } else {
-                alert('Sem conexão com o Firebase.');
-            }
-        }
-
-        // Funções para modais (mantidas)
-        function showColaboradorModal(editId = null) {
-            if (!firebaseConnected) {
-                alert('Sem conexão com o Firebase.');
-                return;
-            }
-            
-            if (empresas.length === 0 || departamentos.length === 0) {
-                alert('Cadastre empresas e departamentos primeiro!');
-                showTab('configuracoes');
-                return;
-            }
-            
-            loadSelects();
-            document.getElementById('colaboradorModal').style.display = 'block';
-            
-            if (editId) {
-                document.getElementById('colaboradorModalTitle').textContent = 'Editar Colaborador';
-                const colab = colaboradores.find(c => c.id === editId);
-                if (colab) {
-                    document.getElementById('colaboradorId').value = colab.id;
-                    document.getElementById('colaboradorNome').value = colab.nome;
-                    document.getElementById('colaboradorData').value = colab.dataAdmissao;
-                    document.getElementById('colaboradorDepartamento').value = colab.departamento;
-                    document.getElementById('colaboradorEmpresa').value = colab.empresa;
-                    document.getElementById('colaboradorAtivo').checked = colab.ativo !== false;
-                }
-            } else {
-                document.getElementById('colaboradorModalTitle').textContent = 'Novo Colaborador';
-                document.getElementById('colaboradorId').value = '';
-                document.getElementById('colaboradorForm').reset();
-                document.getElementById('colaboradorAtivo').checked = true;
-            }
-        }
-
         function showEditLancamentoModal(id) {
             const lanc = lancamentos.find(l => l.id === id);
             if (!lanc) return;
@@ -2114,6 +2648,93 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             document.getElementById('editLancamentoModal').style.display = 'block';
         }
 
+        async function updateLancamento() {
+            const id = document.getElementById('editLancamentoId').value;
+            const colaboradorId = document.getElementById('editLancamentoColaborador').value;
+            const tipo = document.getElementById('editLancamentoTipo').value;
+            const horaStr = document.getElementById('editLancamentoHoras').value;
+            const mes = document.getElementById('editLancamentoMes').value;
+            const ano = document.getElementById('editLancamentoAno').value;
+
+            if (!colaboradorId || !tipo || !horaStr || !mes || !ano) {
+                alert('Preencha todos os campos!');
+                return;
+            }
+
+            if (!isValidHora(horaStr)) {
+                alert('Formato de hora inválido!');
+                return;
+            }
+
+            const horas = horaParaDecimal(horaStr);
+            if (horas < 0) {
+                alert('A quantidade de horas não pode ser negativa!');
+                return;
+            }
+
+            const colaborador = colaboradores.find(c => c.id === colaboradorId);
+            if (!colaborador) {
+                alert('Colaborador não encontrado!');
+                return;
+            }
+
+            const data = `01/${mes}/${ano}`;
+
+            showLoading(true);
+            try {
+                await db.collection('lancamentos').doc(id).update({
+                    colaboradorId: colaboradorId,
+                    colaboradorNome: colaborador.nome || '',
+                    colaboradorDepartamento: colaborador.departamento || '',
+                    data: data,
+                    mes: mes,
+                    ano: ano,
+                    tipo: tipo,
+                    horas: horas,
+                    updatedAt: new Date().toISOString()
+                });
+
+                await loadData();
+                hideModal('editLancamentoModal');
+                
+                document.getElementById('filtroColaborador').value = filtrosAtuais.colaboradorId || '';
+                document.getElementById('filtroDepartamento').value = filtrosAtuais.departamento || '';
+                document.getElementById('filtroStatus').value = filtrosAtuais.status || 'ativos';
+                document.getElementById('filtroMes').value = filtrosAtuais.mes || '';
+                document.getElementById('filtroAno').value = filtrosAtuais.ano || '';
+                aplicarFiltros();
+                
+                alert('Lançamento atualizado com sucesso!');
+            } catch (error) {
+                console.error('Erro ao atualizar:', error);
+                alert('Erro ao atualizar: ' + error.message);
+            }
+            showLoading(false);
+        }
+
+        async function deleteLancamento(id) {
+            if (!confirm('Tem certeza que deseja excluir este lançamento?')) return;
+
+            showLoading(true);
+            try {
+                await db.collection('lancamentos').doc(id).delete();
+                await loadData();
+                
+                document.getElementById('filtroColaborador').value = filtrosAtuais.colaboradorId || '';
+                document.getElementById('filtroDepartamento').value = filtrosAtuais.departamento || '';
+                document.getElementById('filtroStatus').value = filtrosAtuais.status || 'ativos';
+                document.getElementById('filtroMes').value = filtrosAtuais.mes || '';
+                document.getElementById('filtroAno').value = filtrosAtuais.ano || '';
+                aplicarFiltros();
+                
+                alert('Lançamento excluído com sucesso!');
+            } catch (error) {
+                console.error('Erro ao excluir:', error);
+                alert('Erro ao excluir: ' + error.message);
+            }
+            showLoading(false);
+        }
+
         function showVisualizarCompensacoesModal(lancamentoId) {
             const lanc = lancamentos.find(l => l.id === lancamentoId);
             if (!lanc || (!lanc.compensacoes || lanc.compensacoes.length === 0) && (!lanc.compensadoPor || lanc.compensadoPor.length === 0)) {
@@ -2137,12 +2758,10 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 lanc.compensacoes.forEach(comp => {
                     const lancComp = lancamentos.find(l => l.id === comp.lancamentoId);
                     if (lancComp) {
-                        const tipoIcon = lancComp.tipo === 'positiva' ? '➕' : '➖';
                         html += `
                             <div style="padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 8px;">
-                                <strong>${formatarCompetencia(lancComp.mes, lancComp.ano)} ${tipoIcon}</strong><br>
-                                Quantidade compensada: ${decimalParaHora(comp.quantidade)}<br>
-                                Data: ${comp.data || 'N/A'}
+                                <strong>${formatarCompetencia(lancComp.mes, lancComp.ano)}</strong><br>
+                                Quantidade compensada: ${decimalParaHora(comp.quantidade)}
                             </div>
                         `;
                     }
@@ -2154,12 +2773,10 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 lanc.compensadoPor.forEach(comp => {
                     const lancComp = lancamentos.find(l => l.id === comp.lancamentoId);
                     if (lancComp) {
-                        const tipoIcon = lancComp.tipo === 'positiva' ? '➕' : '➖';
                         html += `
                             <div style="padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 8px;">
-                                <strong>${formatarCompetencia(lancComp.mes, lancComp.ano)} ${tipoIcon}</strong><br>
-                                Quantidade: ${decimalParaHora(comp.quantidade)}<br>
-                                Data: ${comp.data || 'N/A'}
+                                <strong>${formatarCompetencia(lancComp.mes, lancComp.ano)}</strong><br>
+                                Quantidade: ${decimalParaHora(comp.quantidade)}
                             </div>
                         `;
                     }
@@ -2170,52 +2787,145 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             document.getElementById('visualizarCompensacoesModal').style.display = 'block';
         }
 
-        function showEmpresaModal(editNome = null) {
-            document.getElementById('empresaModal').style.display = 'block';
-            if (editNome) {
-                document.getElementById('empresaModalTitle').textContent = 'Editar Empresa';
-                document.getElementById('empresaNome').value = editNome;
-                document.getElementById('empresaNomeOriginal').value = editNome;
-                const empresaDoc = empresasDocs.find(doc => doc.nome === editNome);
-                if (empresaDoc) {
-                    document.getElementById('empresaId').value = empresaDoc.id;
-                }
-            } else {
-                document.getElementById('empresaModalTitle').textContent = 'Nova Empresa';
-                document.getElementById('empresaId').value = '';
-                document.getElementById('empresaNomeOriginal').value = '';
-                document.getElementById('empresaNome').value = '';
-            }
+        // ========== FUNÇÕES DE QUITAÇÕES ==========
+        function carregarFiltrosQuitacoes() {
+            const filtroColab = document.getElementById('filtroQuitacaoColaborador');
+            filtroColab.innerHTML = '<option value="">Todos os colaboradores</option>';
+            
+            colaboradores.sort((a, b) => a.nome.localeCompare(b.nome)).forEach(colab => {
+                const status = colab.ativo !== false ? '' : ' (Inativo)';
+                filtroColab.innerHTML += `<option value="${colab.id}">${colab.nome}${status}</option>`;
+            });
+
+            const filtroDepto = document.getElementById('filtroQuitacaoDepartamento');
+            filtroDepto.innerHTML = '<option value="">Todos os departamentos</option>';
+            const deptosUnicos = [...new Set(colaboradores.map(c => c.departamento))];
+            deptosUnicos.sort().forEach(depto => {
+                filtroDepto.innerHTML += `<option value="${depto}">${depto}</option>`;
+            });
+
+            preencherAnos();
         }
 
-        function showDepartamentoModal(editNome = null) {
-            document.getElementById('departamentoModal').style.display = 'block';
-            if (editNome) {
-                document.getElementById('departamentoModalTitle').textContent = 'Editar Departamento';
-                document.getElementById('departamentoNome').value = editNome;
-                document.getElementById('departamentoNomeOriginal').value = editNome;
-                const deptoDoc = departamentosDocs.find(doc => doc.nome === editNome);
-                if (deptoDoc) {
-                    document.getElementById('departamentoId').value = deptoDoc.id;
-                }
-            } else {
-                document.getElementById('departamentoModalTitle').textContent = 'Novo Departamento';
-                document.getElementById('departamentoId').value = '';
-                document.getElementById('departamentoNomeOriginal').value = '';
-                document.getElementById('departamentoNome').value = '';
-            }
+        function aplicarFiltrosQuitacoes() {
+            const colaboradorId = document.getElementById('filtroQuitacaoColaborador').value;
+            const departamento = document.getElementById('filtroQuitacaoDepartamento').value;
+            const status = document.getElementById('filtroQuitacaoStatus').value;
+            const mes = document.getElementById('filtroQuitacaoMes').value;
+            const ano = document.getElementById('filtroQuitacaoAno').value;
+
+            let quitacoesFiltradas = [...quitacoes];
+
+            if (colaboradorId) quitacoesFiltradas = quitacoesFiltradas.filter(q => q.colaboradorId === colaboradorId);
+            if (departamento) quitacoesFiltradas = quitacoesFiltradas.filter(q => q.colaboradorDepartamento === departamento);
+            if (mes) quitacoesFiltradas = quitacoesFiltradas.filter(q => q.mesPagamento === mes);
+            if (ano) quitacoesFiltradas = quitacoesFiltradas.filter(q => q.anoPagamento === ano);
+
+            document.getElementById('contadorQuitacoes').textContent = `${quitacoesFiltradas.length} quitações`;
+            renderizarTabelaQuitacoes(quitacoesFiltradas);
+            renderizarHorasVencidas();
         }
 
-        function showImportModal() {
-            document.getElementById('importModal').style.display = 'block';
+        function renderizarTabelaQuitacoes(quitacoesFiltradas) {
+            const tbody = document.getElementById('quitacoesList');
+            const tabela = document.getElementById('quitacoesTable');
+            const semResultados = document.getElementById('semQuitacoesMsg');
+
+            if (quitacoesFiltradas.length === 0) {
+                tabela.style.display = 'none';
+                semResultados.style.display = 'block';
+                return;
+            }
+
+            tabela.style.display = 'table';
+            semResultados.style.display = 'none';
+            tbody.innerHTML = '';
+
+            quitacoesFiltradas.forEach(quitacao => {
+                const dataQuitacaoFormatada = new Date(quitacao.dataQuitacao).toLocaleDateString('pt-BR');
+                
+                tbody.innerHTML += `
+                    <tr>
+                        <td><strong>${quitacao.colaboradorNome}</strong><br><small style="color: #64748b;">${quitacao.colaboradorDepartamento || ''}</small></td>
+                        <td>${dataQuitacaoFormatada}</td>
+                        <td>${quitacao.competenciaPagamento}</td>
+                        <td>${decimalParaHora(quitacao.horasQuitadas)}</td>
+                        <td>R$ ${quitacao.valorFolha.toFixed(2).replace('.', ',')}</td>
+                        <td>R$ ${quitacao.valorReflexo.toFixed(2).replace('.', ',')}</td>
+                        <td><strong>R$ ${quitacao.totalPago.toFixed(2).replace('.', ',')}</strong></td>
+                        <td>
+                            <div class="action-buttons">
+                                <button class="btn btn-info btn-small" onclick="showVisualizarQuitacaoModal('${quitacao.id}')" title="Ver detalhes">🔍</button>
+                                <button class="btn btn-danger btn-small" onclick="deleteQuitacao('${quitacao.id}')" title="Excluir">🗑️</button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            });
+        }
+
+        function renderizarHorasVencidas() {
+            const horasVencidas = lancamentos.filter(l => 
+                l.tipo === 'negativa' && 
+                !l.quitado && 
+                l.saldoRestante > 0 && 
+                l.vencido
+            );
+
+            const totalVencido = horasVencidas.reduce((sum, l) => sum + l.saldoRestante, 0);
+            
+            const totalVencidoContainer = document.getElementById('totalVencidoContainer');
+            if (totalVencido > 0) {
+                totalVencidoContainer.classList.remove('hidden');
+                document.getElementById('totalHorasVencidas').textContent = decimalParaHora(totalVencido);
+            } else {
+                totalVencidoContainer.classList.add('hidden');
+            }
+
+            document.getElementById('contadorVencidas').textContent = `${decimalParaHora(totalVencido)} horas vencidas`;
+
+            const tbody = document.getElementById('horasVencidasList');
+            const tabela = document.getElementById('horasVencidasTable');
+            const semVencidasMsg = document.getElementById('semVencidasMsg');
+
+            if (horasVencidas.length === 0) {
+                tabela.style.display = 'none';
+                semVencidasMsg.style.display = 'block';
+                return;
+            }
+
+            tabela.style.display = 'table';
+            semVencidasMsg.style.display = 'none';
+            tbody.innerHTML = '';
+
+            horasVencidas.forEach(lanc => {
+                const colaborador = colaboradores.find(c => c.id === lanc.colaboradorId);
+                if (!colaborador) return;
+
+                const competencia = formatarCompetencia(lanc.mes, lanc.ano);
+                const vencimento = calcularVencimento(lanc.mes, lanc.ano);
+                const diasVencidos = calcularDiasVencidos(lanc.mes, lanc.ano);
+                
+                tbody.innerHTML += `
+                    <tr>
+                        <td><strong>${colaborador.nome}</strong></td>
+                        <td>${colaborador.departamento || 'N/A'}</td>
+                        <td>${competencia}</td>
+                        <td>${vencimento}</td>
+                        <td><span class="badge badge-pendente">${decimalParaHora(lanc.saldoRestante)}</span></td>
+                        <td><span class="badge badge-danger">${diasVencidos} dias</span></td>
+                        <td>
+                            <button class="btn btn-primary btn-small" onclick="showNovaQuitacaoParaColaborador('${lanc.colaboradorId}')">
+                                Quitar
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            });
         }
 
         function showNovaQuitacaoModal() {
-            if (!firebaseConnected) {
-                alert('Sem conexão com o Firebase.');
-                return;
-            }
-            
+            if (!firebaseConnected) { alert('Sem conexão com o Firebase.'); return; }
             if (colaboradores.length === 0) {
                 alert('Cadastre colaboradores primeiro!');
                 showTab('colaboradores');
@@ -2229,15 +2939,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 selectColab.innerHTML += `<option value="${colab.id}">${colab.nome}${status}</option>`;
             });
 
-            const anoSelect = document.getElementById('quitacaoAnoPagamento');
-            anoSelect.innerHTML = '';
-            for (let i = 2020; i <= 2030; i++) {
-                const option = document.createElement('option');
-                option.value = i;
-                option.textContent = i;
-                if (i === new Date().getFullYear()) option.selected = true;
-                anoSelect.appendChild(option);
-            }
+            preencherAnos();
 
             document.getElementById('novaQuitacaoForm').reset();
             document.getElementById('quitacaoData').value = new Date().toISOString().split('T')[0];
@@ -2250,6 +2952,14 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             calcularValoresQuitacao();
 
             document.getElementById('novaQuitacaoModal').style.display = 'block';
+        }
+
+        function showNovaQuitacaoParaColaborador(colaboradorId) {
+            showNovaQuitacaoModal();
+            setTimeout(() => {
+                document.getElementById('quitacaoColaborador').value = colaboradorId;
+                carregarHorasVencidasColaborador();
+            }, 100);
         }
 
         function carregarHorasVencidasColaborador() {
@@ -2267,13 +2977,13 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 document.getElementById('quitacaoDepartamento').value = colaborador.departamento || '';
             }
 
-            // Filtrar lançamentos do colaborador que são negativos, estão vencidos na data de referência e não quitados
+            // Filtrar lançamentos do colaborador que são negativos, estão vencidos e não quitados
             const lancamentosColab = lancamentos.filter(l => 
                 l.colaboradorId === colaboradorId && 
                 l.tipo === 'negativa' && 
                 l.saldoRestante > 0 &&
                 !l.quitado &&
-                l.vencido // usa o campo vencido da simulação
+                l.vencido
             );
 
             if (lancamentosColab.length === 0) {
@@ -2282,9 +2992,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 return;
             }
 
-            lancamentosColab.sort((a, b) => {
-                return dataParaObjeto(a.data) - dataParaObjeto(b.data);
-            });
+            lancamentosColab.sort((a, b) => dataParaObjeto(a.data) - dataParaObjeto(b.data));
 
             let html = '';
             lancamentosColab.forEach(lanc => {
@@ -2323,10 +3031,9 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             let totalDisponivel = 0;
 
             document.querySelectorAll('.lancamento-checkbox').forEach(cb => {
-                if (cb.checked) {
-                    totalSelecionado += parseFloat(cb.dataset.horas);
-                }
-                totalDisponivel += parseFloat(cb.dataset.horas);
+                const horas = parseFloat(cb.dataset.horas);
+                if (cb.checked) totalSelecionado += horas;
+                totalDisponivel += horas;
             });
 
             document.getElementById('totalHorasSelecionadas').textContent = 
@@ -2338,9 +3045,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
         function calcularValoresQuitacao() {
             const checkboxes = document.querySelectorAll('.lancamento-checkbox:checked');
             let totalHoras = 0;
-            checkboxes.forEach(cb => {
-                totalHoras += parseFloat(cb.dataset.horas);
-            });
+            checkboxes.forEach(cb => totalHoras += parseFloat(cb.dataset.horas));
 
             const valorHora = parseFloat(document.getElementById('quitacaoValorHora').value) || 0;
             const valorReflexo = parseFloat(document.getElementById('quitacaoValorReflexo').value) || 0;
@@ -2514,369 +3219,37 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             showLoading(false);
         }
 
-        function renderizarHorasVencidas() {
-            const horasVencidas = lancamentos.filter(l => 
-                l.tipo === 'negativa' && 
-                !l.quitado && 
-                l.saldoRestante > 0 && 
-                l.vencido
-            );
-
-            const totalVencido = horasVencidas.reduce((sum, l) => sum + l.saldoRestante, 0);
-            
-            const totalVencidoContainer = document.getElementById('totalVencidoContainer');
-            if (totalVencido > 0) {
-                totalVencidoContainer.classList.remove('hidden');
-                document.getElementById('totalHorasVencidas').textContent = decimalParaHora(totalVencido);
+        // ========== FUNÇÕES DE EMPRESAS E DEPARTAMENTOS ==========
+        function showEmpresaModal(editNome = null) {
+            document.getElementById('empresaModal').style.display = 'block';
+            if (editNome) {
+                document.getElementById('empresaModalTitle').textContent = 'Editar Empresa';
+                document.getElementById('empresaNome').value = editNome;
+                document.getElementById('empresaNomeOriginal').value = editNome;
+                const empresaDoc = empresasDocs.find(doc => doc.nome === editNome);
+                if (empresaDoc) document.getElementById('empresaId').value = empresaDoc.id;
             } else {
-                totalVencidoContainer.classList.add('hidden');
-            }
-
-            document.getElementById('contadorVencidas').textContent = `${decimalParaHora(totalVencido)} horas vencidas`;
-
-            const tbody = document.getElementById('horasVencidasList');
-            const tabela = document.getElementById('horasVencidasTable');
-            const semVencidasMsg = document.getElementById('semVencidasMsg');
-
-            if (horasVencidas.length === 0) {
-                tabela.style.display = 'none';
-                semVencidasMsg.style.display = 'block';
-                return;
-            }
-
-            tabela.style.display = 'table';
-            semVencidasMsg.style.display = 'none';
-
-            tbody.innerHTML = '';
-
-            horasVencidas.forEach(lanc => {
-                const colaborador = colaboradores.find(c => c.id === lanc.colaboradorId);
-                if (!colaborador) return;
-
-                const competencia = formatarCompetencia(lanc.mes, lanc.ano);
-                const vencimento = calcularVencimento(lanc.mes, lanc.ano);
-                const diasVencidos = calcularDiasVencidos(lanc.mes, lanc.ano);
-                
-                tbody.innerHTML += `
-                    <tr>
-                        <td><strong>${colaborador.nome}</strong></td>
-                        <td>${colaborador.departamento || 'N/A'}</td>
-                        <td>${competencia}</td>
-                        <td>${vencimento}</td>
-                        <td><span class="badge badge-pendente">${decimalParaHora(lanc.saldoRestante)}</span></td>
-                        <td><span class="badge badge-danger">${diasVencidos} dias</span></td>
-                        <td>
-                            <button class="btn btn-primary btn-small" onclick="showNovaQuitacaoParaColaborador('${lanc.colaboradorId}')">
-                                Quitar
-                            </button>
-                        </td>
-                    </tr>
-                `;
-            });
-        }
-
-        function showNovaQuitacaoParaColaborador(colaboradorId) {
-            showNovaQuitacaoModal();
-            setTimeout(() => {
-                document.getElementById('quitacaoColaborador').value = colaboradorId;
-                carregarHorasVencidasColaborador();
-            }, 100);
-        }
-
-        function horaParaDecimal(horaStr) {
-            const [horas, minutos] = horaStr.split(':').map(Number);
-            return horas + (minutos / 60);
-        }
-
-        function decimalParaHora(decimal) {
-            if (decimal === undefined || decimal === null) return '00:00';
-            const sinal = decimal < 0 ? '-' : '';
-            const absDecimal = Math.abs(decimal);
-            const horas = Math.floor(absDecimal);
-            const minutos = Math.round((absDecimal - horas) * 60);
-            return `${sinal}${horas.toString().padStart(2, '0')}:${minutos.toString().padStart(2, '0')}`;
-        }
-
-        function isValidHora(horaStr) {
-            const regex = /^([0-9]{1,2}):([0-9]{2})$/;
-            if (!regex.test(horaStr)) return false;
-            const [horas, minutos] = horaStr.split(':').map(Number);
-            return horas >= 0 && horas < 100 && minutos >= 0 && minutos < 60;
-        }
-
-        function isValidDate(dateStr) {
-            const regex = /^(\d{2})\/(\d{2})\/(\d{4})$/;
-            if (!regex.test(dateStr)) return false;
-            const [_, dia, mes, ano] = dateStr.match(regex);
-            const data = new Date(ano, mes - 1, dia);
-            return data.getDate() == dia && data.getMonth() == mes - 1;
-        }
-
-        function normalizarLancamento(doc) {
-            const data = doc.data();
-            const id = doc.id;
-            
-            const lancamento = {
-                id: id,
-                colaboradorId: data.colaboradorId || data.colaborador_id || '',
-                colaboradorNome: data.colaboradorNome || data.colaborador_nome || '',
-                colaboradorDepartamento: data.colaboradorDepartamento || data.departamento || '',
-                data: data.data || data.date || '01/01/2024',
-                mes: data.mes || data.month || '01',
-                ano: data.ano || data.year || '2024',
-                tipo: data.tipo || data.type || 'positiva',
-                horas: typeof data.horas === 'number' ? data.horas : (typeof data.hours === 'number' ? data.hours : 0),
-                quitado: data.quitado || false,
-                quitadoEm: data.quitadoEm || null,
-                quitacaoId: data.quitacaoId || null
-            };
-            
-            if (!lancamento.mes || !lancamento.ano) {
-                const partes = lancamento.data.split('/');
-                if (partes.length === 3) {
-                    lancamento.mes = partes[1];
-                    lancamento.ano = partes[2];
-                }
-            }
-            
-            return lancamento;
-        }
-
-        async function loadData() {
-            if (!firebaseConnected) {
-                showLoading(false);
-                return;
-            }
-            
-            showLoading(true);
-            
-            try {
-                const empresasSnapshot = await db.collection('empresas').get();
-                empresasDocs = empresasSnapshot.docs.map(doc => ({
-                    id: doc.id,
-                    nome: doc.data().nome
-                }));
-                empresas = empresasDocs.map(doc => doc.nome);
-
-                const departamentosSnapshot = await db.collection('departamentos').get();
-                departamentosDocs = departamentosSnapshot.docs.map(doc => ({
-                    id: doc.id,
-                    nome: doc.data().nome
-                }));
-                departamentos = departamentosDocs.map(doc => doc.nome);
-
-                const colaboradoresSnapshot = await db.collection('colaboradores').get();
-                colaboradores = colaboradoresSnapshot.docs.map(doc => ({
-                    id: doc.id,
-                    ...doc.data()
-                }));
-                
-                colaboradores.sort((a, b) => {
-                    const nomeA = (a.nome || '').toLowerCase();
-                    const nomeB = (b.nome || '').toLowerCase();
-                    return nomeA.localeCompare(nomeB);
-                });
-
-                const lancamentosSnapshot = await db.collection('lancamentos').get();
-                lancamentos = lancamentosSnapshot.docs.map(doc => normalizarLancamento(doc));
-
-                const quitacoesSnapshot = await db.collection('quitacoes').get();
-                quitacoes = quitacoesSnapshot.docs.map(doc => ({
-                    id: doc.id,
-                    ...doc.data()
-                }));
-
-                quitacoes.sort((a, b) => new Date(b.dataQuitacao) - new Date(a.dataQuitacao));
-
-                // Ordenar lançamentos por data (mais antigos primeiro) para simulação
-                lancamentos.sort((a, b) => dataParaObjeto(a.data) - dataParaObjeto(b.data));
-
-                // Executar simulação com a data de referência atual
-                simularLinhaDoTempo(dataReferencia);
-
-                updateAllTables();
-                
-            } catch (error) {
-                console.error('Erro ao carregar dados:', error);
-                alert('Erro ao carregar dados: ' + error.message);
-            } finally {
-                showLoading(false);
+                document.getElementById('empresaModalTitle').textContent = 'Nova Empresa';
+                document.getElementById('empresaId').value = '';
+                document.getElementById('empresaNomeOriginal').value = '';
+                document.getElementById('empresaNome').value = '';
             }
         }
 
-        async function salvarCompensacoes() {
-            // Não é mais necessário persistir compensações, pois são calculadas em memória
-        }
-
-        function preencherAnos() {
-            const anos = [];
-            for (let i = 2020; i <= 2030; i++) {
-                anos.push(i);
+        function showDepartamentoModal(editNome = null) {
+            document.getElementById('departamentoModal').style.display = 'block';
+            if (editNome) {
+                document.getElementById('departamentoModalTitle').textContent = 'Editar Departamento';
+                document.getElementById('departamentoNome').value = editNome;
+                document.getElementById('departamentoNomeOriginal').value = editNome;
+                const deptoDoc = departamentosDocs.find(doc => doc.nome === editNome);
+                if (deptoDoc) document.getElementById('departamentoId').value = deptoDoc.id;
+            } else {
+                document.getElementById('departamentoModalTitle').textContent = 'Novo Departamento';
+                document.getElementById('departamentoId').value = '';
+                document.getElementById('departamentoNomeOriginal').value = '';
+                document.getElementById('departamentoNome').value = '';
             }
-            
-            const selects = [
-                'novoLancamentoAno',
-                'filtroAno', 
-                'editLancamentoAno',
-                'quitacaoAnoPagamento',
-                'filtroQuitacaoAno'
-            ];
-            
-            selects.forEach(selectId => {
-                const select = document.getElementById(selectId);
-                if (select) {
-                    select.innerHTML = '';
-                    if (selectId === 'filtroAno' || selectId === 'filtroQuitacaoAno') {
-                        const optionAll = document.createElement('option');
-                        optionAll.value = '';
-                        optionAll.textContent = 'Todos';
-                        select.appendChild(optionAll);
-                    }
-                    anos.forEach(ano => {
-                        const option = document.createElement('option');
-                        option.value = ano;
-                        option.textContent = ano;
-                        if (ano === new Date().getFullYear() && (selectId !== 'filtroAno' && selectId !== 'filtroQuitacaoAno')) {
-                            option.selected = true;
-                        }
-                        select.appendChild(option);
-                    });
-                }
-            });
-        }
-
-        function loadSelects() {
-            const deptoSelect = document.getElementById('colaboradorDepartamento');
-            const empresaSelect = document.getElementById('colaboradorEmpresa');
-            
-            deptoSelect.innerHTML = '<option value="">Selecione...</option>';
-            empresaSelect.innerHTML = '<option value="">Selecione...</option>';
-            
-            departamentos.sort().forEach(depto => {
-                deptoSelect.innerHTML += `<option value="${depto}">${depto}</option>`;
-            });
-            
-            empresas.sort().forEach(empresa => {
-                empresaSelect.innerHTML += `<option value="${empresa}">${empresa}</option>`;
-            });
-        }
-
-        function carregarFiltros() {
-            const filtroColab = document.getElementById('filtroColaborador');
-            filtroColab.innerHTML = '<option value="">Todos os colaboradores</option>';
-            
-            colaboradores.sort((a, b) => a.nome.localeCompare(b.nome)).forEach(colab => {
-                const status = colab.ativo !== false ? '' : ' (Inativo)';
-                const optionText = `${colab.nome}${status}`;
-                filtroColab.innerHTML += `<option value="${colab.id}">${optionText}</option>`;
-            });
-
-            const filtroDepto = document.getElementById('filtroDepartamento');
-            filtroDepto.innerHTML = '<option value="">Todos os departamentos</option>';
-            const deptosUnicos = [...new Set(colaboradores.map(c => c.departamento))];
-            deptosUnicos.sort().forEach(depto => {
-                filtroDepto.innerHTML += `<option value="${depto}">${depto}</option>`;
-            });
-
-            preencherAnos();
-        }
-
-        function carregarFiltrosQuitacoes() {
-            const filtroColab = document.getElementById('filtroQuitacaoColaborador');
-            filtroColab.innerHTML = '<option value="">Todos os colaboradores</option>';
-            
-            colaboradores.sort((a, b) => a.nome.localeCompare(b.nome)).forEach(colab => {
-                const status = colab.ativo !== false ? '' : ' (Inativo)';
-                const optionText = `${colab.nome}${status}`;
-                filtroColab.innerHTML += `<option value="${colab.id}">${optionText}</option>`;
-            });
-
-            const filtroDepto = document.getElementById('filtroQuitacaoDepartamento');
-            filtroDepto.innerHTML = '<option value="">Todos os departamentos</option>';
-            const deptosUnicos = [...new Set(colaboradores.map(c => c.departamento))];
-            deptosUnicos.sort().forEach(depto => {
-                filtroDepto.innerHTML += `<option value="${depto}">${depto}</option>`;
-            });
-
-            preencherAnos();
-        }
-
-        function aplicarFiltrosQuitacoes() {
-            const colaboradorId = document.getElementById('filtroQuitacaoColaborador').value;
-            const departamento = document.getElementById('filtroQuitacaoDepartamento').value;
-            const status = document.getElementById('filtroQuitacaoStatus').value;
-            const mes = document.getElementById('filtroQuitacaoMes').value;
-            const ano = document.getElementById('filtroQuitacaoAno').value;
-
-            let quitacoesFiltradas = [...quitacoes];
-
-            if (colaboradorId) {
-                quitacoesFiltradas = quitacoesFiltradas.filter(q => q.colaboradorId === colaboradorId);
-            }
-
-            if (departamento) {
-                quitacoesFiltradas = quitacoesFiltradas.filter(q => q.colaboradorDepartamento === departamento);
-            }
-
-            if (status === 'quitadas') {
-                // Já são todas quitadas
-            } else if (status === 'vencidas') {
-                renderizarHorasVencidas();
-                return;
-            }
-
-            if (mes) {
-                quitacoesFiltradas = quitacoesFiltradas.filter(q => q.mesPagamento === mes);
-            }
-
-            if (ano) {
-                quitacoesFiltradas = quitacoesFiltradas.filter(q => q.anoPagamento === ano);
-            }
-
-            document.getElementById('contadorQuitacoes').textContent = `${quitacoesFiltradas.length} quitações`;
-
-            renderizarTabelaQuitacoes(quitacoesFiltradas);
-            renderizarHorasVencidas();
-        }
-
-        function renderizarTabelaQuitacoes(quitacoesFiltradas) {
-            const tbody = document.getElementById('quitacoesList');
-            const tabela = document.getElementById('quitacoesTable');
-            const semResultados = document.getElementById('semQuitacoesMsg');
-
-            if (quitacoesFiltradas.length === 0) {
-                tabela.style.display = 'none';
-                semResultados.style.display = 'block';
-                return;
-            }
-
-            tabela.style.display = 'table';
-            semResultados.style.display = 'none';
-
-            tbody.innerHTML = '';
-
-            quitacoesFiltradas.forEach(quitacao => {
-                const colaborador = colaboradores.find(c => c.id === quitacao.colaboradorId);
-                const dataQuitacaoFormatada = new Date(quitacao.dataQuitacao).toLocaleDateString('pt-BR');
-                
-                tbody.innerHTML += `
-                    <tr>
-                        <td><strong>${quitacao.colaboradorNome}</strong><br><small style="color: #64748b;">${quitacao.colaboradorDepartamento || ''}</small></td>
-                        <td>${dataQuitacaoFormatada}</td>
-                        <td>${quitacao.competenciaPagamento}</td>
-                        <td>${decimalParaHora(quitacao.horasQuitadas)}</td>
-                        <td>R$ ${quitacao.valorFolha.toFixed(2).replace('.', ',')}</td>
-                        <td>R$ ${quitacao.valorReflexo.toFixed(2).replace('.', ',')}</td>
-                        <td><strong>R$ ${quitacao.totalPago.toFixed(2).replace('.', ',')}</strong></td>
-                        <td>
-                            <div class="action-buttons">
-                                <button class="btn btn-info btn-small" onclick="showVisualizarQuitacaoModal('${quitacao.id}')" title="Ver detalhes">🔍</button>
-                                <button class="btn btn-danger btn-small" onclick="deleteQuitacao('${quitacao.id}')" title="Excluir">🗑️</button>
-                            </div>
-                        </td>
-                    </tr>
-                `;
-            });
         }
 
         async function saveEmpresa() {
@@ -2884,11 +3257,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             const nome = document.getElementById('empresaNome').value.trim();
             const nomeOriginal = document.getElementById('empresaNomeOriginal').value;
 
-            if (!nome) {
-                alert('Digite um nome para a empresa');
-                return;
-            }
-
+            if (!nome) { alert('Digite um nome para a empresa'); return; }
             if ((!id || nome !== nomeOriginal) && empresas.includes(nome)) {
                 alert('Esta empresa já está cadastrada!');
                 return;
@@ -2905,10 +3274,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                     if (nome !== nomeOriginal) {
                         const colaboradoresEmpresa = colaboradores.filter(c => c.empresa === nomeOriginal);
                         for (const colab of colaboradoresEmpresa) {
-                            await db.collection('colaboradores').doc(colab.id).update({
-                                empresa: nome,
-                                updatedAt: new Date().toISOString()
-                            });
+                            await db.collection('colaboradores').doc(colab.id).update({ empresa: nome });
                         }
                     }
                 } else {
@@ -2932,11 +3298,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             const nome = document.getElementById('departamentoNome').value.trim();
             const nomeOriginal = document.getElementById('departamentoNomeOriginal').value;
 
-            if (!nome) {
-                alert('Digite um nome para o departamento');
-                return;
-            }
-
+            if (!nome) { alert('Digite um nome para o departamento'); return; }
             if ((!id || nome !== nomeOriginal) && departamentos.includes(nome)) {
                 alert('Este departamento já está cadastrado!');
                 return;
@@ -2953,10 +3315,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                     if (nome !== nomeOriginal) {
                         const colaboradoresDepto = colaboradores.filter(c => c.departamento === nomeOriginal);
                         for (const colab of colaboradoresDepto) {
-                            await db.collection('colaboradores').doc(colab.id).update({
-                                departamento: nome,
-                                updatedAt: new Date().toISOString()
-                            });
+                            await db.collection('colaboradores').doc(colab.id).update({ departamento: nome });
                         }
                     }
                 } else {
@@ -2973,504 +3332,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 alert('Erro ao salvar: ' + error.message);
             }
             showLoading(false);
-        }
-
-        async function saveColaborador() {
-            const id = document.getElementById('colaboradorId').value;
-            const nome = document.getElementById('colaboradorNome').value.trim();
-            const data = document.getElementById('colaboradorData').value;
-            const departamento = document.getElementById('colaboradorDepartamento').value;
-            const empresa = document.getElementById('colaboradorEmpresa').value;
-            const ativo = document.getElementById('colaboradorAtivo').checked;
-
-            if (!nome || !data || !departamento || !empresa) {
-                alert('Preencha todos os campos!');
-                return;
-            }
-
-            if (!isValidDate(data)) {
-                alert('Data inválida! Use o formato DD/MM/AAAA');
-                return;
-            }
-
-            showLoading(true);
-            try {
-                const colaboradorData = {
-                    nome,
-                    dataAdmissao: data,
-                    departamento,
-                    empresa,
-                    horasPositivas: 0,
-                    horasNegativas: 0,
-                    ativo: ativo,
-                    updatedAt: new Date().toISOString()
-                };
-
-                if (id) {
-                    await db.collection('colaboradores').doc(id).update(colaboradorData);
-                } else {
-                    colaboradorData.createdAt = new Date().toISOString();
-                    await db.collection('colaboradores').add(colaboradorData);
-                }
-
-                await loadData();
-                hideModal('colaboradorModal');
-            } catch (error) {
-                console.error('Erro ao salvar colaborador:', error);
-                alert('Erro ao salvar: ' + error.message);
-            }
-            showLoading(false);
-        }
-
-        async function updateLancamento() {
-            const id = document.getElementById('editLancamentoId').value;
-            const colaboradorId = document.getElementById('editLancamentoColaborador').value;
-            const tipo = document.getElementById('editLancamentoTipo').value;
-            const horaStr = document.getElementById('editLancamentoHoras').value;
-            const mes = document.getElementById('editLancamentoMes').value;
-            const ano = document.getElementById('editLancamentoAno').value;
-
-            if (!colaboradorId || !tipo || !horaStr || !mes || !ano) {
-                alert('Preencha todos os campos!');
-                return;
-            }
-
-            if (!isValidHora(horaStr)) {
-                alert('Formato de hora inválido!');
-                return;
-            }
-
-            const horas = horaParaDecimal(horaStr);
-            if (horas < 0) {
-                alert('A quantidade de horas não pode ser negativa!');
-                return;
-            }
-
-            const colaborador = colaboradores.find(c => c.id === colaboradorId);
-            if (!colaborador) {
-                alert('Colaborador não encontrado!');
-                return;
-            }
-
-            const data = `01/${mes}/${ano}`;
-
-            showLoading(true);
-            try {
-                await db.collection('lancamentos').doc(id).update({
-                    colaboradorId: colaboradorId,
-                    colaboradorNome: colaborador.nome || '',
-                    colaboradorDepartamento: colaborador.departamento || '',
-                    data: data,
-                    mes: mes,
-                    ano: ano,
-                    tipo: tipo,
-                    horas: horas,
-                    updatedAt: new Date().toISOString()
-                });
-
-                await loadData();
-                hideModal('editLancamentoModal');
-                
-                document.getElementById('filtroColaborador').value = filtrosAtuais.colaboradorId || '';
-                document.getElementById('filtroDepartamento').value = filtrosAtuais.departamento || '';
-                document.getElementById('filtroStatus').value = filtrosAtuais.status || 'ativos';
-                document.getElementById('filtroMes').value = filtrosAtuais.mes || '';
-                document.getElementById('filtroAno').value = filtrosAtuais.ano || '';
-                aplicarFiltros();
-                
-                alert('Lançamento atualizado com sucesso!');
-            } catch (error) {
-                console.error('Erro ao atualizar:', error);
-                alert('Erro ao atualizar: ' + error.message);
-            }
-            showLoading(false);
-        }
-
-        async function deleteLancamento(id) {
-            if (!confirm('Tem certeza que deseja excluir este lançamento?')) return;
-
-            showLoading(true);
-            try {
-                await db.collection('lancamentos').doc(id).delete();
-                await loadData();
-                
-                document.getElementById('filtroColaborador').value = filtrosAtuais.colaboradorId || '';
-                document.getElementById('filtroDepartamento').value = filtrosAtuais.departamento || '';
-                document.getElementById('filtroStatus').value = filtrosAtuais.status || 'ativos';
-                document.getElementById('filtroMes').value = filtrosAtuais.mes || '';
-                document.getElementById('filtroAno').value = filtrosAtuais.ano || '';
-                aplicarFiltros();
-                
-                alert('Lançamento excluído com sucesso!');
-            } catch (error) {
-                console.error('Erro ao excluir:', error);
-                alert('Erro ao excluir: ' + error.message);
-            }
-            showLoading(false);
-        }
-
-        async function importColaboradores() {
-            const data = document.getElementById('importData').value;
-            const lines = data.split('\n');
-            let imported = 0;
-            let errors = 0;
-
-            showLoading(true);
-            try {
-                for (let i = 0; i < lines.length; i++) {
-                    const line = lines[i].trim();
-                    if (line) {
-                        const [nome, dataAdmissao, departamento, empresa] = line.split(',').map(item => item.trim());
-                        
-                        if (nome && dataAdmissao && departamento && empresa) {
-                            if (!departamentos.includes(departamento)) {
-                                errors++;
-                                continue;
-                            }
-                            
-                            if (!empresas.includes(empresa)) {
-                                errors++;
-                                continue;
-                            }
-                            
-                            if (isValidDate(dataAdmissao)) {
-                                await db.collection('colaboradores').add({
-                                    nome,
-                                    dataAdmissao,
-                                    departamento,
-                                    empresa,
-                                    horasPositivas: 0,
-                                    horasNegativas: 0,
-                                    ativo: true,
-                                    createdAt: new Date().toISOString()
-                                });
-                                imported++;
-                            } else {
-                                errors++;
-                            }
-                        } else {
-                            errors++;
-                        }
-                    }
-                }
-
-                await loadData();
-                alert(`${imported} colaborador(es) importado(s) com sucesso! ${errors} erro(s).`);
-                hideModal('importModal');
-            } catch (error) {
-                console.error('Erro ao importar:', error);
-                alert('Erro ao importar: ' + error.message);
-            }
-            showLoading(false);
-        }
-
-        function aplicarFiltros() {
-            const colaboradorId = document.getElementById('filtroColaborador').value;
-            const departamento = document.getElementById('filtroDepartamento').value;
-            const status = document.getElementById('filtroStatus').value;
-            const mes = document.getElementById('filtroMes').value;
-            const ano = document.getElementById('filtroAno').value;
-
-            filtrosAtuais = {
-                colaboradorId,
-                departamento,
-                status,
-                mes,
-                ano
-            };
-
-            if (!colaboradorId && !departamento && !mes && !ano && status === 'todos') {
-                document.getElementById('semResultadosMsg').style.display = 'block';
-                document.getElementById('lancamentosTable').style.display = 'none';
-                document.getElementById('contadorLancamentos').textContent = '0 lançamentos';
-                document.getElementById('resumoSaldoContainer').style.display = 'none';
-                return;
-            }
-
-            let lancamentosFiltrados = [...lancamentos];
-
-            if (colaboradorId) {
-                lancamentosFiltrados = lancamentosFiltrados.filter(l => l.colaboradorId === colaboradorId);
-            }
-
-            if (departamento) {
-                lancamentosFiltrados = lancamentosFiltrados.filter(l => l.colaboradorDepartamento === departamento);
-            }
-
-            if (status !== 'todos') {
-                const statusAtivo = status === 'ativos';
-                lancamentosFiltrados = lancamentosFiltrados.filter(l => {
-                    const colaborador = colaboradores.find(c => c.id === l.colaboradorId);
-                    const colaboradorAtivo = colaborador ? colaborador.ativo !== false : true;
-                    return colaboradorAtivo === statusAtivo;
-                });
-            }
-
-            if (mes) {
-                lancamentosFiltrados = lancamentosFiltrados.filter(l => l.mes === mes);
-            }
-            if (ano) {
-                lancamentosFiltrados = lancamentosFiltrados.filter(l => l.ano === ano);
-            }
-
-            document.getElementById('contadorLancamentos').textContent = `${lancamentosFiltrados.length} lançamentos`;
-
-            const resumoContainer = document.getElementById('resumoSaldoContainer');
-            if (colaboradorId) {
-                const colaborador = colaboradores.find(c => c.id === colaboradorId);
-                if (colaborador) {
-                    document.getElementById('resumoColaboradorNome').textContent = colaborador.nome;
-                    
-                    const saldoTotal = lancamentos
-                        .filter(l => l.colaboradorId === colaboradorId)
-                        .reduce((sum, l) => {
-                            return l.tipo === 'positiva' ? sum + l.horas : sum - l.horas;
-                        }, 0);
-                    
-                    document.getElementById('resumoSaldoTotal').textContent = decimalParaHora(saldoTotal);
-                    
-                    resumoContainer.style.display = 'flex';
-                }
-            } else {
-                resumoContainer.style.display = 'none';
-            }
-
-            renderizarTabelaLancamentos(lancamentosFiltrados);
-        }
-
-        function renderizarTabelaLancamentos(lancamentosFiltrados) {
-            const tbody = document.getElementById('lancamentosList');
-            const tabela = document.getElementById('lancamentosTable');
-            const semResultados = document.getElementById('semResultadosMsg');
-
-            if (lancamentosFiltrados.length === 0) {
-                tabela.style.display = 'none';
-                semResultados.style.display = 'block';
-                semResultados.textContent = 'Nenhum lançamento encontrado com os filtros selecionados.';
-                return;
-            }
-
-            tabela.style.display = 'table';
-            semResultados.style.display = 'none';
-
-            tbody.innerHTML = '';
-
-            // Ordenar lançamentos por data decrescente (mais recentes primeiro) para exibição
-            lancamentosFiltrados.sort((a, b) => dataParaObjeto(b.data) - dataParaObjeto(a.data));
-
-            const lancamentosPorColaborador = {};
-            lancamentosFiltrados.forEach(lanc => {
-                if (!lancamentosPorColaborador[lanc.colaboradorId]) {
-                    lancamentosPorColaborador[lanc.colaboradorId] = [];
-                }
-                lancamentosPorColaborador[lanc.colaboradorId].push(lanc);
-            });
-
-            const saldosAcumulados = {};
-            Object.keys(lancamentosPorColaborador).forEach(colaboradorId => {
-                const lancamentosColab = lancamentosPorColaborador[colaboradorId];
-                const saldos = calcularSaldoAcumulado(colaboradorId, lancamentosColab);
-                saldosAcumulados[colaboradorId] = new Map(saldos.map(s => [s.id, s.saldoAcumulado]));
-            });
-
-            lancamentosFiltrados.forEach(lanc => {
-                const colaborador = colaboradores.find(c => c.id === lanc.colaboradorId);
-                if (!colaborador) return;
-
-                const competencia = formatarCompetencia(lanc.mes, lanc.ano);
-                const vencimento = calcularVencimento(lanc.mes, lanc.ano);
-                const status = calcularStatus(lanc);
-                
-                const quantidadeIcon = lanc.tipo === 'positiva' ? '➕' : '➖';
-                
-                const saldoAcumulado = saldosAcumulados[lanc.colaboradorId]?.get(lanc.id) || 0;
-                
-                const horasFaltantes = lanc.saldoRestante !== undefined ? lanc.saldoRestante : lanc.horas;
-                
-                const tooltipText = gerarTooltipCompensacoes(lanc);
-                
-                const compensacoesText = horasFaltantes > 0 ? 
-                    `<span class="badge badge-warning compensacoes-tooltip" data-tooltip="${tooltipText}">Falta ${decimalParaHora(horasFaltantes)}</span>` : 
-                    `<span class="badge badge-success compensacoes-tooltip" data-tooltip="${tooltipText}">Completo</span>`;
-
-                const visualizarBtn = (lanc.compensacoes && lanc.compensacoes.length > 0) || (lanc.compensadoPor && lanc.compensadoPor.length > 0) ?
-                    `<button class="btn btn-info btn-small" onclick="showVisualizarCompensacoesModal('${lanc.id}')" title="Ver detalhes das compensações">🔍</button>` : '';
-
-                const quitarBtn = (lanc.tipo === 'negativa' && !lanc.quitado && horasFaltantes > 0 && lanc.vencido) ?
-                    `<button class="btn btn-primary btn-small" onclick="showNovaQuitacaoParaColaborador('${lanc.colaboradorId}')" title="Quitar horas vencidas">💰</button>` : '';
-
-                tbody.innerHTML += `
-                    <tr>
-                        <td><strong>${colaborador.nome}</strong><br><small style="color: #64748b;">${colaborador.departamento}</small></td>
-                        <td><span class="badge ${lanc.tipo === 'positiva' ? 'badge-success' : 'badge-danger'}">${quantidadeIcon} ${decimalParaHora(lanc.horas)}</span></td>
-                        <td>${competencia}</td>
-                        <td>${vencimento}</td>
-                        <td><span class="badge ${status.classe} compensacoes-tooltip" data-tooltip="${tooltipText}" style="cursor: help;">${status.texto}</span></td>
-                        <td><span class="badge ${saldoAcumulado >= 0 ? 'badge-success' : 'badge-danger'}">${decimalParaHora(saldoAcumulado)}</span></td>
-                        <td>${compensacoesText}</td>
-                        <td>
-                            <div class="action-buttons">
-                                ${visualizarBtn}
-                                ${quitarBtn}
-                                <button class="btn btn-warning btn-small" onclick="showEditLancamentoModal('${lanc.id}')">✏️</button>
-                                <button class="btn btn-danger btn-small" onclick="deleteLancamento('${lanc.id}')">🗑️</button>
-                            </div>
-                        </td>
-                    </tr>
-                `;
-            });
-        }
-
-        function filterColaboradores() {
-            const searchTerm = document.getElementById('searchColaborador').value.toLowerCase();
-            const statusFilter = document.getElementById('filterStatus').value;
-            const deptoFilter = document.getElementById('filterDepartamento').value;
-            const empresaFilter = document.getElementById('filterEmpresa').value;
-
-            colaboradoresFiltrados = colaboradores.filter(colab => {
-                const matchSearch = colab.nome.toLowerCase().includes(searchTerm) ||
-                                  colab.departamento.toLowerCase().includes(searchTerm) ||
-                                  colab.empresa.toLowerCase().includes(searchTerm);
-                const matchDepto = !deptoFilter || colab.departamento === deptoFilter;
-                const matchEmpresa = !empresaFilter || colab.empresa === empresaFilter;
-                
-                let matchStatus = true;
-                if (statusFilter === 'ativos') {
-                    matchStatus = colab.ativo !== false;
-                } else if (statusFilter === 'inativos') {
-                    matchStatus = colab.ativo === false;
-                }
-                
-                return matchSearch && matchDepto && matchEmpresa && matchStatus;
-            });
-
-            colaboradoresFiltrados.sort((a, b) => {
-                const nomeA = (a.nome || '').toLowerCase();
-                const nomeB = (b.nome || '').toLowerCase();
-                return nomeA.localeCompare(nomeB);
-            });
-
-            sortField = 'nome';
-            sortDirection = 'asc';
-            currentPage = 1;
-            updateColaboradoresTable();
-        }
-
-        function sortColaboradores(field) {
-            if (sortField === field) {
-                sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
-            } else {
-                sortField = field;
-                sortDirection = 'asc';
-            }
-
-            colaboradoresFiltrados.sort((a, b) => {
-                let valA = a[field];
-                let valB = b[field];
-                
-                if (field === 'dataAdmissao') {
-                    const [dA, mA, yA] = valA.split('/');
-                    const [dB, mB, yB] = valB.split('/');
-                    valA = new Date(yA, mA - 1, dA);
-                    valB = new Date(yB, mB - 1, dB);
-                } else {
-                    valA = String(valA || '').toLowerCase();
-                    valB = String(valB || '').toLowerCase();
-                }
-                
-                if (valA < valB) return sortDirection === 'asc' ? -1 : 1;
-                if (valA > valB) return sortDirection === 'asc' ? 1 : -1;
-                return 0;
-            });
-
-            updateColaboradoresTable();
-        }
-
-        function updateColaboradoresTable() {
-            const tbody = document.getElementById('colaboradoresList');
-            const start = (currentPage - 1) * itemsPerPage;
-            const end = start + itemsPerPage;
-            const paginatedColabs = colaboradoresFiltrados.slice(start, end);
-
-            tbody.innerHTML = '';
-
-            if (colaboradoresFiltrados.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 40px;">Nenhum colaborador encontrado.</td></tr>';
-                updatePagination();
-                return;
-            }
-
-            paginatedColabs.forEach(colab => {
-                const lancamentosColab = lancamentos.filter(l => l.colaboradorId === colab.id);
-                const saldoTotal = lancamentosColab.reduce((sum, l) => {
-                    return l.tipo === 'positiva' ? sum + l.horas : sum - l.horas;
-                }, 0);
-                
-                const statusClass = saldoTotal >= 0 ? 'badge-success' : 'badge-danger';
-                const statusText = colab.ativo !== false ? 
-                    '<span class="badge badge-success">Ativo</span>' : 
-                    '<span class="badge badge-danger">Inativo</span>';
-                
-                tbody.innerHTML += `
-                    <tr>
-                        <td>${colab.nome}</td>
-                        <td>${colab.dataAdmissao}</td>
-                        <td>${colab.departamento}</td>
-                        <td>${colab.empresa}</td>
-                        <td><span class="badge ${statusClass}">${decimalParaHora(saldoTotal)}</span></td>
-                        <td>${statusText}</td>
-                        <td>
-                            <button class="btn btn-primary btn-small" onclick="showColaboradorModal('${colab.id}')">Editar</button>
-                            <button class="btn btn-danger btn-small" onclick="deleteColaborador('${colab.id}')">Excluir</button>
-                        </td>
-                    </tr>
-                `;
-            });
-
-            updatePagination();
-        }
-
-        function updatePagination() {
-            const totalPages = Math.ceil(colaboradoresFiltrados.length / itemsPerPage);
-            const pagination = document.getElementById('pagination');
-            
-            if (totalPages <= 1) {
-                pagination.innerHTML = '';
-                return;
-            }
-
-            let html = '';
-            for (let i = 1; i <= totalPages; i++) {
-                html += `<button class="btn ${i === currentPage ? 'btn-primary' : 'btn-secondary'}" style="padding: 8px 12px;" onclick="goToPage(${i})">${i}</button>`;
-            }
-            pagination.innerHTML = html;
-        }
-
-        function goToPage(page) {
-            currentPage = page;
-            updateColaboradoresTable();
-        }
-
-        async function deleteColaborador(id) {
-            const colaborador = colaboradores.find(c => c.id === id);
-            if (!colaborador) return;
-
-            if (confirm(`Excluir "${colaborador.nome}"?`)) {
-                showLoading(true);
-                try {
-                    const lancamentosRelacionados = lancamentos.filter(l => l.colaboradorId === id);
-                    for (const lanc of lancamentosRelacionados) {
-                        await db.collection('lancamentos').doc(lanc.id).delete();
-                    }
-                    
-                    await db.collection('colaboradores').doc(id).delete();
-                    await loadData();
-                } catch (error) {
-                    console.error('Erro ao deletar:', error);
-                    alert('Erro ao deletar: ' + error.message);
-                }
-                showLoading(false);
-            }
         }
 
         async function deleteEmpresa(nome) {
@@ -3519,169 +3380,55 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             }
         }
 
-        function updateEmpresasTable() {
-            const tbody = document.getElementById('empresasList');
-            const alert = document.getElementById('empresasAlert');
-            
-            tbody.innerHTML = '';
-
-            if (empresas.length === 0) {
-                alert.classList.remove('hidden');
-                return;
-            }
-
-            alert.classList.add('hidden');
-            empresas.sort().forEach(empresa => {
-                tbody.innerHTML += `
-                    <tr>
-                        <td>${empresa}</td>
-                        <td>
-                            <button class="btn btn-primary btn-small" onclick="showEmpresaModal('${empresa}')">Editar</button>
-                            <button class="btn btn-danger btn-small" onclick="deleteEmpresa('${empresa}')">Excluir</button>
-                        </td>
-                    </tr>
-                `;
-            });
+        // ========== IMPORTAÇÃO ==========
+        function showImportModal() {
+            document.getElementById('importModal').style.display = 'block';
         }
 
-        function updateDepartamentosTable() {
-            const tbody = document.getElementById('departamentosList');
-            const alert = document.getElementById('departamentosAlert');
-            
-            tbody.innerHTML = '';
+        async function importColaboradores() {
+            const data = document.getElementById('importData').value;
+            const lines = data.split('\n');
+            let imported = 0;
+            let errors = 0;
 
-            if (departamentos.length === 0) {
-                alert.classList.remove('hidden');
-                return;
-            }
-
-            alert.classList.add('hidden');
-            departamentos.sort().forEach(depto => {
-                tbody.innerHTML += `
-                    <tr>
-                        <td>${depto}</td>
-                        <td>
-                            <button class="btn btn-primary btn-small" onclick="showDepartamentoModal('${depto}')">Editar</button>
-                            <button class="btn btn-danger btn-small" onclick="deleteDepartamento('${depto}')">Excluir</button>
-                        </td>
-                    </tr>
-                `;
-            });
-        }
-
-        function updateDashboard() {
-            document.getElementById('totalColaboradores').textContent = colaboradores.filter(c => c.ativo !== false).length;
-            
-            let totalPositivas = lancamentos
-                .filter(l => l.tipo === 'positiva')
-                .reduce((sum, l) => sum + l.horas, 0);
-            let totalNegativas = lancamentos
-                .filter(l => l.tipo === 'negativa')
-                .reduce((sum, l) => sum + l.horas, 0);
-            
-            document.getElementById('totalHorasPositivas').textContent = decimalParaHora(totalPositivas);
-            document.getElementById('totalHorasNegativas').textContent = decimalParaHora(totalNegativas);
-            document.getElementById('saldoLiquido').textContent = decimalParaHora(totalPositivas - totalNegativas);
-
-            const activities = document.getElementById('recentActivities');
-            
-            if (lancamentos.length === 0) {
-                activities.innerHTML = '<div style="text-align: center; padding: 20px;">Nenhum lançamento recente</div>';
-                return;
-            }
-
-            activities.innerHTML = lancamentos.slice(-5).reverse().map(lanc => {
-                const colaborador = colaboradores.find(c => c.id === lanc.colaboradorId);
-                if (!colaborador) return '';
-                
-                const tipoClass = lanc.tipo === 'positiva' ? 'badge-success' : 'badge-danger';
-                const tipoIcon = lanc.tipo === 'positiva' ? '➕' : '➖';
-                const status = calcularStatus(lanc);
-                
-                return `
-                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px; border-bottom: 1px solid #f1f5f9;">
-                        <div>
-                            <strong>${colaborador.nome}</strong>
-                            <span class="badge ${tipoClass}" style="margin-left: 8px;">${tipoIcon} ${decimalParaHora(lanc.horas)}</span>
-                            <span class="badge ${status.classe}" style="margin-left: 8px;">${status.texto}</span>
-                        </div>
-                        <span style="color: #64748b;">${lanc.data}</span>
-                    </div>
-                `;
-            }).join('');
-        }
-
-        function calcularSaldoAcumulado(colaboradorId, lancamentosDoColaborador) {
-            const lancamentosOrdenados = [...lancamentosDoColaborador].sort((a, b) => {
-                return dataParaObjeto(a.data) - dataParaObjeto(b.data);
-            });
-
-            let saldo = 0;
-            const saldosPorLancamento = [];
-
-            for (const lanc of lancamentosOrdenados) {
-                if (lanc.tipo === 'positiva') {
-                    saldo += lanc.horas;
-                } else {
-                    saldo -= lanc.horas;
+            showLoading(true);
+            try {
+                for (let i = 0; i < lines.length; i++) {
+                    const line = lines[i].trim();
+                    if (line) {
+                        const [nome, dataAdmissao, departamento, empresa] = line.split(',').map(item => item.trim());
+                        
+                        if (nome && dataAdmissao && departamento && empresa) {
+                            if (!departamentos.includes(departamento)) { errors++; continue; }
+                            if (!empresas.includes(empresa)) { errors++; continue; }
+                            if (isValidDate(dataAdmissao)) {
+                                await db.collection('colaboradores').add({
+                                    nome,
+                                    dataAdmissao,
+                                    departamento,
+                                    empresa,
+                                    horasPositivas: 0,
+                                    horasNegativas: 0,
+                                    ativo: true,
+                                    createdAt: new Date().toISOString()
+                                });
+                                imported++;
+                            } else { errors++; }
+                        } else { errors++; }
+                    }
                 }
-                saldosPorLancamento.push({
-                    id: lanc.id,
-                    saldoAcumulado: saldo
-                });
-            }
 
-            return saldosPorLancamento;
+                await loadData();
+                alert(`${imported} colaborador(es) importado(s) com sucesso! ${errors} erro(s).`);
+                hideModal('importModal');
+            } catch (error) {
+                console.error('Erro ao importar:', error);
+                alert('Erro ao importar: ' + error.message);
+            }
+            showLoading(false);
         }
 
-        function gerarTooltipCompensacoes(lancamento) {
-            let tooltip = '';
-            
-            if (lancamento.compensacoes && lancamento.compensacoes.length > 0) {
-                tooltip += '🔽 COMPENSOU:\n';
-                lancamento.compensacoes.forEach(comp => {
-                    const lancComp = lancamentos.find(l => l.id === comp.lancamentoId);
-                    if (lancComp) {
-                        const competencia = formatarCompetencia(lancComp.mes, lancComp.ano);
-                        const tipoIcon = lancComp.tipo === 'positiva' ? '➕' : '➖';
-                        tooltip += `  • ${competencia} ${tipoIcon}: ${decimalParaHora(comp.quantidade)}\n`;
-                    }
-                });
-            }
-            
-            if (lancamento.compensadoPor && lancamento.compensadoPor.length > 0) {
-                if (tooltip) tooltip += '\n';
-                tooltip += '🔼 FOI COMPENSADO POR:\n';
-                lancamento.compensadoPor.forEach(comp => {
-                    const lancComp = lancamentos.find(l => l.id === comp.lancamentoId);
-                    if (lancComp) {
-                        const competencia = formatarCompetencia(lancComp.mes, lancComp.ano);
-                        const tipoIcon = lancComp.tipo === 'positiva' ? '➕' : '➖';
-                        tooltip += `  • ${competencia} ${tipoIcon}: ${decimalParaHora(comp.quantidade)}\n`;
-                    }
-                });
-            }
-            
-            if (!tooltip) {
-                tooltip = 'Nenhuma compensação registrada';
-            } else {
-                tooltip = '📊 DETALHES DAS COMPENSAÇÕES:\n\n' + tooltip;
-            }
-            
-            return tooltip;
-        }
-
-        function updateAllTables() {
-            updateEmpresasTable();
-            updateDepartamentosTable();
-            updateDashboard();
-            carregarFiltros();
-            carregarFiltrosQuitacoes();
-            aplicarFiltrosQuitacoes();
-            filterColaboradores();
-            renderizarHorasVencidas();
-        }
-
+        // ========== DATA DE REFERÊNCIA ==========
         function aplicarDataReferencia() {
             const input = document.getElementById('dataReferenciaInput');
             if (input.value) {
@@ -3692,11 +3439,12 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 dataReferencia.setHours(0, 0, 0, 0);
                 input.value = dataReferencia.toISOString().split('T')[0];
             }
-            // Reexecutar simulação com nova data
-            simularLinhaDoTempo(dataReferencia);
+            // Reexecutar simulação com nova data para atualizar flag 'vencido'
+            simularCompensacoes();
             updateAllTables();
         }
 
+        // ========== INICIALIZAÇÃO ==========
         window.onclick = function(event) {
             if (event.target.classList.contains('modal')) {
                 event.target.style.display = 'none';
