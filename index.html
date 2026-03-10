@@ -1424,7 +1424,7 @@
 
                 <div style="display: flex; gap: 24px; margin: 24px 0;">
                     <div class="form-group" style="flex: 1;">
-                        <label>Valor por Hora (R$) *</label>
+                        <label>Valor total das horas (R$) *</label>
                         <input type="number" id="quitacaoValorHora" step="0.01" min="0" required onchange="calcularValoresQuitacao()">
                     </div>
 
@@ -3155,14 +3155,13 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             let totalHoras = 0;
             checkboxes.forEach(cb => totalHoras += parseFloat(cb.dataset.horas));
 
-            const valorHora = parseFloat(document.getElementById('quitacaoValorHora').value) || 0;
+            const valorTotalHoras = parseFloat(document.getElementById('quitacaoValorHora').value) || 0;
             const valorReflexo = parseFloat(document.getElementById('quitacaoValorReflexo').value) || 0;
             
-            const valorHoras = totalHoras * valorHora;
-            const total = valorHoras + valorReflexo;
+            const total = valorTotalHoras + valorReflexo;
 
             document.getElementById('resumoTotalHoras').textContent = decimalParaHora(totalHoras);
-            document.getElementById('resumoValorHoras').textContent = valorHoras.toFixed(2).replace('.', ',');
+            document.getElementById('resumoValorHoras').textContent = valorTotalHoras.toFixed(2).replace('.', ',');
             document.getElementById('resumoValorReflexo').textContent = valorReflexo.toFixed(2).replace('.', ',');
             document.getElementById('resumoTotalPago').textContent = total.toFixed(2).replace('.', ',');
         }
@@ -3172,7 +3171,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             const mesPagamento = document.getElementById('quitacaoMesPagamento').value;
             const anoPagamento = document.getElementById('quitacaoAnoPagamento').value;
             const dataQuitacao = document.getElementById('quitacaoData').value;
-            const valorHora = parseFloat(document.getElementById('quitacaoValorHora').value) || 0;
+            const valorTotalHoras = parseFloat(document.getElementById('quitacaoValorHora').value) || 0;
             const valorReflexo = parseFloat(document.getElementById('quitacaoValorReflexo').value) || 0;
 
             if (!colaboradorId || !mesPagamento || !anoPagamento || !dataQuitacao) {
@@ -3186,8 +3185,8 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 return;
             }
 
-            if (valorHora <= 0) {
-                alert('O valor por hora deve ser maior que zero!');
+            if (valorTotalHoras <= 0) {
+                alert('O valor total das horas deve ser maior que zero!');
                 return;
             }
 
@@ -3208,13 +3207,11 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             });
 
             const competenciaPagamento = `${mesPagamento}/${anoPagamento}`;
+            const totalPago = valorTotalHoras + valorReflexo;
 
             showLoading(true);
 
             try {
-                const valorFolha = totalHoras * valorHora;
-                const totalPago = valorFolha + valorReflexo;
-
                 const quitacaoData = {
                     colaboradorId: colaboradorId,
                     colaboradorNome: colaborador.nome,
@@ -3224,8 +3221,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                     mesPagamento: mesPagamento,
                     anoPagamento: anoPagamento,
                     horasQuitadas: totalHoras,
-                    valorHora: valorHora,
-                    valorFolha: valorFolha,
+                    valorFolha: valorTotalHoras,
                     valorReflexo: valorReflexo,
                     totalPago: totalPago,
                     lancamentos: lancamentosSelecionados,
@@ -3242,8 +3238,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                             quitado: true,
                             quitadoEm: dataQuitacao,
                             quitacaoId: quitacaoRef.id,
-                            valorQuitacaoHora: valorHora,
-                            valorQuitacaoTotal: lanc.horas * valorHora,
+                            valorQuitacaoTotal: lanc.horas * (valorTotalHoras / totalHoras), // opcional: rateio do valor por hora
                             // Salva o histórico de compensações antes de quitar
                             historicoCompensacoes: lancOriginal.compensacoes || [],
                             historicoCompensadoPor: lancOriginal.compensadoPor || []
@@ -3278,8 +3273,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                     <p><strong>Data da Quitação:</strong> ${new Date(quitacao.dataQuitacao).toLocaleDateString('pt-BR')}</p>
                     <p><strong>Competência Pagamento:</strong> ${quitacao.competenciaPagamento}</p>
                     <p><strong>Total Horas:</strong> ${decimalParaHora(quitacao.horasQuitadas)}</p>
-                    <p><strong>Valor por Hora:</strong> R$ ${quitacao.valorHora.toFixed(2).replace('.', ',')}</p>
-                    <p><strong>Valor na Folha:</strong> R$ ${quitacao.valorFolha.toFixed(2).replace('.', ',')}</p>
+                    <p><strong>Valor Horas:</strong> R$ ${quitacao.valorFolha.toFixed(2).replace('.', ',')}</p>
                     <p><strong>Valor de Reflexo:</strong> R$ ${quitacao.valorReflexo.toFixed(2).replace('.', ',')}</p>
                     <p><strong>Total Pago:</strong> R$ ${quitacao.totalPago.toFixed(2).replace('.', ',')}</p>
                 </div>
@@ -3317,7 +3311,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                         quitado: false,
                         quitadoEm: null,
                         quitacaoId: null,
-                        valorQuitacaoHora: null,
                         valorQuitacaoTotal: null,
                         historicoCompensacoes: [], // Limpa o histórico ao reverter
                         historicoCompensadoPor: []
