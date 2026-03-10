@@ -2130,7 +2130,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             return { texto: 'A compensar', classe: 'badge-info' };
         }
 
-        // Tooltip com informações de compensações e pagamento
+        // Tooltip com informações detalhadas de compensações e pagamento
         function gerarTooltipCompensacoes(lanc) {
             let tooltipHtml = '';
             
@@ -2176,8 +2176,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
 
             // Seção de pagamento em folha (se quitado)
             if (lanc.quitado) {
-                // Para quitados, as horas pagas são as horas originais menos o que foi compensado
-                // Mas como salvamos o histórico, o saldoRestante pode não refletir. Vamos calcular com base no histórico.
                 let totalCompensado = 0;
                 if (lanc.compensacoes) totalCompensado += lanc.compensacoes.reduce((sum, c) => sum + c.quantidade, 0);
                 if (lanc.compensadoPor) totalCompensado += lanc.compensadoPor.reduce((sum, c) => sum + c.quantidade, 0);
@@ -2185,6 +2183,8 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 
                 tooltipHtml += '<div class="tooltip-section">';
                 tooltipHtml += '<div class="tooltip-title">💰 PAGO EM FOLHA:</div>';
+                tooltipHtml += `<div class="tooltip-item"><span>Total horas:</span><span>${decimalParaHora(lanc.horas)}</span></div>`;
+                tooltipHtml += `<div class="tooltip-item"><span>Compensado:</span><span>${decimalParaHora(totalCompensado)}</span></div>`;
                 tooltipHtml += `<div class="tooltip-item"><span>Horas pagas:</span><span class="tooltip-quantidade">${decimalParaHora(horasPagas)}</span></div>`;
                 if (lanc.quitadoEm) {
                     const quitacaoDate = new Date(lanc.quitadoEm).toLocaleDateString('pt-BR');
