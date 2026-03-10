@@ -1725,6 +1725,24 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             return `${meses[dataVencimento.getMonth()]}/${dataVencimento.getFullYear()}`;
         }
 
+        // ========== FUNÇÃO PARA VERIFICAR VENCIMENTOS ==========
+        function verificarVencimentos() {
+            console.log('Verificando vencimentos com prazo de 1 ano');
+            
+            // Para cada lançamento negativo não quitado
+            lancamentos.forEach(l => {
+                if (l.tipo === 'negativa' && !l.quitado) {
+                    const venc = getVencimentoDate(l.mes, l.ano);
+                    // Se a data de vencimento já passou, marca como vencido
+                    if (venc < dataReferencia) {
+                        l.vencido = true;
+                    } else {
+                        l.vencido = false;
+                    }
+                }
+            });
+        }
+
         // ========== SIMULAÇÃO DE COMPENSAÇÃO (CORRIGIDA: respeita vencimento de 1 ano) ==========
         function simularCompensacoes() {
             console.log('Simulando compensações com prazo de 1 ano');
@@ -1734,7 +1752,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 l.saldoRestante = l.horas;
                 l.compensacoes = [];
                 l.compensadoPor = [];
-                l.vencido = false; // usado apenas para quitação em dinheiro
+                // Não resetar o campo vencido aqui, pois já foi definido pela verificação
             });
 
             // Agrupar por colaborador
@@ -1791,29 +1809,21 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                         if (dataPos <= dataNeg) iPos++; else iNeg++;
                     }
                 }
-
-                // Marcar como vencidos (para quitação em dinheiro) os negativos que ainda têm saldo e cujo vencimento já passou (em relação à dataReferencia)
-                lancamentosColab.forEach(l => {
-                    if (l.tipo === 'negativa' && !l.quitado && l.saldoRestante > 0) {
-                        const venc = getVencimentoDate(l.mes, l.ano);
-                        if (venc < dataReferencia) {
-                            l.vencido = true;
-                        }
-                    }
-                });
             });
         }
 
-        // ========== FUNÇÃO PARA VERIFICAR VENCIMENTOS AO LANÇAR NOVA COMPETÊNCIA ==========
+        // ========== FUNÇÃO PARA VERIFICAR VENCIMENTOS APÓS NOVO LANÇAMENTO ==========
         function verificarVencimentosAposNovoLancamento(novoMes, novoAno) {
             const dataNovoLancamento = new Date(parseInt(novoAno), parseInt(novoMes) - 1, 1);
             
             lancamentos.forEach(l => {
-                if (l.tipo === 'negativa' && !l.quitado && l.saldoRestante > 0) {
+                if (l.tipo === 'negativa' && !l.quitado) {
                     const venc = getVencimentoDate(l.mes, l.ano);
                     // Se a nova competência é posterior ao vencimento, marca como vencida
                     if (dataNovoLancamento > venc) {
                         l.vencido = true;
+                    } else {
+                        l.vencido = false;
                     }
                 }
             });
@@ -1962,7 +1972,10 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 // Ordenar lançamentos por data (mais antigos primeiro) para simulação
                 lancamentos.sort((a, b) => dataParaObjeto(a.data) - dataParaObjeto(b.data));
 
-                // Executar simulação de compensação
+                // Primeiro verifica vencimentos baseado na data atual
+                verificarVencimentos();
+
+                // Depois executa simulação de compensação
                 simularCompensacoes();
 
                 // Atualizar todas as telas
@@ -2083,7 +2096,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
         function calcularStatus(lancamento) {
             if (lancamento.quitado) return { texto: 'Quitado', classe: 'badge-quitado' };
             if (lancamento.saldoRestante === 0) return { texto: 'Compensada', classe: 'badge-compensada' };
-            if (lancamento.vencido) return { texto: 'Pendente Pagamento', classe: 'badge-pendente' };
+            if (lancamento.tipo === 'negativa' && lancamento.vencido) return { texto: 'Pendente Pagamento', classe: 'badge-pendente' };
             return { texto: 'A compensar', classe: 'badge-info' };
         }
 
@@ -2636,14 +2649,14 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
 
                 await db.collection('lancamentos').add(lancamentoData);
                 
-                // Verificar vencimentos após o novo lançamento
-                lancamentos.push({ ...lancamentoData, id: 'temp' }); // Temporário para verificação
-                verificarVencimentosAposNovoLancamento(mes, ano);
-                lancamentos.pop(); // Remover temporário
-                
                 await loadData();
                 
                 hideModal('novoLancamentoModal');
+                
+                // Após carregar os dados, verificar vencimentos novamente
+                verificarVencimentos();
+                simularCompensacoes();
+                updateAllTables();
                 
                 document.getElementById('filtroColaborador').value = filtrosAtuais.colaboradorId || '';
                 document.getElementById('filtroDepartamento').value = filtrosAtuais.departamento || '';
@@ -2903,6 +2916,9 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
         }
 
         function renderizarHorasVencidas() {
+            // Verificar vencimentos antes de renderizar
+            verificarVencimentos();
+            
             const horasVencidas = lancamentos.filter(l => 
                 l.tipo === 'negativa' && 
                 !l.quitado && 
@@ -3014,6 +3030,9 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             if (colaborador) {
                 document.getElementById('quitacaoDepartamento').value = colaborador.departamento || '';
             }
+
+            // Verificar vencimentos antes de carregar
+            verificarVencimentos();
 
             // Filtrar lançamentos do colaborador que são negativos, estão vencidos e não quitados
             const lancamentosColab = lancamentos.filter(l => 
