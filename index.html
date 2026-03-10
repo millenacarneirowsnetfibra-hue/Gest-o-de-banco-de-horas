@@ -522,7 +522,7 @@
             100% { opacity: 1; }
         }
 
-        /* Tooltip melhorado para compensações */
+        /* Tooltip melhorado para compensações e pagamentos */
         .status-tooltip {
             position: relative;
             cursor: help;
@@ -1125,7 +1125,7 @@
                 </div>
             </div>
 
-            <!-- QUITAÇÕES TAB (MODIFICADA PARA EXIBIR TODAS AS HORAS COM SALDO > 0) -->
+            <!-- QUITAÇÕES TAB -->
             <div id="quitacoes" class="tab-content">
                 <!-- Header com ações -->
                 <div class="header-with-actions">
@@ -1361,7 +1361,7 @@
         </div>
     </div>
 
-    <!-- Modal de Nova Quitação (MODIFICADO PARA PERMITIR SELEÇÃO DE TODAS AS HORAS PENDENTES) -->
+    <!-- Modal de Nova Quitação -->
     <div id="novaQuitacaoModal" class="modal">
         <div class="modal-content" style="max-width: 900px;">
             <h2>💰 Nova Quitação de Horas Pendentes</h2>
@@ -1740,7 +1740,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             return diffDays > 0 ? diffDays : 0;
         }
 
-        // ========== FUNÇÃO PARA VERIFICAR HORAS PENDENTES (AGORA CONSIDERA TODAS COM SALDO > 0) ==========
+        // ========== FUNÇÃO PARA VERIFICAR HORAS PENDENTES ==========
         function verificarHorasPendentes() {
             console.log('Verificando horas pendentes com prazo de 1 ano');
             
@@ -1756,7 +1756,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             });
         }
 
-        // ========== SIMULAÇÃO DE COMPENSAÇÃO (CORRIGIDA: respeita vencimento de 1 ano) ==========
+        // ========== SIMULAÇÃO DE COMPENSAÇÃO ==========
         function simularCompensacoes() {
             console.log('Simulando compensações com prazo de 1 ano');
 
@@ -1835,7 +1835,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             lancamentos.forEach(l => {
                 if (!l.quitado && l.saldoRestante > 0) {
                     const venc = getVencimentoDate(l.mes, l.ano);
-                    // Se a nova competência é posterior ao vencimento, pode influenciar? Mantemos o cálculo padrão
                     l.pendenteQuitacao = (venc < dataReferencia);
                 } else {
                     l.pendenteQuitacao = false;
@@ -2114,13 +2113,15 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             return { texto: 'A compensar', classe: 'badge-info' };
         }
 
-        function gerarTooltipCompensacoes(lancamento) {
+        // Tooltip modificado para incluir informações de pagamento
+        function gerarTooltipCompensacoes(lanc) {
             let tooltipHtml = '';
             
-            if (lancamento.compensacoes && lancamento.compensacoes.length > 0) {
+            // Seção de compensações realizadas por este lançamento
+            if (lanc.compensacoes && lanc.compensacoes.length > 0) {
                 tooltipHtml += '<div class="tooltip-section">';
                 tooltipHtml += '<div class="tooltip-title">🔽 COMPENSOU:</div>';
-                lancamento.compensacoes.forEach(comp => {
+                lanc.compensacoes.forEach(comp => {
                     const lancComp = lancamentos.find(l => l.id === comp.lancamentoId);
                     if (lancComp) {
                         const competencia = formatarCompetencia(lancComp.mes, lancComp.ano);
@@ -2136,10 +2137,11 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 tooltipHtml += '</div>';
             }
             
-            if (lancamento.compensadoPor && lancamento.compensadoPor.length > 0) {
+            // Seção de compensações que este lançamento recebeu
+            if (lanc.compensadoPor && lanc.compensadoPor.length > 0) {
                 tooltipHtml += '<div class="tooltip-section">';
                 tooltipHtml += '<div class="tooltip-title">🔼 FOI COMPENSADO POR:</div>';
-                lancamento.compensadoPor.forEach(comp => {
+                lanc.compensadoPor.forEach(comp => {
                     const lancComp = lancamentos.find(l => l.id === comp.lancamentoId);
                     if (lancComp) {
                         const competencia = formatarCompetencia(lancComp.mes, lancComp.ano);
@@ -2152,6 +2154,18 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                         `;
                     }
                 });
+                tooltipHtml += '</div>';
+            }
+
+            // Seção de pagamento em folha (se quitado)
+            if (lanc.quitado) {
+                tooltipHtml += '<div class="tooltip-section">';
+                tooltipHtml += '<div class="tooltip-title">💰 PAGO EM FOLHA:</div>';
+                tooltipHtml += `<div class="tooltip-item"><span>Horas pagas:</span><span class="tooltip-quantidade">${decimalParaHora(lanc.saldoRestante)}</span></div>`;
+                if (lanc.quitadoEm) {
+                    const quitacaoDate = new Date(lanc.quitadoEm).toLocaleDateString('pt-BR');
+                    tooltipHtml += `<div class="tooltip-item"><span>Data quitação:</span><span>${quitacaoDate}</span></div>`;
+                }
                 tooltipHtml += '</div>';
             }
             
@@ -2300,14 +2314,16 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 
                 const tooltipHtml = gerarTooltipCompensacoes(lanc);
                 
-                const compensacoesText = horasFaltantes > 0 ? 
-                    `<span class="badge badge-warning">Falta ${decimalParaHora(horasFaltantes)}</span>` : 
-                    `<span class="badge badge-success">Completo</span>`;
+                // Ajuste na coluna "Falta Compensar": se quitado, exibe "Completo" independentemente de horasFaltantes
+                const compensacoesText = lanc.quitado ? 
+                    '<span class="badge badge-success">Completo</span>' : 
+                    (horasFaltantes > 0 ? 
+                        `<span class="badge badge-warning">Falta ${decimalParaHora(horasFaltantes)}</span>` : 
+                        '<span class="badge badge-success">Completo</span>');
 
                 const visualizarBtn = (lanc.compensacoes && lanc.compensacoes.length > 0) || (lanc.compensadoPor && lanc.compensadoPor.length > 0) ?
                     `<button class="btn btn-info btn-small" onclick="showVisualizarCompensacoesModal('${lanc.id}')" title="Ver detalhes das compensações">🔍</button>` : '';
 
-                // Botão de quitar agora aparece para qualquer pendente (saldo > 0 e não quitado)
                 const quitarBtn = (!lanc.quitado && horasFaltantes > 0 && lanc.pendenteQuitacao) ?
                     `<button class="btn btn-primary btn-small" onclick="showNovaQuitacaoParaColaborador('${lanc.colaboradorId}')" title="Quitar horas pendentes">💰</button>` : '';
 
@@ -2846,7 +2862,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             document.getElementById('visualizarCompensacoesModal').style.display = 'block';
         }
 
-        // ========== FUNÇÕES DE QUITAÇÕES (MODIFICADAS) ==========
+        // ========== FUNÇÕES DE QUITAÇÕES ==========
         function carregarFiltrosQuitacoes() {
             const filtroColab = document.getElementById('filtroQuitacaoColaborador');
             filtroColab.innerHTML = '<option value="">Todos os colaboradores</option>';
