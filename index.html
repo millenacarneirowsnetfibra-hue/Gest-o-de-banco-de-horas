@@ -1155,7 +1155,7 @@
                         <select id="filtroQuitacaoStatus" onchange="aplicarFiltrosQuitacoes()">
                             <option value="todas">Todas</option>
                             <option value="quitadas">Quitadas</option>
-                            <option value="vencidas">Vencidas (a quitar)</option>
+                            <option value="vencidas" selected>Vencidas (a quitar)</option>
                         </select>
                     </div>
 
@@ -1662,7 +1662,8 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                     firebaseConnected = true;
                     loadData();
                 })
-                .catch(() => {
+                .catch((error) => {
+                    console.error('Erro ao conectar ao Firebase:', error);
                     firebaseConnected = false;
                     alert('Erro ao conectar ao Firebase. Verifique sua conexão.');
                 });
@@ -1725,7 +1726,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             return `${meses[dataVencimento.getMonth()]}/${dataVencimento.getFullYear()}`;
         }
 
-        // ========== FUNÇÃO PARA VERIFICAR VENCIMENTOS ==========
+        // ========== FUNÇÃO PARA VERIFICAR VENCIMENTOS (CORRIGIDA) ==========
         function verificarVencimentos() {
             console.log('Verificando vencimentos com prazo de 1 ano');
             
@@ -1734,16 +1735,24 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 if (l.tipo === 'negativa' && !l.quitado) {
                     const venc = getVencimentoDate(l.mes, l.ano);
                     // Se a data de vencimento já passou, marca como vencido
-                    if (venc < dataReferencia) {
-                        l.vencido = true;
+                    l.vencido = venc < dataReferencia;
+                    
+                    // Se estiver vencido, o status deve ser "Pendente Pagamento"
+                    if (l.vencido) {
+                        l.statusPagamento = 'pendente';
                     } else {
-                        l.vencido = false;
+                        l.statusPagamento = 'a_compensar';
+                    }
+                } else {
+                    l.vencido = false;
+                    if (l.tipo === 'negativa' && !l.quitado) {
+                        l.statusPagamento = 'a_compensar';
                     }
                 }
             });
         }
 
-        // ========== SIMULAÇÃO DE COMPENSAÇÃO (CORRIGIDA: respeita vencimento de 1 ano) ==========
+        // ========== SIMULAÇÃO DE COMPENSAÇÃO (CORRIGIDA) ==========
         function simularCompensacoes() {
             console.log('Simulando compensações com prazo de 1 ano');
 
@@ -1752,8 +1761,10 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 l.saldoRestante = l.horas;
                 l.compensacoes = [];
                 l.compensadoPor = [];
-                // Não resetar o campo vencido aqui, pois já foi definido pela verificação
             });
+
+            // Verificar vencimentos primeiro
+            verificarVencimentos();
 
             // Agrupar por colaborador
             const colaboradoresIds = [...new Set(lancamentos.map(l => l.colaboradorId))];
@@ -1778,52 +1789,36 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                     // Verificar se a compensação é permitida dentro do prazo de 1 ano
                     const dataPos = dataParaObjeto(pos.data);
                     const dataNeg = dataParaObjeto(neg.data);
-                    const vencPos = getVencimentoDate(pos.mes, pos.ano);
                     const vencNeg = getVencimentoDate(neg.mes, neg.ano);
 
                     // Regra: a hora compensadora deve existir antes do vencimento da hora compensada
-                    const posPodeCompensarNeg = dataPos <= vencNeg;
-                    const negPodeCompensarPos = dataNeg <= vencPos;
+                    // E a hora negativa não pode estar vencida
+                    const posPodeCompensarNeg = dataPos <= vencNeg && !neg.vencido;
 
-                    if (posPodeCompensarNeg && negPodeCompensarPos) {
+                    if (posPodeCompensarNeg) {
                         // Pode compensar
                         const quantidade = Math.min(pos.saldoRestante, neg.saldoRestante);
                         
-                        pos.compensacoes.push({
-                            lancamentoId: neg.id,
-                            quantidade: quantidade,
-                            data: new Date().toLocaleDateString('pt-BR'),
-                            tipo: neg.tipo
-                        });
-                        neg.compensadoPor.push({
-                            lancamentoId: pos.id,
-                            quantidade: quantidade,
-                            data: new Date().toLocaleDateString('pt-BR'),
-                            tipo: pos.tipo
-                        });
+                        if (quantidade > 0) {
+                            pos.compensacoes.push({
+                                lancamentoId: neg.id,
+                                quantidade: quantidade,
+                                data: new Date().toLocaleDateString('pt-BR'),
+                                tipo: neg.tipo
+                            });
+                            neg.compensadoPor.push({
+                                lancamentoId: pos.id,
+                                quantidade: quantidade,
+                                data: new Date().toLocaleDateString('pt-BR'),
+                                tipo: pos.tipo
+                            });
 
-                        pos.saldoRestante -= quantidade;
-                        neg.saldoRestante -= quantidade;
+                            pos.saldoRestante -= quantidade;
+                            neg.saldoRestante -= quantidade;
+                        }
                     } else {
-                        // Não podem compensar: avança o mais antigo
-                        if (dataPos <= dataNeg) iPos++; else iNeg++;
-                    }
-                }
-            });
-        }
-
-        // ========== FUNÇÃO PARA VERIFICAR VENCIMENTOS APÓS NOVO LANÇAMENTO ==========
-        function verificarVencimentosAposNovoLancamento(novoMes, novoAno) {
-            const dataNovoLancamento = new Date(parseInt(novoAno), parseInt(novoMes) - 1, 1);
-            
-            lancamentos.forEach(l => {
-                if (l.tipo === 'negativa' && !l.quitado) {
-                    const venc = getVencimentoDate(l.mes, l.ano);
-                    // Se a nova competência é posterior ao vencimento, marca como vencida
-                    if (dataNovoLancamento > venc) {
-                        l.vencido = true;
-                    } else {
-                        l.vencido = false;
+                        // Não podem compensar: avança o negativo
+                        iNeg++;
                     }
                 }
             });
@@ -2097,6 +2092,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             if (lancamento.quitado) return { texto: 'Quitado', classe: 'badge-quitado' };
             if (lancamento.saldoRestante === 0) return { texto: 'Compensada', classe: 'badge-compensada' };
             if (lancamento.tipo === 'negativa' && lancamento.vencido) return { texto: 'Pendente Pagamento', classe: 'badge-pendente' };
+            if (lancamento.tipo === 'negativa') return { texto: 'A compensar', classe: 'badge-info' };
             return { texto: 'A compensar', classe: 'badge-info' };
         }
 
@@ -2653,11 +2649,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 
                 hideModal('novoLancamentoModal');
                 
-                // Após carregar os dados, verificar vencimentos novamente
-                verificarVencimentos();
-                simularCompensacoes();
-                updateAllTables();
-                
                 document.getElementById('filtroColaborador').value = filtrosAtuais.colaboradorId || '';
                 document.getElementById('filtroDepartamento').value = filtrosAtuais.departamento || '';
                 document.getElementById('filtroStatus').value = filtrosAtuais.status || 'ativos';
@@ -2919,11 +2910,12 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             // Verificar vencimentos antes de renderizar
             verificarVencimentos();
             
+            // Filtrar apenas horas negativas, não quitadas, com saldo restante > 0 e vencidas
             const horasVencidas = lancamentos.filter(l => 
                 l.tipo === 'negativa' && 
                 !l.quitado && 
                 l.saldoRestante > 0 && 
-                l.vencido
+                l.vencido === true
             );
 
             const totalVencido = horasVencidas.reduce((sum, l) => sum + l.saldoRestante, 0);
@@ -3034,13 +3026,13 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             // Verificar vencimentos antes de carregar
             verificarVencimentos();
 
-            // Filtrar lançamentos do colaborador que são negativos, estão vencidos e não quitados
+            // Filtrar lançamentos do colaborador que são negativos, estão vencidos, não quitados e com saldo restante > 0
             const lancamentosColab = lancamentos.filter(l => 
                 l.colaboradorId === colaboradorId && 
                 l.tipo === 'negativa' && 
                 l.saldoRestante > 0 &&
                 !l.quitado &&
-                l.vencido
+                l.vencido === true
             );
 
             if (lancamentosColab.length === 0) {
