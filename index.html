@@ -1740,23 +1740,26 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             return diffDays > 0 ? diffDays : 0;
         }
 
-        // ========== FUNÇÃO PARA VERIFICAR HORAS PENDENTES ==========
+        // ========== FUNÇÃO PARA VERIFICAR HORAS PENDENTES (APENAS NEGATIVAS) ==========
         function verificarHorasPendentes() {
             console.log('Verificando horas pendentes com prazo de 1 ano');
             
-            // Para cada lançamento não quitado e com saldo restante, verifica se venceu
             lancamentos.forEach(l => {
                 if (!l.quitado && l.saldoRestante > 0) {
-                    const venc = getVencimentoDate(l.mes, l.ano);
-                    // Se a data de vencimento já passou, considera pendente para quitação
-                    l.pendenteQuitacao = (venc < dataReferencia);
+                    // Apenas horas negativas podem se tornar pendentes para quitação
+                    if (l.tipo === 'negativa') {
+                        const venc = getVencimentoDate(l.mes, l.ano);
+                        l.pendenteQuitacao = (venc < dataReferencia);
+                    } else {
+                        l.pendenteQuitacao = false; // positivos não viram pendentes
+                    }
                 } else {
                     l.pendenteQuitacao = false;
                 }
             });
         }
 
-        // ========== SIMULAÇÃO DE COMPENSAÇÃO (apenas lançamentos não quitados) ==========
+        // ========== SIMULAÇÃO DE COMPENSAÇÃO (positivas compensam negativas dentro do prazo) ==========
         function simularCompensacoes() {
             console.log('Simulando compensações com prazo de 1 ano');
 
@@ -1790,17 +1793,11 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                     if (pos.saldoRestante <= 0) { iPos++; continue; }
                     if (neg.saldoRestante <= 0) { iNeg++; continue; }
 
-                    // Verificar se a compensação é permitida dentro do prazo de 1 ano
                     const dataPos = dataParaObjeto(pos.data);
-                    const dataNeg = dataParaObjeto(neg.data);
-                    const vencPos = getVencimentoDate(pos.mes, pos.ano);
                     const vencNeg = getVencimentoDate(neg.mes, neg.ano);
 
-                    // Regra: a hora compensadora deve existir antes do vencimento da hora compensada
-                    const posPodeCompensarNeg = dataPos <= vencNeg;
-                    const negPodeCompensarPos = dataNeg <= vencPos;
-
-                    if (posPodeCompensarNeg && negPodeCompensarPos) {
+                    // Verifica se o positivo pode compensar o negativo: positivo deve ocorrer antes do vencimento do negativo
+                    if (dataPos <= vencNeg) {
                         // Pode compensar
                         const quantidade = Math.min(pos.saldoRestante, neg.saldoRestante);
                         
@@ -1820,28 +1817,15 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                         pos.saldoRestante -= quantidade;
                         neg.saldoRestante -= quantidade;
                     } else {
-                        // Não podem compensar: avança o mais antigo
-                        if (dataPos <= dataNeg) iPos++; else iNeg++;
+                        // Este negativo não pode ser compensado por este positivo nem por nenhum futuro (pois futuros têm data maior)
+                        // Então pulamos para o próximo negativo
+                        iNeg++;
                     }
                 }
             });
 
-            // Após simular compensações, verificar quais horas ainda estão pendentes (vencidas)
+            // Após simular compensações, verificar quais horas ainda estão pendentes (vencidas) - apenas negativas
             verificarHorasPendentes();
-        }
-
-        // ========== FUNÇÃO PARA VERIFICAR PENDÊNCIAS APÓS NOVO LANÇAMENTO ==========
-        function verificarPendenciasAposNovoLancamento(novoMes, novoAno) {
-            const dataNovoLancamento = new Date(parseInt(novoAno), parseInt(novoMes) - 1, 1);
-            
-            lancamentos.forEach(l => {
-                if (!l.quitado && l.saldoRestante > 0) {
-                    const venc = getVencimentoDate(l.mes, l.ano);
-                    l.pendenteQuitacao = (venc < dataReferencia);
-                } else {
-                    l.pendenteQuitacao = false;
-                }
-            });
         }
 
         // ========== FUNÇÕES AUXILIARES ==========
@@ -2005,7 +1989,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 // Primeiro executa simulação de compensação apenas para não quitados
                 simularCompensacoes();
 
-                // Verificar pendências
+                // Verificar pendências (já incluso na simulação, mas chama novamente por segurança)
                 verificarHorasPendentes();
 
                 // Atualizar todas as telas
@@ -2966,7 +2950,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             // Verificar pendências antes de renderizar
             verificarHorasPendentes();
             
-            // Agora filtra todas as horas não quitadas com saldo restante > 0 e pendenteQuitacao = true (vencidas)
+            // Agora filtra todas as horas não quitadas com saldo restante > 0 e pendenteQuitacao = true (apenas negativas vencidas)
             const horasPendentes = lancamentos.filter(l => 
                 !l.quitado && 
                 l.saldoRestante > 0 && 
@@ -3085,7 +3069,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             // Verificar pendências antes de carregar
             verificarHorasPendentes();
 
-            // Filtrar lançamentos do colaborador que estão pendentes (não quitados, com saldo restante e vencidos)
+            // Filtrar lançamentos do colaborador que estão pendentes (não quitados, com saldo restante e vencidos - apenas negativas)
             const lancamentosColab = lancamentos.filter(l => 
                 l.colaboradorId === colaboradorId && 
                 !l.quitado && 
