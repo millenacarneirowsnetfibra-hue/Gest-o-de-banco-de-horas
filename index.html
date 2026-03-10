@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Banco de Horas · Compensação por competência</title>
     <style>
-        /* ==================== CSS COMPLETO (com tooltip mais compacto) ==================== */
+        /* ==================== CSS COMPLETO ==================== */
         * {
             margin: 0;
             padding: 0;
@@ -522,7 +522,7 @@
             100% { opacity: 1; }
         }
 
-        /* Tooltip melhorado para compensações e pagamentos – agora mais compacto */
+        /* Tooltip melhorado - mostrando apenas FOI COMPENSADO POR e QUITADO EM FOLHA */
         .status-tooltip {
             position: relative;
             cursor: help;
@@ -536,17 +536,17 @@
             transform: translateX(-50%);
             background: #1e293b;
             color: white;
-            padding: 12px;  /* reduzido de 16px para 12px */
+            padding: 12px;
             border-radius: 12px;
             font-size: 0.85rem;
             white-space: pre-line;
             z-index: 1000;
-            min-width: 300px;
+            min-width: 320px;
             max-width: 400px;
             text-align: left;
             box-shadow: 0 8px 20px rgba(0,0,0,0.3);
             margin-bottom: 10px;
-            line-height: 1.5;  /* ligeiramente reduzido */
+            line-height: 1.5;
             border: 1px solid #334155;
             pointer-events: none;
         }
@@ -567,9 +567,9 @@
         }
 
         .tooltip-section {
-            margin-bottom: 8px;  /* reduzido de 12px para 8px */
+            margin-bottom: 12px;
             border-bottom: 1px solid #334155;
-            padding-bottom: 4px;  /* reduzido de 8px para 4px */
+            padding-bottom: 8px;
         }
 
         .tooltip-section:last-child {
@@ -581,14 +581,15 @@
         .tooltip-title {
             font-weight: 600;
             color: #94a3b8;
-            margin-bottom: 4px;
+            margin-bottom: 6px;
+            font-size: 0.9rem;
         }
 
         .tooltip-item {
             display: flex;
             justify-content: space-between;
             gap: 16px;
-            margin-bottom: 2px;  /* reduzido de 4px para 2px */
+            margin-bottom: 4px;
         }
 
         .tooltip-competencia {
@@ -597,6 +598,11 @@
 
         .tooltip-quantidade {
             color: #fbbf24;
+            font-weight: 600;
+        }
+
+        .tooltip-valor {
+            color: #86efac;
             font-weight: 600;
         }
 
@@ -856,6 +862,57 @@
         .total-vencido .valor {
             color: #dc2626;
             font-size: 1.5rem;
+        }
+
+        /* Informações de quitação */
+        .quitacao-info {
+            background: linear-gradient(135deg, #0f172a, #1e293b);
+            color: white;
+            border-radius: 16px;
+            padding: 20px;
+            margin: 20px 0;
+            border-left: 4px solid #3b82f6;
+        }
+
+        .quitacao-info h3 {
+            color: #94a3b8;
+            font-size: 1rem;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .quitacao-info .quitacao-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            padding: 8px 0;
+            border-bottom: 1px solid #334155;
+        }
+
+        .quitacao-info .quitacao-item:last-child {
+            border-bottom: none;
+        }
+
+        .quitacao-info .label {
+            color: #94a3b8;
+        }
+
+        .quitacao-info .value {
+            color: #fbbf24;
+            font-weight: 600;
+        }
+
+        .quitacao-info .total {
+            font-size: 1.2rem;
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 2px solid #3b82f6;
+        }
+
+        .quitacao-info .total .value {
+            color: #86efac;
+            font-size: 1.3rem;
         }
     </style>
 </head>
@@ -1808,13 +1865,15 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                             lancamentoId: neg.id,
                             quantidade: quantidade,
                             data: new Date().toLocaleDateString('pt-BR'),
-                            tipo: neg.tipo
+                            tipo: neg.tipo,
+                            competencia: formatarCompetencia(neg.mes, neg.ano)
                         });
                         neg.compensadoPor.push({
                             lancamentoId: pos.id,
                             quantidade: quantidade,
                             data: new Date().toLocaleDateString('pt-BR'),
-                            tipo: pos.tipo
+                            tipo: pos.tipo,
+                            competencia: formatarCompetencia(pos.mes, pos.ano)
                         });
 
                         pos.saldoRestante -= quantidade;
@@ -1977,6 +2036,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                         quitado: data.quitado || false,
                         quitadoEm: data.quitadoEm || null,
                         quitacaoId: data.quitacaoId || null,
+                        valorQuitacao: data.valorQuitacaoTotal || null,
                         // Histórico de compensações para quitados
                         historicoCompensacoes: data.historicoCompensacoes || [],
                         historicoCompensadoPor: data.historicoCompensadoPor || []
@@ -2130,51 +2190,26 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             return { texto: 'A compensar', classe: 'badge-info' };
         }
 
-        // Tooltip com informações detalhadas de compensações e pagamento
+        // Tooltip mostrando apenas FOI COMPENSADO POR e QUITADO EM FOLHA
         function gerarTooltipCompensacoes(lanc) {
             let tooltipHtml = '';
             
-            // Seção de compensações realizadas por este lançamento
-            if (lanc.compensacoes && lanc.compensacoes.length > 0) {
-                tooltipHtml += '<div class="tooltip-section">';
-                tooltipHtml += '<div class="tooltip-title">🔽 COMPENSOU:</div>';
-                lanc.compensacoes.forEach(comp => {
-                    const lancComp = lancamentos.find(l => l.id === comp.lancamentoId);
-                    if (lancComp) {
-                        const competencia = formatarCompetencia(lancComp.mes, lancComp.ano);
-                        const tipoIcon = lancComp.tipo === 'positiva' ? '➕' : '➖';
-                        tooltipHtml += `
-                            <div class="tooltip-item">
-                                <span class="tooltip-competencia">${competencia} ${tipoIcon}</span>
-                                <span class="tooltip-quantidade">${decimalParaHora(comp.quantidade)}</span>
-                            </div>
-                        `;
-                    }
-                });
-                tooltipHtml += '</div>';
-            }
-            
-            // Seção de compensações que este lançamento recebeu
+            // Seção FOI COMPENSADO POR
             if (lanc.compensadoPor && lanc.compensadoPor.length > 0) {
                 tooltipHtml += '<div class="tooltip-section">';
-                tooltipHtml += '<div class="tooltip-title">🔼 FOI COMPENSADO POR:</div>';
+                tooltipHtml += '<div class="tooltip-title">🔽 FOI COMPENSADO POR:</div>';
                 lanc.compensadoPor.forEach(comp => {
-                    const lancComp = lancamentos.find(l => l.id === comp.lancamentoId);
-                    if (lancComp) {
-                        const competencia = formatarCompetencia(lancComp.mes, lancComp.ano);
-                        const tipoIcon = lancComp.tipo === 'positiva' ? '➕' : '➖';
-                        tooltipHtml += `
-                            <div class="tooltip-item">
-                                <span class="tooltip-competencia">${competencia} ${tipoIcon}</span>
-                                <span class="tooltip-quantidade">${decimalParaHora(comp.quantidade)}</span>
-                            </div>
-                        `;
-                    }
+                    tooltipHtml += `
+                        <div class="tooltip-item">
+                            <span class="tooltip-competencia">${comp.competencia || 'N/A'} (${comp.tipo === 'positiva' ? '➕' : '➖'})</span>
+                            <span class="tooltip-quantidade">${decimalParaHora(comp.quantidade)}</span>
+                        </div>
+                    `;
                 });
                 tooltipHtml += '</div>';
             }
 
-            // Seção de pagamento em folha (se quitado)
+            // Seção QUITADO EM FOLHA (se quitado)
             if (lanc.quitado) {
                 let totalCompensado = 0;
                 if (lanc.compensacoes) totalCompensado += lanc.compensacoes.reduce((sum, c) => sum + c.quantidade, 0);
@@ -2182,7 +2217,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 const horasPagas = lanc.horas - totalCompensado;
                 
                 tooltipHtml += '<div class="tooltip-section">';
-                tooltipHtml += '<div class="tooltip-title">💰 PAGO EM FOLHA:</div>';
+                tooltipHtml += '<div class="tooltip-title">💰 QUITADO EM FOLHA:</div>';
                 tooltipHtml += `<div class="tooltip-item"><span>Total horas:</span><span>${decimalParaHora(lanc.horas)}</span></div>`;
                 tooltipHtml += `<div class="tooltip-item"><span>Compensado:</span><span>${decimalParaHora(totalCompensado)}</span></div>`;
                 tooltipHtml += `<div class="tooltip-item"><span>Horas pagas:</span><span class="tooltip-quantidade">${decimalParaHora(horasPagas)}</span></div>`;
@@ -2190,11 +2225,14 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                     const quitacaoDate = new Date(lanc.quitadoEm).toLocaleDateString('pt-BR');
                     tooltipHtml += `<div class="tooltip-item"><span>Data quitação:</span><span>${quitacaoDate}</span></div>`;
                 }
+                if (lanc.valorQuitacao) {
+                    tooltipHtml += `<div class="tooltip-item"><span>Valor pago:</span><span class="tooltip-valor">R$ ${lanc.valorQuitacao.toFixed(2)}</span></div>`;
+                }
                 tooltipHtml += '</div>';
             }
             
             if (!tooltipHtml) {
-                tooltipHtml = '<div class="tooltip-section">Nenhuma compensação registrada</div>';
+                tooltipHtml = '<div class="tooltip-section">Nenhuma informação disponível</div>';
             }
             
             return tooltipHtml;
@@ -3238,7 +3276,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                             quitado: true,
                             quitadoEm: dataQuitacao,
                             quitacaoId: quitacaoRef.id,
-                            valorQuitacaoTotal: lanc.horas * (valorTotalHoras / totalHoras), // opcional: rateio do valor por hora
+                            valorQuitacaoTotal: lanc.horas * (valorTotalHoras / totalHoras), // rateio do valor por hora
                             // Salva o histórico de compensações antes de quitar
                             historicoCompensacoes: lancOriginal.compensacoes || [],
                             historicoCompensadoPor: lancOriginal.compensadoPor || []
@@ -3267,15 +3305,40 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             
             const detalhes = document.getElementById('detalhesQuitacao');
             detalhes.innerHTML = `
-                <div style="padding: 16px; background: #f8fafc; border-radius: 12px; margin-bottom: 20px;">
-                    <p><strong>Colaborador:</strong> ${quitacao.colaboradorNome}</p>
-                    <p><strong>Departamento:</strong> ${quitacao.colaboradorDepartamento || 'N/A'}</p>
-                    <p><strong>Data da Quitação:</strong> ${new Date(quitacao.dataQuitacao).toLocaleDateString('pt-BR')}</p>
-                    <p><strong>Competência Pagamento:</strong> ${quitacao.competenciaPagamento}</p>
-                    <p><strong>Total Horas:</strong> ${decimalParaHora(quitacao.horasQuitadas)}</p>
-                    <p><strong>Valor Horas:</strong> R$ ${quitacao.valorFolha.toFixed(2).replace('.', ',')}</p>
-                    <p><strong>Valor de Reflexo:</strong> R$ ${quitacao.valorReflexo.toFixed(2).replace('.', ',')}</p>
-                    <p><strong>Total Pago:</strong> R$ ${quitacao.totalPago.toFixed(2).replace('.', ',')}</p>
+                <div class="quitacao-info">
+                    <h3>Informações da Quitação</h3>
+                    <div class="quitacao-item">
+                        <span class="label">Colaborador:</span>
+                        <span class="value">${quitacao.colaboradorNome}</span>
+                    </div>
+                    <div class="quitacao-item">
+                        <span class="label">Departamento:</span>
+                        <span class="value">${quitacao.colaboradorDepartamento || 'N/A'}</span>
+                    </div>
+                    <div class="quitacao-item">
+                        <span class="label">Data da Quitação:</span>
+                        <span class="value">${new Date(quitacao.dataQuitacao).toLocaleDateString('pt-BR')}</span>
+                    </div>
+                    <div class="quitacao-item">
+                        <span class="label">Competência Pagamento:</span>
+                        <span class="value">${quitacao.competenciaPagamento}</span>
+                    </div>
+                    <div class="quitacao-item">
+                        <span class="label">Total Horas:</span>
+                        <span class="value">${decimalParaHora(quitacao.horasQuitadas)}</span>
+                    </div>
+                    <div class="quitacao-item">
+                        <span class="label">Valor Horas:</span>
+                        <span class="value">R$ ${quitacao.valorFolha.toFixed(2).replace('.', ',')}</span>
+                    </div>
+                    <div class="quitacao-item">
+                        <span class="label">Valor de Reflexo:</span>
+                        <span class="value">R$ ${quitacao.valorReflexo.toFixed(2).replace('.', ',')}</span>
+                    </div>
+                    <div class="quitacao-item total">
+                        <span class="label">Total Pago:</span>
+                        <span class="value">R$ ${quitacao.totalPago.toFixed(2).replace('.', ',')}</span>
+                    </div>
                 </div>
             `;
 
