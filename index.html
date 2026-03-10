@@ -1,5 +1,3 @@
-Aqui está o código HTML completo ajustado com a regra de compensação corrigida: as horas só podem ser compensadas se a competência de uma estiver dentro do intervalo [competência da outra, vencimento da outra] mutuamente. Todas as funcionalidades permanecem intactas e operacionais.
-```html
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
@@ -7,7 +5,7 @@ Aqui está o código HTML completo ajustado com a regra de compensação corrigi
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Banco de Horas · Compensação por competência</title>
     <style>
-        /* ==================== CSS COMPLETO (com tooltip mais compacto) ==================== */
+        /* ==================== CSS COMPLETO ==================== */
         * {
             margin: 0;
             padding: 0;
@@ -538,7 +536,7 @@ Aqui está o código HTML completo ajustado com a regra de compensação corrigi
             transform: translateX(-50%);
             background: #1e293b;
             color: white;
-            padding: 12px;  /* reduzido de 16px para 12px */
+            padding: 12px;
             border-radius: 12px;
             font-size: 0.85rem;
             white-space: pre-line;
@@ -548,7 +546,7 @@ Aqui está o código HTML completo ajustado com a regra de compensação corrigi
             text-align: left;
             box-shadow: 0 8px 20px rgba(0,0,0,0.3);
             margin-bottom: 10px;
-            line-height: 1.5;  /* ligeiramente reduzido */
+            line-height: 1.5;
             border: 1px solid #334155;
             pointer-events: none;
         }
@@ -569,9 +567,9 @@ Aqui está o código HTML completo ajustado com a regra de compensação corrigi
         }
 
         .tooltip-section {
-            margin-bottom: 8px;  /* reduzido de 12px para 8px */
+            margin-bottom: 8px;
             border-bottom: 1px solid #334155;
-            padding-bottom: 4px;  /* reduzido de 8px para 4px */
+            padding-bottom: 4px;
         }
 
         .tooltip-section:last-child {
@@ -590,7 +588,7 @@ Aqui está o código HTML completo ajustado com a regra de compensação corrigi
             display: flex;
             justify-content: space-between;
             gap: 16px;
-            margin-bottom: 2px;  /* reduzido de 4px para 2px */
+            margin-bottom: 2px;
         }
 
         .tooltip-competencia {
@@ -1758,9 +1756,9 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             });
         }
 
-        // ========== SIMULAÇÃO DE COMPENSAÇÃO CORRIGIDA (apenas lançamentos não quitados) ==========
+        // ========== SIMULAÇÃO DE COMPENSAÇÃO CORRIGIDA ==========
         function simularCompensacoes() {
-            console.log('Simulando compensações com prazo de 1 ano (regra de competência)');
+            console.log('Simulando compensações com prazo de 1 ano (regra individual)');
 
             // Resetar campos de simulação para não quitados
             lancamentos.forEach(l => {
@@ -1800,9 +1798,13 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                     const vencPos = getVencimentoDate(pos.mes, pos.ano);
                     const vencNeg = getVencimentoDate(neg.mes, neg.ano);
 
-                    // Regra: a competência da positiva deve estar dentro do intervalo [competência da negativa, vencimento da negativa]
+                    // REGRA CORRETA: Cada lançamento só pode ser compensado por horas que estejam
+                    // dentro do período entre a sua própria competência e o seu próprio vencimento
+                    
+                    // Verifica se a positiva está dentro do período da negativa
                     const posPodeCompensarNeg = compPos >= compNeg && compPos <= vencNeg;
-                    // E a competência da negativa deve estar dentro do intervalo [competência da positiva, vencimento da positiva]
+                    
+                    // Verifica se a negativa está dentro do período da positiva
                     const negPodeCompensarPos = compNeg >= compPos && compNeg <= vencPos;
 
                     if (posPodeCompensarNeg && negPodeCompensarPos) {
