@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Banco de Horas · Compensação por competência</title>
     <style>
-        /* ==================== CSS COMPLETO ==================== */
+        /* ==================== CSS COMPLETO (com tooltip mais compacto) ==================== */
         * {
             margin: 0;
             padding: 0;
@@ -536,7 +536,7 @@
             transform: translateX(-50%);
             background: #1e293b;
             color: white;
-            padding: 12px;
+            padding: 12px;  /* reduzido de 16px para 12px */
             border-radius: 12px;
             font-size: 0.85rem;
             white-space: pre-line;
@@ -546,7 +546,7 @@
             text-align: left;
             box-shadow: 0 8px 20px rgba(0,0,0,0.3);
             margin-bottom: 10px;
-            line-height: 1.5;
+            line-height: 1.5;  /* ligeiramente reduzido */
             border: 1px solid #334155;
             pointer-events: none;
         }
@@ -567,9 +567,9 @@
         }
 
         .tooltip-section {
-            margin-bottom: 8px;
+            margin-bottom: 8px;  /* reduzido de 12px para 8px */
             border-bottom: 1px solid #334155;
-            padding-bottom: 4px;
+            padding-bottom: 4px;  /* reduzido de 8px para 4px */
         }
 
         .tooltip-section:last-child {
@@ -588,7 +588,7 @@
             display: flex;
             justify-content: space-between;
             gap: 16px;
-            margin-bottom: 2px;
+            margin-bottom: 2px;  /* reduzido de 4px para 2px */
         }
 
         .tooltip-competencia {
@@ -1756,9 +1756,9 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             });
         }
 
-        // ========== SIMULAÇÃO DE COMPENSAÇÃO CORRIGIDA ==========
+        // ========== SIMULAÇÃO DE COMPENSAÇÃO (apenas lançamentos não quitados) ==========
         function simularCompensacoes() {
-            console.log('Simulando compensações com prazo de 1 ano (regra individual)');
+            console.log('Simulando compensações com prazo de 1 ano');
 
             // Resetar campos de simulação para não quitados
             lancamentos.forEach(l => {
@@ -1790,22 +1790,15 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                     if (pos.saldoRestante <= 0) { iPos++; continue; }
                     if (neg.saldoRestante <= 0) { iNeg++; continue; }
 
-                    // Datas de competência (primeiro dia do mês)
-                    const compPos = dataParaObjeto(pos.data);
-                    const compNeg = dataParaObjeto(neg.data);
-                    
-                    // Datas de vencimento (último dia do mês um ano depois)
+                    // Verificar se a compensação é permitida dentro do prazo de 1 ano
+                    const dataPos = dataParaObjeto(pos.data);
+                    const dataNeg = dataParaObjeto(neg.data);
                     const vencPos = getVencimentoDate(pos.mes, pos.ano);
                     const vencNeg = getVencimentoDate(neg.mes, neg.ano);
 
-                    // REGRA CORRETA: Cada lançamento só pode ser compensado por horas que estejam
-                    // dentro do período entre a sua própria competência e o seu próprio vencimento
-                    
-                    // Verifica se a positiva está dentro do período da negativa
-                    const posPodeCompensarNeg = compPos >= compNeg && compPos <= vencNeg;
-                    
-                    // Verifica se a negativa está dentro do período da positiva
-                    const negPodeCompensarPos = compNeg >= compPos && compNeg <= vencPos;
+                    // Regra: a hora compensadora deve existir antes do vencimento da hora compensada
+                    const posPodeCompensarNeg = dataPos <= vencNeg;
+                    const negPodeCompensarPos = dataNeg <= vencPos;
 
                     if (posPodeCompensarNeg && negPodeCompensarPos) {
                         // Pode compensar
@@ -1827,8 +1820,8 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                         pos.saldoRestante -= quantidade;
                         neg.saldoRestante -= quantidade;
                     } else {
-                        // Não podem compensar: avança o mais antigo (FIFO)
-                        if (compPos <= compNeg) iPos++; else iNeg++;
+                        // Não podem compensar: avança o mais antigo
+                        if (dataPos <= dataNeg) iPos++; else iNeg++;
                     }
                 }
             });
