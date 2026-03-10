@@ -1125,7 +1125,7 @@
                 </div>
             </div>
 
-            <!-- QUITAÇÕES TAB -->
+            <!-- QUITAÇÕES TAB (MODIFICADA PARA EXIBIR TODAS AS HORAS COM SALDO > 0) -->
             <div id="quitacoes" class="tab-content">
                 <!-- Header com ações -->
                 <div class="header-with-actions">
@@ -1161,7 +1161,7 @@
                         <select id="filtroQuitacaoStatus" onchange="aplicarFiltrosQuitacoes()">
                             <option value="todas">Todas</option>
                             <option value="quitadas">Quitadas</option>
-                            <option value="pendentes">Pendentes (A quitar)</option>
+                            <option value="pendentes" selected>Pendentes (a quitar)</option>
                         </select>
                     </div>
 
@@ -1197,7 +1197,7 @@
                     <span class="valor" id="totalHorasPendentes">00:00</span>
                 </div>
 
-                <!-- Tabela de Horas Pendentes (Não Quitadas - "A compensar") -->
+                <!-- Tabela de Horas Pendentes (todas com saldo restante > 0 e não quitadas) -->
                 <div class="table-container" id="horasPendentesContainer">
                     <div class="header-with-refresh">
                         <h3 style="margin-bottom: 0;">⚠️ Horas Pendentes (Aguardando Quitação)</h3>
@@ -1215,7 +1215,8 @@
                                 <th>Departamento</th>
                                 <th>Competência</th>
                                 <th>Vencimento</th>
-                                <th>Horas Negativas</th>
+                                <th>Tipo</th>
+                                <th>Horas Restantes</th>
                                 <th>Dias Pendentes</th>
                                 <th>Status</th>
                                 <th>Ações</th>
@@ -1360,7 +1361,7 @@
         </div>
     </div>
 
-    <!-- Modal de Nova Quitação -->
+    <!-- Modal de Nova Quitação (MODIFICADO PARA PERMITIR SELEÇÃO DE TODAS AS HORAS PENDENTES) -->
     <div id="novaQuitacaoModal" class="modal">
         <div class="modal-content" style="max-width: 900px;">
             <h2>💰 Nova Quitação de Horas Pendentes</h2>
@@ -1739,23 +1740,25 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             return diffDays > 0 ? diffDays : 0;
         }
 
-        // ========== FUNÇÃO PARA VERIFICAR HORAS PENDENTES (A COMPENSAR) ==========
+        // ========== FUNÇÃO PARA VERIFICAR HORAS PENDENTES (AGORA CONSIDERA TODAS COM SALDO > 0) ==========
         function verificarHorasPendentes() {
-            console.log('Verificando horas pendentes - mostrando todas as horas com status A COMPENSAR');
+            console.log('Verificando horas pendentes com prazo de 1 ano');
             
-            // Para cada lançamento negativo não quitado, marca como pendente se tiver saldo restante > 0
+            // Para cada lançamento não quitado e com saldo restante, verifica se venceu
             lancamentos.forEach(l => {
-                if (l.tipo === 'negativa' && !l.quitado && l.saldoRestante > 0) {
-                    l.pendenteQuitacao = true;
+                if (!l.quitado && l.saldoRestante > 0) {
+                    const venc = getVencimentoDate(l.mes, l.ano);
+                    // Se a data de vencimento já passou, considera pendente para quitação
+                    l.pendenteQuitacao = (venc < dataReferencia);
                 } else {
                     l.pendenteQuitacao = false;
                 }
             });
         }
 
-        // ========== SIMULAÇÃO DE COMPENSAÇÃO ==========
+        // ========== SIMULAÇÃO DE COMPENSAÇÃO (CORRIGIDA: respeita vencimento de 1 ano) ==========
         function simularCompensacoes() {
-            console.log('Simulando compensações');
+            console.log('Simulando compensações com prazo de 1 ano');
 
             // Resetar campos de simulação
             lancamentos.forEach(l => {
@@ -1821,8 +1824,23 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 }
             });
 
-            // Após simular compensações, verificar quais horas negativas ainda estão pendentes
+            // Após simular compensações, verificar quais horas ainda estão pendentes (vencidas)
             verificarHorasPendentes();
+        }
+
+        // ========== FUNÇÃO PARA VERIFICAR PENDÊNCIAS APÓS NOVO LANÇAMENTO ==========
+        function verificarPendenciasAposNovoLancamento(novoMes, novoAno) {
+            const dataNovoLancamento = new Date(parseInt(novoAno), parseInt(novoMes) - 1, 1);
+            
+            lancamentos.forEach(l => {
+                if (!l.quitado && l.saldoRestante > 0) {
+                    const venc = getVencimentoDate(l.mes, l.ano);
+                    // Se a nova competência é posterior ao vencimento, pode influenciar? Mantemos o cálculo padrão
+                    l.pendenteQuitacao = (venc < dataReferencia);
+                } else {
+                    l.pendenteQuitacao = false;
+                }
+            });
         }
 
         // ========== FUNÇÕES AUXILIARES ==========
@@ -1971,6 +1989,9 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 // Primeiro executa simulação de compensação
                 simularCompensacoes();
 
+                // Verificar pendências
+                verificarHorasPendentes();
+
                 // Atualizar todas as telas
                 updateAllTables();
                 
@@ -2089,7 +2110,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
         function calcularStatus(lancamento) {
             if (lancamento.quitado) return { texto: 'PAGO EM FOLHA', classe: 'badge-pago-folha' };
             if (lancamento.saldoRestante === 0) return { texto: 'Compensada', classe: 'badge-compensada' };
-            if (lancamento.tipo === 'negativa' && lancamento.saldoRestante > 0) return { texto: 'A compensar', classe: 'badge-info' };
+            if (lancamento.pendenteQuitacao) return { texto: 'A quitar', classe: 'badge-pendente' };
             return { texto: 'A compensar', classe: 'badge-info' };
         }
 
@@ -2286,7 +2307,8 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 const visualizarBtn = (lanc.compensacoes && lanc.compensacoes.length > 0) || (lanc.compensadoPor && lanc.compensadoPor.length > 0) ?
                     `<button class="btn btn-info btn-small" onclick="showVisualizarCompensacoesModal('${lanc.id}')" title="Ver detalhes das compensações">🔍</button>` : '';
 
-                const quitarBtn = (lanc.tipo === 'negativa' && !lanc.quitado && horasFaltantes > 0) ?
+                // Botão de quitar agora aparece para qualquer pendente (saldo > 0 e não quitado)
+                const quitarBtn = (!lanc.quitado && horasFaltantes > 0 && lanc.pendenteQuitacao) ?
                     `<button class="btn btn-primary btn-small" onclick="showNovaQuitacaoParaColaborador('${lanc.colaboradorId}')" title="Quitar horas pendentes">💰</button>` : '';
 
                 tbody.innerHTML += `
@@ -2640,6 +2662,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 hideModal('novoLancamentoModal');
                 
                 // Após carregar os dados, verificar pendências novamente
+                verificarHorasPendentes();
                 simularCompensacoes();
                 updateAllTables();
                 
@@ -2823,7 +2846,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             document.getElementById('visualizarCompensacoesModal').style.display = 'block';
         }
 
-        // ========== FUNÇÕES DE QUITAÇÕES ==========
+        // ========== FUNÇÕES DE QUITAÇÕES (MODIFICADAS) ==========
         function carregarFiltrosQuitacoes() {
             const filtroColab = document.getElementById('filtroQuitacaoColaborador');
             filtroColab.innerHTML = '<option value="">Todos os colaboradores</option>';
@@ -2904,11 +2927,11 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             // Verificar pendências antes de renderizar
             verificarHorasPendentes();
             
-            // Mostrar TODAS as horas negativas não quitadas que ainda têm saldo restante
+            // Agora filtra todas as horas não quitadas com saldo restante > 0 e pendenteQuitacao = true (vencidas)
             const horasPendentes = lancamentos.filter(l => 
-                l.tipo === 'negativa' && 
                 !l.quitado && 
-                l.saldoRestante > 0
+                l.saldoRestante > 0 && 
+                l.pendenteQuitacao
             );
 
             const totalPendente = horasPendentes.reduce((sum, l) => sum + l.saldoRestante, 0);
@@ -2944,6 +2967,8 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 const competencia = formatarCompetencia(lanc.mes, lanc.ano);
                 const vencimento = calcularVencimento(lanc.mes, lanc.ano);
                 const diasPendentes = calcularDiasPendentes(lanc.mes, lanc.ano);
+                const tipoIcon = lanc.tipo === 'positiva' ? '➕' : '➖';
+                const tipoClass = lanc.tipo === 'positiva' ? 'badge-success' : 'badge-danger';
                 
                 tbody.innerHTML += `
                     <tr>
@@ -2951,9 +2976,10 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                         <td>${colaborador.departamento || 'N/A'}</td>
                         <td>${competencia}</td>
                         <td>${vencimento}</td>
+                        <td><span class="badge ${tipoClass}">${tipoIcon}</span></td>
                         <td><span class="badge badge-pendente">${decimalParaHora(lanc.saldoRestante)}</span></td>
-                        <td><span class="badge ${diasPendentes > 0 ? 'badge-danger' : 'badge-info'}">${diasPendentes > 0 ? diasPendentes + ' dias' : 'No prazo'}</span></td>
-                        <td><span class="badge badge-warning">A compensar</span></td>
+                        <td><span class="badge badge-danger">${diasPendentes} dias</span></td>
+                        <td><span class="badge badge-warning">A quitar</span></td>
                         <td>
                             <button class="btn btn-primary btn-small" onclick="showNovaQuitacaoParaColaborador('${lanc.colaboradorId}')">
                                 Quitar
@@ -3020,12 +3046,12 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             // Verificar pendências antes de carregar
             verificarHorasPendentes();
 
-            // Filtrar lançamentos do colaborador que são negativos e não quitados com saldo restante
+            // Filtrar lançamentos do colaborador que estão pendentes (não quitados, com saldo restante e vencidos)
             const lancamentosColab = lancamentos.filter(l => 
                 l.colaboradorId === colaboradorId && 
-                l.tipo === 'negativa' && 
+                !l.quitado && 
                 l.saldoRestante > 0 &&
-                !l.quitado
+                l.pendenteQuitacao
             );
 
             if (lancamentosColab.length === 0) {
@@ -3041,6 +3067,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 const competencia = formatarCompetencia(lanc.mes, lanc.ano);
                 const vencimento = calcularVencimento(lanc.mes, lanc.ano);
                 const diasPendentes = calcularDiasPendentes(lanc.mes, lanc.ano);
+                const tipoIcon = lanc.tipo === 'positiva' ? '➕' : '➖';
                 
                 html += `
                     <div class="checkbox-item">
@@ -3050,13 +3077,13 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                                onchange="atualizarTotalHorasSelecionadas()">
                         <div class="info">
                             <div>
-                                <span class="competencia">${competencia}</span>
-                                <span class="badge badge-warning" style="margin-left: 8px;">A COMPENSAR</span>
+                                <span class="competencia">${competencia} ${tipoIcon}</span>
+                                <span class="badge badge-pendente" style="margin-left: 8px;">PENDENTE</span>
                             </div>
                             <div class="detalhes">
                                 Disponível: ${decimalParaHora(lanc.saldoRestante)} | 
                                 Vencimento: ${vencimento} | 
-                                ${diasPendentes > 0 ? 'Vencido há ' + diasPendentes + ' dias' : 'No prazo'}
+                                Dias pendentes: ${diasPendentes}
                             </div>
                         </div>
                     </div>
