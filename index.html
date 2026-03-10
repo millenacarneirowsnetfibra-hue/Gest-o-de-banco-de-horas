@@ -1756,20 +1756,22 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             });
         }
 
-        // ========== SIMULAÇÃO DE COMPENSAÇÃO ==========
+        // ========== SIMULAÇÃO DE COMPENSAÇÃO (apenas lançamentos não quitados) ==========
         function simularCompensacoes() {
             console.log('Simulando compensações com prazo de 1 ano');
 
-            // Resetar campos de simulação
+            // Resetar campos de simulação para não quitados
             lancamentos.forEach(l => {
-                l.saldoRestante = l.horas;
-                l.compensacoes = [];
-                l.compensadoPor = [];
-                l.pendenteQuitacao = false;
+                if (!l.quitado) {
+                    l.saldoRestante = l.horas;
+                    l.compensacoes = [];
+                    l.compensadoPor = [];
+                    l.pendenteQuitacao = false;
+                }
             });
 
-            // Agrupar por colaborador
-            const colaboradoresIds = [...new Set(lancamentos.map(l => l.colaboradorId))];
+            // Agrupar por colaborador apenas os não quitados
+            const colaboradoresIds = [...new Set(lancamentos.filter(l => !l.quitado).map(l => l.colaboradorId))];
 
             colaboradoresIds.forEach(colabId => {
                 // Pegar lançamentos não quitados
@@ -1962,7 +1964,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 const lancamentosSnapshot = await db.collection('lancamentos').get();
                 lancamentos = lancamentosSnapshot.docs.map(doc => {
                     const data = doc.data();
-                    return {
+                    const lanc = {
                         id: doc.id,
                         colaboradorId: data.colaboradorId || '',
                         colaboradorNome: data.colaboradorNome || '',
@@ -1974,8 +1976,23 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                         horas: typeof data.horas === 'number' ? data.horas : 0,
                         quitado: data.quitado || false,
                         quitadoEm: data.quitadoEm || null,
-                        quitacaoId: data.quitacaoId || null
+                        quitacaoId: data.quitacaoId || null,
+                        // Histórico de compensações para quitados
+                        historicoCompensacoes: data.historicoCompensacoes || [],
+                        historicoCompensadoPor: data.historicoCompensadoPor || []
                     };
+                    // Se quitado, já usar o histórico
+                    if (lanc.quitado) {
+                        lanc.compensacoes = lanc.historicoCompensacoes;
+                        lanc.compensadoPor = lanc.historicoCompensadoPor;
+                        lanc.saldoRestante = 0; // quitado não tem saldo restante
+                    } else {
+                        // Inicializar vazio para não quitados
+                        lanc.compensacoes = [];
+                        lanc.compensadoPor = [];
+                        lanc.saldoRestante = lanc.horas; // será atualizado na simulação
+                    }
+                    return lanc;
                 });
 
                 const quitacoesSnapshot = await db.collection('quitacoes').get();
@@ -1985,7 +2002,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 // Ordenar lançamentos por data (mais antigos primeiro) para simulação
                 lancamentos.sort((a, b) => dataParaObjeto(a.data) - dataParaObjeto(b.data));
 
-                // Primeiro executa simulação de compensação
+                // Primeiro executa simulação de compensação apenas para não quitados
                 simularCompensacoes();
 
                 // Verificar pendências
@@ -2113,7 +2130,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             return { texto: 'A compensar', classe: 'badge-info' };
         }
 
-        // Tooltip modificado para incluir informações de pagamento
+        // Tooltip com informações de compensações e pagamento
         function gerarTooltipCompensacoes(lanc) {
             let tooltipHtml = '';
             
@@ -2159,9 +2176,16 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
 
             // Seção de pagamento em folha (se quitado)
             if (lanc.quitado) {
+                // Para quitados, as horas pagas são as horas originais menos o que foi compensado
+                // Mas como salvamos o histórico, o saldoRestante pode não refletir. Vamos calcular com base no histórico.
+                let totalCompensado = 0;
+                if (lanc.compensacoes) totalCompensado += lanc.compensacoes.reduce((sum, c) => sum + c.quantidade, 0);
+                if (lanc.compensadoPor) totalCompensado += lanc.compensadoPor.reduce((sum, c) => sum + c.quantidade, 0);
+                const horasPagas = lanc.horas - totalCompensado;
+                
                 tooltipHtml += '<div class="tooltip-section">';
                 tooltipHtml += '<div class="tooltip-title">💰 PAGO EM FOLHA:</div>';
-                tooltipHtml += `<div class="tooltip-item"><span>Horas pagas:</span><span class="tooltip-quantidade">${decimalParaHora(lanc.saldoRestante)}</span></div>`;
+                tooltipHtml += `<div class="tooltip-item"><span>Horas pagas:</span><span class="tooltip-quantidade">${decimalParaHora(horasPagas)}</span></div>`;
                 if (lanc.quitadoEm) {
                     const quitacaoDate = new Date(lanc.quitadoEm).toLocaleDateString('pt-BR');
                     tooltipHtml += `<div class="tooltip-item"><span>Data quitação:</span><span>${quitacaoDate}</span></div>`;
@@ -2310,21 +2334,20 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 
                 const saldoAcumulado = saldosAcumulados[lanc.colaboradorId]?.get(lanc.id) || 0;
                 
-                const horasFaltantes = lanc.saldoRestante !== undefined ? lanc.saldoRestante : lanc.horas;
+                // Para lançamentos quitados, a coluna "Falta Compensar" deve mostrar "Completo"
+                // Para não quitados, mostrar o saldo restante
+                const compensacoesText = lanc.quitado ? 
+                    '<span class="badge badge-success">Completo</span>' : 
+                    (lanc.saldoRestante > 0 ? 
+                        `<span class="badge badge-warning">Falta ${decimalParaHora(lanc.saldoRestante)}</span>` : 
+                        '<span class="badge badge-success">Completo</span>');
                 
                 const tooltipHtml = gerarTooltipCompensacoes(lanc);
                 
-                // Ajuste na coluna "Falta Compensar": se quitado, exibe "Completo" independentemente de horasFaltantes
-                const compensacoesText = lanc.quitado ? 
-                    '<span class="badge badge-success">Completo</span>' : 
-                    (horasFaltantes > 0 ? 
-                        `<span class="badge badge-warning">Falta ${decimalParaHora(horasFaltantes)}</span>` : 
-                        '<span class="badge badge-success">Completo</span>');
-
                 const visualizarBtn = (lanc.compensacoes && lanc.compensacoes.length > 0) || (lanc.compensadoPor && lanc.compensadoPor.length > 0) ?
                     `<button class="btn btn-info btn-small" onclick="showVisualizarCompensacoesModal('${lanc.id}')" title="Ver detalhes das compensações">🔍</button>` : '';
 
-                const quitarBtn = (!lanc.quitado && horasFaltantes > 0 && lanc.pendenteQuitacao) ?
+                const quitarBtn = (!lanc.quitado && lanc.saldoRestante > 0 && lanc.pendenteQuitacao) ?
                     `<button class="btn btn-primary btn-small" onclick="showNovaQuitacaoParaColaborador('${lanc.colaboradorId}')" title="Quitar horas pendentes">💰</button>` : '';
 
                 tbody.innerHTML += `
@@ -3212,13 +3235,20 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 const quitacaoRef = await db.collection('quitacoes').add(quitacaoData);
 
                 for (const lanc of lancamentosSelecionados) {
-                    await db.collection('lancamentos').doc(lanc.id).update({
-                        quitado: true,
-                        quitadoEm: dataQuitacao,
-                        quitacaoId: quitacaoRef.id,
-                        valorQuitacaoHora: valorHora,
-                        valorQuitacaoTotal: lanc.horas * valorHora
-                    });
+                    // Buscar o lançamento original para obter as compensações atuais
+                    const lancOriginal = lancamentos.find(l => l.id === lanc.id);
+                    if (lancOriginal) {
+                        await db.collection('lancamentos').doc(lanc.id).update({
+                            quitado: true,
+                            quitadoEm: dataQuitacao,
+                            quitacaoId: quitacaoRef.id,
+                            valorQuitacaoHora: valorHora,
+                            valorQuitacaoTotal: lanc.horas * valorHora,
+                            // Salva o histórico de compensações antes de quitar
+                            historicoCompensacoes: lancOriginal.compensacoes || [],
+                            historicoCompensadoPor: lancOriginal.compensadoPor || []
+                        });
+                    }
                 }
 
                 await loadData();
@@ -3288,7 +3318,9 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                         quitadoEm: null,
                         quitacaoId: null,
                         valorQuitacaoHora: null,
-                        valorQuitacaoTotal: null
+                        valorQuitacaoTotal: null,
+                        historicoCompensacoes: [], // Limpa o histórico ao reverter
+                        historicoCompensadoPor: []
                     });
                 }
 
