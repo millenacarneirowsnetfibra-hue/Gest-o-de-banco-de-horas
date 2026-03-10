@@ -510,6 +510,12 @@
             animation: pulse 2s infinite;
         }
 
+        .badge-pago-folha {
+            background: #cffafe;
+            color: #0e7490;
+            border: 1px solid #06b6d4;
+        }
+
         @keyframes pulse {
             0% { opacity: 1; }
             50% { opacity: 0.8; }
@@ -1155,7 +1161,7 @@
                         <select id="filtroQuitacaoStatus" onchange="aplicarFiltrosQuitacoes()">
                             <option value="todas">Todas</option>
                             <option value="quitadas">Quitadas</option>
-                            <option value="vencidas" selected>Vencidas (a quitar)</option>
+                            <option value="pendentes">Pendentes (A quitar)</option>
                         </select>
                     </div>
 
@@ -1185,24 +1191,24 @@
                     </div>
                 </div>
 
-                <!-- Total de Horas Vencidas (Resumo) -->
-                <div id="totalVencidoContainer" class="total-vencido hidden">
-                    <span>💰 Total de Horas Vencidas a Quitar:</span>
-                    <span class="valor" id="totalHorasVencidas">00:00</span>
+                <!-- Total de Horas Pendentes (Resumo) -->
+                <div id="totalPendenteContainer" class="total-vencido hidden">
+                    <span>💰 Total de Horas Pendentes a Quitar:</span>
+                    <span class="valor" id="totalHorasPendentes">00:00</span>
                 </div>
 
-                <!-- Tabela de Horas Vencidas (Não Quitadas) -->
-                <div class="table-container" id="horasVencidasContainer">
+                <!-- Tabela de Horas Pendentes (Não Quitadas - "A compensar") -->
+                <div class="table-container" id="horasPendentesContainer">
                     <div class="header-with-refresh">
-                        <h3 style="margin-bottom: 0;">⚠️ Horas Vencidas (Aguardando Quitação)</h3>
-                        <span id="contadorVencidas" style="color: #64748b;">0 horas vencidas</span>
+                        <h3 style="margin-bottom: 0;">⚠️ Horas Pendentes (Aguardando Quitação)</h3>
+                        <span id="contadorPendentes" style="color: #64748b;">0 horas pendentes</span>
                     </div>
                     
-                    <div id="semVencidasMsg" style="text-align: center; padding: 40px; color: #64748b; display: none;">
-                        Nenhuma hora vencida encontrada.
+                    <div id="semPendentesMsg" style="text-align: center; padding: 40px; color: #64748b; display: none;">
+                        Nenhuma hora pendente encontrada.
                     </div>
 
-                    <table id="horasVencidasTable">
+                    <table id="horasPendentesTable">
                         <thead>
                             <tr>
                                 <th>Colaborador</th>
@@ -1210,12 +1216,13 @@
                                 <th>Competência</th>
                                 <th>Vencimento</th>
                                 <th>Horas Negativas</th>
-                                <th>Dias Vencidos</th>
+                                <th>Dias Pendentes</th>
+                                <th>Status</th>
                                 <th>Ações</th>
                             </tr>
                         </thead>
-                        <tbody id="horasVencidasList">
-                            <!-- Horas vencidas serão inseridas aqui -->
+                        <tbody id="horasPendentesList">
+                            <!-- Horas pendentes serão inseridas aqui -->
                         </tbody>
                     </table>
                 </div>
@@ -1356,12 +1363,12 @@
     <!-- Modal de Nova Quitação -->
     <div id="novaQuitacaoModal" class="modal">
         <div class="modal-content" style="max-width: 900px;">
-            <h2>💰 Nova Quitação de Horas Vencidas</h2>
+            <h2>💰 Nova Quitação de Horas Pendentes</h2>
             <form id="novaQuitacaoForm" onsubmit="event.preventDefault(); salvarNovaQuitacao();">
                 <div class="form-row">
                     <div class="form-group">
                         <label>Funcionário *</label>
-                        <select id="quitacaoColaborador" required onchange="carregarHorasVencidasColaborador()">
+                        <select id="quitacaoColaborador" required onchange="carregarHorasPendentesColaborador()">
                             <option value="">Selecione um funcionário</option>
                         </select>
                     </div>
@@ -1403,7 +1410,7 @@
                 </div>
 
                 <div style="margin: 24px 0;">
-                    <h3 style="margin-bottom: 16px;">📋 Horas Vencidas Disponíveis para Quitação</h3>
+                    <h3 style="margin-bottom: 16px;">📋 Horas Pendentes Disponíveis para Quitação</h3>
                     
                     <div class="checkbox-list" id="lancamentosDisponiveisList">
                         <!-- Lançamentos serão inseridos aqui -->
@@ -1662,8 +1669,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                     firebaseConnected = true;
                     loadData();
                 })
-                .catch((error) => {
-                    console.error('Erro ao conectar ao Firebase:', error);
+                .catch(() => {
                     firebaseConnected = false;
                     alert('Erro ao conectar ao Firebase. Verifique sua conexão.');
                 });
@@ -1726,33 +1732,32 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             return `${meses[dataVencimento.getMonth()]}/${dataVencimento.getFullYear()}`;
         }
 
-        // ========== FUNÇÃO PARA VERIFICAR VENCIMENTOS (CORRIGIDA) ==========
-        function verificarVencimentos() {
-            console.log('Verificando vencimentos com prazo de 1 ano');
+        function calcularDiasPendentes(mes, ano) {
+            const dataVencimento = getVencimentoDate(mes, ano);
+            const diffTime = dataReferencia - dataVencimento;
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            return diffDays > 0 ? diffDays : 0;
+        }
+
+        // ========== FUNÇÃO PARA VERIFICAR HORAS PENDENTES (A COMPENSAR) ==========
+        function verificarHorasPendentes() {
+            console.log('Verificando horas pendentes com prazo de 1 ano');
             
-            // Para cada lançamento negativo não quitado
+            // Para cada lançamento negativo não quitado e que não foi compensado totalmente
             lancamentos.forEach(l => {
                 if (l.tipo === 'negativa' && !l.quitado) {
                     const venc = getVencimentoDate(l.mes, l.ano);
-                    // Se a data de vencimento já passou, marca como vencido
-                    l.vencido = venc < dataReferencia;
-                    
-                    // Se estiver vencido, o status deve ser "Pendente Pagamento"
-                    if (l.vencido) {
-                        l.statusPagamento = 'pendente';
+                    // Se a data de vencimento já passou, considera pendente para quitação
+                    if (venc < dataReferencia && l.saldoRestante > 0) {
+                        l.pendenteQuitacao = true;
                     } else {
-                        l.statusPagamento = 'a_compensar';
-                    }
-                } else {
-                    l.vencido = false;
-                    if (l.tipo === 'negativa' && !l.quitado) {
-                        l.statusPagamento = 'a_compensar';
+                        l.pendenteQuitacao = false;
                     }
                 }
             });
         }
 
-        // ========== SIMULAÇÃO DE COMPENSAÇÃO (CORRIGIDA) ==========
+        // ========== SIMULAÇÃO DE COMPENSAÇÃO (CORRIGIDA: respeita vencimento de 1 ano) ==========
         function simularCompensacoes() {
             console.log('Simulando compensações com prazo de 1 ano');
 
@@ -1761,10 +1766,8 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 l.saldoRestante = l.horas;
                 l.compensacoes = [];
                 l.compensadoPor = [];
+                l.pendenteQuitacao = false;
             });
-
-            // Verificar vencimentos primeiro
-            verificarVencimentos();
 
             // Agrupar por colaborador
             const colaboradoresIds = [...new Set(lancamentos.map(l => l.colaboradorId))];
@@ -1789,36 +1792,55 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                     // Verificar se a compensação é permitida dentro do prazo de 1 ano
                     const dataPos = dataParaObjeto(pos.data);
                     const dataNeg = dataParaObjeto(neg.data);
+                    const vencPos = getVencimentoDate(pos.mes, pos.ano);
                     const vencNeg = getVencimentoDate(neg.mes, neg.ano);
 
                     // Regra: a hora compensadora deve existir antes do vencimento da hora compensada
-                    // E a hora negativa não pode estar vencida
-                    const posPodeCompensarNeg = dataPos <= vencNeg && !neg.vencido;
+                    const posPodeCompensarNeg = dataPos <= vencNeg;
+                    const negPodeCompensarPos = dataNeg <= vencPos;
 
-                    if (posPodeCompensarNeg) {
+                    if (posPodeCompensarNeg && negPodeCompensarPos) {
                         // Pode compensar
                         const quantidade = Math.min(pos.saldoRestante, neg.saldoRestante);
                         
-                        if (quantidade > 0) {
-                            pos.compensacoes.push({
-                                lancamentoId: neg.id,
-                                quantidade: quantidade,
-                                data: new Date().toLocaleDateString('pt-BR'),
-                                tipo: neg.tipo
-                            });
-                            neg.compensadoPor.push({
-                                lancamentoId: pos.id,
-                                quantidade: quantidade,
-                                data: new Date().toLocaleDateString('pt-BR'),
-                                tipo: pos.tipo
-                            });
+                        pos.compensacoes.push({
+                            lancamentoId: neg.id,
+                            quantidade: quantidade,
+                            data: new Date().toLocaleDateString('pt-BR'),
+                            tipo: neg.tipo
+                        });
+                        neg.compensadoPor.push({
+                            lancamentoId: pos.id,
+                            quantidade: quantidade,
+                            data: new Date().toLocaleDateString('pt-BR'),
+                            tipo: pos.tipo
+                        });
 
-                            pos.saldoRestante -= quantidade;
-                            neg.saldoRestante -= quantidade;
-                        }
+                        pos.saldoRestante -= quantidade;
+                        neg.saldoRestante -= quantidade;
                     } else {
-                        // Não podem compensar: avança o negativo
-                        iNeg++;
+                        // Não podem compensar: avança o mais antigo
+                        if (dataPos <= dataNeg) iPos++; else iNeg++;
+                    }
+                }
+            });
+
+            // Após simular compensações, verificar quais horas negativas ainda estão pendentes
+            verificarHorasPendentes();
+        }
+
+        // ========== FUNÇÃO PARA VERIFICAR PENDÊNCIAS APÓS NOVO LANÇAMENTO ==========
+        function verificarPendenciasAposNovoLancamento(novoMes, novoAno) {
+            const dataNovoLancamento = new Date(parseInt(novoAno), parseInt(novoMes) - 1, 1);
+            
+            lancamentos.forEach(l => {
+                if (l.tipo === 'negativa' && !l.quitado) {
+                    const venc = getVencimentoDate(l.mes, l.ano);
+                    // Se a nova competência é posterior ao vencimento, marca como pendente
+                    if (dataNovoLancamento > venc && l.saldoRestante > 0) {
+                        l.pendenteQuitacao = true;
+                    } else {
+                        l.pendenteQuitacao = false;
                     }
                 }
             });
@@ -1850,7 +1872,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             } else if (tabName === 'quitacoes') {
                 carregarFiltrosQuitacoes();
                 aplicarFiltrosQuitacoes();
-                renderizarHorasVencidas();
+                renderizarHorasPendentes();
             }
         }
 
@@ -1967,11 +1989,11 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 // Ordenar lançamentos por data (mais antigos primeiro) para simulação
                 lancamentos.sort((a, b) => dataParaObjeto(a.data) - dataParaObjeto(b.data));
 
-                // Primeiro verifica vencimentos baseado na data atual
-                verificarVencimentos();
-
-                // Depois executa simulação de compensação
+                // Primeiro executa simulação de compensação
                 simularCompensacoes();
+
+                // Verificar pendências
+                verificarHorasPendentes();
 
                 // Atualizar todas as telas
                 updateAllTables();
@@ -1993,7 +2015,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             carregarFiltrosQuitacoes();
             aplicarFiltrosQuitacoes();
             filterColaboradores();
-            renderizarHorasVencidas();
+            renderizarHorasPendentes();
         }
 
         function updateEmpresasTable() {
@@ -2089,10 +2111,9 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
         }
 
         function calcularStatus(lancamento) {
-            if (lancamento.quitado) return { texto: 'Quitado', classe: 'badge-quitado' };
+            if (lancamento.quitado) return { texto: 'PAGO EM FOLHA', classe: 'badge-pago-folha' };
             if (lancamento.saldoRestante === 0) return { texto: 'Compensada', classe: 'badge-compensada' };
-            if (lancamento.tipo === 'negativa' && lancamento.vencido) return { texto: 'Pendente Pagamento', classe: 'badge-pendente' };
-            if (lancamento.tipo === 'negativa') return { texto: 'A compensar', classe: 'badge-info' };
+            if (lancamento.tipo === 'negativa' && lancamento.pendenteQuitacao) return { texto: 'A quitar', classe: 'badge-pendente' };
             return { texto: 'A compensar', classe: 'badge-info' };
         }
 
@@ -2142,13 +2163,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             }
             
             return tooltipHtml;
-        }
-
-        function calcularDiasVencidos(mes, ano) {
-            const dataVencimento = getVencimentoDate(mes, ano);
-            const diffTime = dataReferencia - dataVencimento;
-            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-            return diffDays > 0 ? diffDays : 0;
         }
 
         // ========== FUNÇÕES DE FILTRO E RENDER DE LANÇAMENTOS ==========
@@ -2296,8 +2310,8 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 const visualizarBtn = (lanc.compensacoes && lanc.compensacoes.length > 0) || (lanc.compensadoPor && lanc.compensadoPor.length > 0) ?
                     `<button class="btn btn-info btn-small" onclick="showVisualizarCompensacoesModal('${lanc.id}')" title="Ver detalhes das compensações">🔍</button>` : '';
 
-                const quitarBtn = (lanc.tipo === 'negativa' && !lanc.quitado && horasFaltantes > 0 && lanc.vencido) ?
-                    `<button class="btn btn-primary btn-small" onclick="showNovaQuitacaoParaColaborador('${lanc.colaboradorId}')" title="Quitar horas vencidas">💰</button>` : '';
+                const quitarBtn = (lanc.tipo === 'negativa' && !lanc.quitado && horasFaltantes > 0 && lanc.pendenteQuitacao) ?
+                    `<button class="btn btn-primary btn-small" onclick="showNovaQuitacaoParaColaborador('${lanc.colaboradorId}')" title="Quitar horas pendentes">💰</button>` : '';
 
                 tbody.innerHTML += `
                     <tr>
@@ -2649,6 +2663,11 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 
                 hideModal('novoLancamentoModal');
                 
+                // Após carregar os dados, verificar pendências novamente
+                verificarHorasPendentes();
+                simularCompensacoes();
+                updateAllTables();
+                
                 document.getElementById('filtroColaborador').value = filtrosAtuais.colaboradorId || '';
                 document.getElementById('filtroDepartamento').value = filtrosAtuais.departamento || '';
                 document.getElementById('filtroStatus').value = filtrosAtuais.status || 'ativos';
@@ -2865,7 +2884,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
 
             document.getElementById('contadorQuitacoes').textContent = `${quitacoesFiltradas.length} quitações`;
             renderizarTabelaQuitacoes(quitacoesFiltradas);
-            renderizarHorasVencidas();
+            renderizarHorasPendentes();
         }
 
         function renderizarTabelaQuitacoes(quitacoesFiltradas) {
@@ -2906,51 +2925,50 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             });
         }
 
-        function renderizarHorasVencidas() {
-            // Verificar vencimentos antes de renderizar
-            verificarVencimentos();
+        function renderizarHorasPendentes() {
+            // Verificar pendências antes de renderizar
+            verificarHorasPendentes();
             
-            // Filtrar apenas horas negativas, não quitadas, com saldo restante > 0 e vencidas
-            const horasVencidas = lancamentos.filter(l => 
+            const horasPendentes = lancamentos.filter(l => 
                 l.tipo === 'negativa' && 
                 !l.quitado && 
                 l.saldoRestante > 0 && 
-                l.vencido === true
+                l.pendenteQuitacao
             );
 
-            const totalVencido = horasVencidas.reduce((sum, l) => sum + l.saldoRestante, 0);
+            const totalPendente = horasPendentes.reduce((sum, l) => sum + l.saldoRestante, 0);
             
-            const totalVencidoContainer = document.getElementById('totalVencidoContainer');
-            if (totalVencido > 0) {
-                totalVencidoContainer.classList.remove('hidden');
-                document.getElementById('totalHorasVencidas').textContent = decimalParaHora(totalVencido);
+            const totalPendenteContainer = document.getElementById('totalPendenteContainer');
+            if (totalPendente > 0) {
+                totalPendenteContainer.classList.remove('hidden');
+                document.getElementById('totalHorasPendentes').textContent = decimalParaHora(totalPendente);
             } else {
-                totalVencidoContainer.classList.add('hidden');
+                totalPendenteContainer.classList.add('hidden');
             }
 
-            document.getElementById('contadorVencidas').textContent = `${decimalParaHora(totalVencido)} horas vencidas`;
+            document.getElementById('contadorPendentes').textContent = `${decimalParaHora(totalPendente)} horas pendentes`;
 
-            const tbody = document.getElementById('horasVencidasList');
-            const tabela = document.getElementById('horasVencidasTable');
-            const semVencidasMsg = document.getElementById('semVencidasMsg');
+            const tbody = document.getElementById('horasPendentesList');
+            const tabela = document.getElementById('horasPendentesTable');
+            const semPendentesMsg = document.getElementById('semPendentesMsg');
 
-            if (horasVencidas.length === 0) {
+            if (horasPendentes.length === 0) {
                 tabela.style.display = 'none';
-                semVencidasMsg.style.display = 'block';
+                semPendentesMsg.style.display = 'block';
                 return;
             }
 
             tabela.style.display = 'table';
-            semVencidasMsg.style.display = 'none';
+            semPendentesMsg.style.display = 'none';
             tbody.innerHTML = '';
 
-            horasVencidas.forEach(lanc => {
+            horasPendentes.forEach(lanc => {
                 const colaborador = colaboradores.find(c => c.id === lanc.colaboradorId);
                 if (!colaborador) return;
 
                 const competencia = formatarCompetencia(lanc.mes, lanc.ano);
                 const vencimento = calcularVencimento(lanc.mes, lanc.ano);
-                const diasVencidos = calcularDiasVencidos(lanc.mes, lanc.ano);
+                const diasPendentes = calcularDiasPendentes(lanc.mes, lanc.ano);
                 
                 tbody.innerHTML += `
                     <tr>
@@ -2959,7 +2977,8 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                         <td>${competencia}</td>
                         <td>${vencimento}</td>
                         <td><span class="badge badge-pendente">${decimalParaHora(lanc.saldoRestante)}</span></td>
-                        <td><span class="badge badge-danger">${diasVencidos} dias</span></td>
+                        <td><span class="badge badge-danger">${diasPendentes} dias</span></td>
+                        <td><span class="badge badge-warning">A quitar</span></td>
                         <td>
                             <button class="btn btn-primary btn-small" onclick="showNovaQuitacaoParaColaborador('${lanc.colaboradorId}')">
                                 Quitar
@@ -3004,11 +3023,11 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             showNovaQuitacaoModal();
             setTimeout(() => {
                 document.getElementById('quitacaoColaborador').value = colaboradorId;
-                carregarHorasVencidasColaborador();
+                carregarHorasPendentesColaborador();
             }, 100);
         }
 
-        function carregarHorasVencidasColaborador() {
+        function carregarHorasPendentesColaborador() {
             const colaboradorId = document.getElementById('quitacaoColaborador').value;
             
             if (!colaboradorId) {
@@ -3023,20 +3042,20 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 document.getElementById('quitacaoDepartamento').value = colaborador.departamento || '';
             }
 
-            // Verificar vencimentos antes de carregar
-            verificarVencimentos();
+            // Verificar pendências antes de carregar
+            verificarHorasPendentes();
 
-            // Filtrar lançamentos do colaborador que são negativos, estão vencidos, não quitados e com saldo restante > 0
+            // Filtrar lançamentos do colaborador que são negativos, estão pendentes e não quitados
             const lancamentosColab = lancamentos.filter(l => 
                 l.colaboradorId === colaboradorId && 
                 l.tipo === 'negativa' && 
                 l.saldoRestante > 0 &&
                 !l.quitado &&
-                l.vencido === true
+                l.pendenteQuitacao
             );
 
             if (lancamentosColab.length === 0) {
-                document.getElementById('lancamentosDisponiveisList').innerHTML = '<div style="text-align: center; padding: 20px;">Nenhuma hora vencida disponível para quitação.</div>';
+                document.getElementById('lancamentosDisponiveisList').innerHTML = '<div style="text-align: center; padding: 20px;">Nenhuma hora pendente disponível para quitação.</div>';
                 document.getElementById('totalHorasSelecionadas').textContent = 'Horas selecionadas: 00:00 de 00:00 disponíveis';
                 return;
             }
@@ -3047,7 +3066,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             lancamentosColab.forEach(lanc => {
                 const competencia = formatarCompetencia(lanc.mes, lanc.ano);
                 const vencimento = calcularVencimento(lanc.mes, lanc.ano);
-                const diasVencidos = calcularDiasVencidos(lanc.mes, lanc.ano);
+                const diasPendentes = calcularDiasPendentes(lanc.mes, lanc.ano);
                 
                 html += `
                     <div class="checkbox-item">
@@ -3058,12 +3077,12 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                         <div class="info">
                             <div>
                                 <span class="competencia">${competencia}</span>
-                                <span class="badge badge-danger" style="margin-left: 8px;">PENDENTE PAGAMENTO</span>
+                                <span class="badge badge-pendente" style="margin-left: 8px;">PENDENTE</span>
                             </div>
                             <div class="detalhes">
                                 Disponível: ${decimalParaHora(lanc.saldoRestante)} | 
                                 Vencimento: ${vencimento} | 
-                                Dias vencidos: ${diasVencidos}
+                                Dias pendentes: ${diasPendentes}
                             </div>
                         </div>
                     </div>
@@ -3123,7 +3142,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
 
             const checkboxes = document.querySelectorAll('.lancamento-checkbox:checked');
             if (checkboxes.length === 0) {
-                alert('Selecione pelo menos uma hora vencida para quitar!');
+                alert('Selecione pelo menos uma hora pendente para quitar!');
                 return;
             }
 
@@ -3189,7 +3208,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 
                 hideModal('novaQuitacaoModal');
                 aplicarFiltrosQuitacoes();
-                renderizarHorasVencidas();
+                renderizarHorasPendentes();
                 alert('Quitação realizada com sucesso!');
             } catch (error) {
                 console.error('Erro ao salvar quitação:', error);
@@ -3228,7 +3247,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                     lancHtml += `
                         <div style="padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 8px;">
                             <strong>${formatarCompetencia(lancOriginal.mes, lancOriginal.ano)}</strong><br>
-                            Horas: ${decimalParaHora(lanc.horas)}
+                            Horas: ${decimalParaHora(lanc.horas)} - <span class="badge badge-pago-folha">PAGO EM FOLHA</span>
                         </div>
                     `;
                 }
@@ -3259,7 +3278,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 await db.collection('quitacoes').doc(id).delete();
                 await loadData();
                 aplicarFiltrosQuitacoes();
-                renderizarHorasVencidas();
+                renderizarHorasPendentes();
                 alert('Quitação excluída com sucesso!');
             } catch (error) {
                 console.error('Erro ao excluir quitação:', error);
