@@ -1,3 +1,4 @@
+```html
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
@@ -1977,20 +1978,22 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             console.log('Compensações recalculadas.');
         }
 
-        // ========== FUNÇÃO DE STATUS BASEADA NOS DIAS PARA VENCIMENTO ==========
+        // ========== FUNÇÃO DE STATUS CORRIGIDA - PRIORIDADE: QUITADO > SALDO ZERO > VENCIMENTO ==========
         function calcularStatus(lanc) {
-            // Se quitado, prioridade máxima
+            // 1. Prioridade máxima: quitado em folha
             if (lanc.quitado) {
                 return { texto: 'Quitado em Folha', classe: 'badge-pago-folha' };
             }
             
-            // Verifica se o saldo restante é zero (considerando tolerância para arredondamento)
+            // 2. Verifica se o saldo restante é zero (considerando tolerância para arredondamento)
+            //    Isso garante que competências totalmente compensadas apareçam como COMPENSADA,
+            //    independentemente da data de vencimento.
             const saldoZero = lanc.saldoRestante !== undefined && Math.abs(lanc.saldoRestante) < 0.0001;
             if (saldoZero) {
                 return { texto: 'Compensada', classe: 'badge-compensada' };
             }
 
-            // Se não quitado e com saldo restante, calcula com base no vencimento
+            // 3. Se há saldo restante, avalia o vencimento
             const hoje = dataReferencia;
             const venc = getVencimentoDate(lanc.mes, lanc.ano);
             const diffTime = venc - hoje;
@@ -2470,8 +2473,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 
                 const saldoAcumulado = saldosAcumulados[lanc.colaboradorId]?.get(lanc.id) || 0;
                 
-                // Para lançamentos quitados, a coluna "Falta Compensar" deve mostrar "Completo"
-                // Para não quitados, mostrar o saldo restante (se for zero, mostra "Completo" também)
+                // Para lançamentos quitados ou com saldo restante zero, a coluna "Falta Compensar" deve mostrar "Completo"
                 let compensacoesText;
                 if (lanc.quitado) {
                     compensacoesText = '<span class="badge badge-success">Completo</span>';
