@@ -1,3 +1,5 @@
+Aqui está o código HTML completo com a lógica de compensação corrigida. Agora o sistema cruza corretamente horas positivas e negativas, respeitando prazos e ordem cronológica.
+```html
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
@@ -1797,14 +1799,9 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             return diffDays > 0 ? diffDays : 0;
         }
 
-        // ========== NOVA LÓGICA DE COMPENSAÇÃO ==========
-        // Função principal que recalcula todas as compensações com base nas regras:
-        // - Apenas lançamentos não quitados participam
-        // - Ordem cronológica (mais antigo primeiro)
-        // - Compensação apenas entre sinais opostos
-        // - Respeita o prazo de 1 ano: para que A compense B, a data de A deve estar entre a data de B e o vencimento de B, e vice-versa
+        // ========== NOVA LÓGICA DE COMPENSAÇÃO CORRIGIDA ==========
         function calcularCompensacoes() {
-            console.log('Executando nova lógica de compensação...');
+            console.log('Executando lógica de compensação corrigida...');
 
             // Inicializa saldos e estruturas de compensação para não quitados
             lancamentos.forEach(l => {
@@ -1820,8 +1817,9 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             const colaboradoresIds = [...new Set(lancamentos.filter(l => !l.quitado).map(l => l.colaboradorId))];
 
             colaboradoresIds.forEach(colabId => {
-                // Obtém lançamentos não quitados do colaborador
-                const lancs = lancamentos.filter(l => l.colaboradorId === colabId && !l.quitado);
+                // Obtém lançamentos não quitados do colaborador que ainda estão dentro do prazo (não vencidos)
+                // Apenas horas dentro do prazo podem participar da compensação
+                const lancs = lancamentos.filter(l => l.colaboradorId === colabId && !l.quitado && getVencimentoDate(l.mes, l.ano) >= dataReferencia);
                 
                 // Separa positivos e negativos, ordenados por data (ascendente)
                 const positivos = lancs.filter(l => l.tipo === 'positiva').sort((a, b) => dataParaObjeto(a.data) - dataParaObjeto(b.data));
@@ -1841,15 +1839,16 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                     const vencPos = getVencimentoDate(pos.mes, pos.ano);
                     const vencNeg = getVencimentoDate(neg.mes, neg.ano);
 
-                    // Verifica se podem se compensar mutuamente (ambos dentro do período um do outro)
+                    // Condição correta: a data de uma deve estar dentro do período da outra (OU)
+                    // Isto permite que a hora mais recente compense a mais antiga, desde que esteja dentro do prazo da mais antiga
                     const posPodeCompensarNeg = dataPos >= dataNeg && dataPos <= vencNeg;
                     const negPodeCompensarPos = dataNeg >= dataPos && dataNeg <= vencPos;
 
-                    if (posPodeCompensarNeg && negPodeCompensarPos) {
+                    if (posPodeCompensarNeg || negPodeCompensarPos) {
                         // Compensação possível
                         const quantidade = Math.min(pos.saldoRestante, neg.saldoRestante);
 
-                        // Registra as compensações
+                        // Registra as compensações (sempre bilateral)
                         pos.compensacoes.push({
                             lancamentoId: neg.id,
                             quantidade: quantidade,
@@ -2078,7 +2077,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 // Ordena lançamentos por data para consistência
                 lancamentos.sort((a, b) => dataParaObjeto(a.data) - dataParaObjeto(b.data));
 
-                // Executa a nova lógica de compensação
+                // Executa a nova lógica de compensação corrigida
                 calcularCompensacoes();
 
                 // Atualiza todas as telas
@@ -3615,3 +3614,4 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
     </script>
 </body>
 </html>
+```
