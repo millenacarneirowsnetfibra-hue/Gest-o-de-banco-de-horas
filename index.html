@@ -1,5 +1,3 @@
-Aqui está o código HTML completo com a lógica de compensação corrigida. Agora o sistema cruza corretamente horas positivas e negativas, respeitando prazos e ordem cronológica.
-```html
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
@@ -1801,9 +1799,9 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
 
         // ========== NOVA LÓGICA DE COMPENSAÇÃO CORRIGIDA ==========
         function calcularCompensacoes() {
-            console.log('Executando lógica de compensação corrigida...');
+            console.log('Executando nova lógica de compensação (ordem cronológica com vencimento)...');
 
-            // Inicializa saldos e estruturas de compensação para não quitados
+            // Inicializa saldos e estruturas de compensação para todos os lançamentos não quitados
             lancamentos.forEach(l => {
                 if (!l.quitado) {
                     l.saldoRestante = l.horas;
@@ -1813,78 +1811,151 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 }
             });
 
-            // Agrupa por colaborador
+            // Função auxiliar para converter string "01/mm/aaaa" em objeto Date (considerando primeiro dia do mês)
+            function parseData(dataStr) {
+                const [dia, mes, ano] = dataStr.split('/').map(Number);
+                return new Date(ano, mes - 1, dia);
+            }
+
+            // Agrupa lançamentos não quitados por colaborador
             const colaboradoresIds = [...new Set(lancamentos.filter(l => !l.quitado).map(l => l.colaboradorId))];
 
             colaboradoresIds.forEach(colabId => {
-                // Obtém lançamentos não quitados do colaborador que ainda estão dentro do prazo (não vencidos)
-                // Apenas horas dentro do prazo podem participar da compensação
-                const lancs = lancamentos.filter(l => l.colaboradorId === colabId && !l.quitado && getVencimentoDate(l.mes, l.ano) >= dataReferencia);
-                
-                // Separa positivos e negativos, ordenados por data (ascendente)
-                const positivos = lancs.filter(l => l.tipo === 'positiva').sort((a, b) => dataParaObjeto(a.data) - dataParaObjeto(b.data));
-                const negativos = lancs.filter(l => l.tipo === 'negativa').sort((a, b) => dataParaObjeto(a.data) - dataParaObjeto(b.data));
+                // Obtém lançamentos do colaborador não quitados, ordenados por data (crescente)
+                const lancsColab = lancamentos
+                    .filter(l => l.colaboradorId === colabId && !l.quitado)
+                    .sort((a, b) => parseData(a.data) - parseData(b.data));
 
-                let iPos = 0, iNeg = 0;
+                // Filas de pendências (cada item: { id, saldoRestante, dataObj, vencimentoObj, competencia })
+                const filaPos = [];
+                const filaNeg = [];
 
-                while (iPos < positivos.length && iNeg < negativos.length) {
-                    const pos = positivos[iPos];
-                    const neg = negativos[iNeg];
+                lancsColab.forEach(lanc => {
+                    // Data do lançamento atual como objeto Date
+                    const dataLanc = parseData(lanc.data);
+                    const vencLanc = getVencimentoDate(lanc.mes, lanc.ano);
 
-                    if (pos.saldoRestante <= 0) { iPos++; continue; }
-                    if (neg.saldoRestante <= 0) { iNeg++; continue; }
-
-                    const dataPos = dataParaObjeto(pos.data);
-                    const dataNeg = dataParaObjeto(neg.data);
-                    const vencPos = getVencimentoDate(pos.mes, pos.ano);
-                    const vencNeg = getVencimentoDate(neg.mes, neg.ano);
-
-                    // Condição correta: a data de uma deve estar dentro do período da outra (OU)
-                    // Isto permite que a hora mais recente compense a mais antiga, desde que esteja dentro do prazo da mais antiga
-                    const posPodeCompensarNeg = dataPos >= dataNeg && dataPos <= vencNeg;
-                    const negPodeCompensarPos = dataNeg >= dataPos && dataNeg <= vencPos;
-
-                    if (posPodeCompensarNeg || negPodeCompensarPos) {
-                        // Compensação possível
-                        const quantidade = Math.min(pos.saldoRestante, neg.saldoRestante);
-
-                        // Registra as compensações (sempre bilateral)
-                        pos.compensacoes.push({
-                            lancamentoId: neg.id,
-                            quantidade: quantidade,
-                            data: new Date().toLocaleDateString('pt-BR'),
-                            tipo: neg.tipo,
-                            competencia: formatarCompetencia(neg.mes, neg.ano)
-                        });
-                        neg.compensadoPor.push({
-                            lancamentoId: pos.id,
-                            quantidade: quantidade,
-                            data: new Date().toLocaleDateString('pt-BR'),
-                            tipo: pos.tipo,
-                            competencia: formatarCompetencia(pos.mes, pos.ano)
-                        });
-
-                        pos.saldoRestante -= quantidade;
-                        neg.saldoRestante -= quantidade;
-
-                        // Não avançamos os índices, pois ainda pode haver saldo em algum dos dois para continuar compensando com o próximo do outro lado
-                    } else {
-                        // Não podem compensar: avança o de data mais antiga
-                        if (dataPos < dataNeg) {
-                            iPos++;
-                        } else {
-                            iNeg++;
-                        }
+                    // --- Etapa 1: Remover das filas as pendências que já expiraram antes deste lançamento ---
+                    // Pendências cujo vencimento é anterior à data do lançamento atual não podem mais ser usadas
+                    while (filaPos.length > 0 && filaPos[0].vencimentoObj < dataLanc) {
+                        filaPos.shift(); // remove da fila, mas o saldo restante já está no objeto original
                     }
-                }
+                    while (filaNeg.length > 0 && filaNeg[0].vencimentoObj < dataLanc) {
+                        filaNeg.shift();
+                    }
+
+                    // Inicializa saldo restante do lançamento atual
+                    let saldoAtual = lanc.horas;
+
+                    if (lanc.tipo === 'positiva') {
+                        // Tenta compensar com pendências negativas (mais antigas primeiro)
+                        while (saldoAtual > 0 && filaNeg.length > 0) {
+                            const pend = filaNeg[0];
+                            // Verifica se este lançamento positivo pode compensar a pendência negativa:
+                            // A data do lançamento atual deve ser <= vencimento da pendência (já que pend.data <= lanc.data)
+                            if (dataLanc <= pend.vencimentoObj) {
+                                const qtd = Math.min(saldoAtual, pend.saldoRestante);
+                                // Reduz saldos
+                                saldoAtual -= qtd;
+                                pend.saldoRestante -= qtd;
+
+                                // Registra compensação: este positivo compensou a pendência negativa
+                                lanc.compensacoes.push({
+                                    lancamentoId: pend.id,
+                                    quantidade: qtd,
+                                    data: lanc.data,
+                                    tipo: 'negativa',
+                                    competencia: pend.competencia
+                                });
+                                // Na pendência, registra que foi compensada por este positivo
+                                const pendOriginal = lancamentos.find(l => l.id === pend.id);
+                                if (pendOriginal) {
+                                    pendOriginal.compensadoPor.push({
+                                        lancamentoId: lanc.id,
+                                        quantidade: qtd,
+                                        data: lanc.data,
+                                        tipo: 'positiva',
+                                        competencia: formatarCompetencia(lanc.mes, lanc.ano)
+                                    });
+                                }
+
+                                // Se a pendência zerou, remove da fila; senão, apenas atualiza o saldo (continua na fila)
+                                if (pend.saldoRestante === 0) {
+                                    filaNeg.shift();
+                                }
+                            } else {
+                                // A pendência expirou antes deste lançamento, então não pode compensar; remove da fila
+                                filaNeg.shift();
+                            }
+                        }
+
+                        // Após compensações, se ainda restar saldo, adiciona à fila de positivos
+                        if (saldoAtual > 0) {
+                            filaPos.push({
+                                id: lanc.id,
+                                saldoRestante: saldoAtual,
+                                dataObj: dataLanc,
+                                vencimentoObj: vencLanc,
+                                competencia: formatarCompetencia(lanc.mes, lanc.ano)
+                            });
+                        }
+                        // Atualiza o saldo restante no objeto original
+                        lanc.saldoRestante = saldoAtual;
+
+                    } else { // tipo === 'negativa'
+                        // Tenta compensar com pendências positivas
+                        while (saldoAtual > 0 && filaPos.length > 0) {
+                            const pend = filaPos[0];
+                            if (dataLanc <= pend.vencimentoObj) {
+                                const qtd = Math.min(saldoAtual, pend.saldoRestante);
+                                saldoAtual -= qtd;
+                                pend.saldoRestante -= qtd;
+
+                                lanc.compensacoes.push({
+                                    lancamentoId: pend.id,
+                                    quantidade: qtd,
+                                    data: lanc.data,
+                                    tipo: 'positiva',
+                                    competencia: pend.competencia
+                                });
+
+                                const pendOriginal = lancamentos.find(l => l.id === pend.id);
+                                if (pendOriginal) {
+                                    pendOriginal.compensadoPor.push({
+                                        lancamentoId: lanc.id,
+                                        quantidade: qtd,
+                                        data: lanc.data,
+                                        tipo: 'negativa',
+                                        competencia: formatarCompetencia(lanc.mes, lanc.ano)
+                                    });
+                                }
+
+                                if (pend.saldoRestante === 0) {
+                                    filaPos.shift();
+                                }
+                            } else {
+                                filaPos.shift();
+                            }
+                        }
+
+                        if (saldoAtual > 0) {
+                            filaNeg.push({
+                                id: lanc.id,
+                                saldoRestante: saldoAtual,
+                                dataObj: dataLanc,
+                                vencimentoObj: vencLanc,
+                                competencia: formatarCompetencia(lanc.mes, lanc.ano)
+                            });
+                        }
+                        lanc.saldoRestante = saldoAtual;
+                    }
+                });
+
+                // Após processar todos os lançamentos do colaborador, não precisamos fazer mais nada.
+                // As pendências que sobraram nas filas (não expiradas) estão ativas para o futuro.
             });
 
-            // Após compensações, atualiza pendências (horas vencidas com saldo restante)
-            verificarHorasPendentes();
-        }
-
-        // ========== FUNÇÃO PARA VERIFICAR HORAS PENDENTES (vencidas) ==========
-        function verificarHorasPendentes() {
+            // Por fim, atualiza a flag de pendenteQuitacao para lançamentos vencidos com saldo > 0
             lancamentos.forEach(l => {
                 if (!l.quitado && l.saldoRestante > 0) {
                     const venc = getVencimentoDate(l.mes, l.ano);
@@ -1893,6 +1964,8 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                     l.pendenteQuitacao = false;
                 }
             });
+
+            console.log('Compensações recalculadas.');
         }
 
         // ========== FUNÇÃO DE STATUS BASEADA NOS DIAS PARA VENCIMENTO ==========
@@ -3614,4 +3687,3 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
     </script>
 </body>
 </html>
-```
