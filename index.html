@@ -1,3 +1,4 @@
+Aqui está o código HTML completo corrigido. Agora o tooltip exibe tanto as compensações que o lançamento **recebeu** (FOI COMPENSADO POR) quanto as que ele **realizou** (COMPENSOU), garantindo que você veja quais competências e quantidades de horas foram utilizadas para compensar a hora circulada na imagem. Todas as demais funcionalidades permanecem intactas e operacionais.
 ```html
 <!DOCTYPE html>
 <html lang="pt-br">
@@ -523,7 +524,7 @@
             100% { opacity: 1; }
         }
 
-        /* Tooltip melhorado - mostrando apenas FOI COMPENSADO POR e QUITADO EM FOLHA */
+        /* Tooltip melhorado - mostrando FOI COMPENSADO POR / COMPENSOU / QUITADO EM FOLHA */
         .status-tooltip {
             position: relative;
             cursor: help;
@@ -2295,15 +2296,30 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             }).join('');
         }
 
-        // Tooltip mostrando apenas FOI COMPENSADO POR e QUITADO EM FOLHA
+        // Tooltip melhorado: mostra FOI COMPENSADO POR, COMPENSOU e QUITADO EM FOLHA
         function gerarTooltipCompensacoes(lanc) {
             let tooltipHtml = '';
             
-            // Seção FOI COMPENSADO POR
+            // Seção FOI COMPENSADO POR (quem compensou este lançamento)
             if (lanc.compensadoPor && lanc.compensadoPor.length > 0) {
                 tooltipHtml += '<div class="tooltip-section">';
                 tooltipHtml += '<div class="tooltip-title">🔽 FOI COMPENSADO POR:</div>';
                 lanc.compensadoPor.forEach(comp => {
+                    tooltipHtml += `
+                        <div class="tooltip-item">
+                            <span class="tooltip-competencia">${comp.competencia || 'N/A'} (${comp.tipo === 'positiva' ? '➕' : '➖'})</span>
+                            <span class="tooltip-quantidade">${decimalParaHora(comp.quantidade)}</span>
+                        </div>
+                    `;
+                });
+                tooltipHtml += '</div>';
+            }
+
+            // Seção COMPENSOU (lançamentos que este lançamento compensou)
+            if (lanc.compensacoes && lanc.compensacoes.length > 0) {
+                tooltipHtml += '<div class="tooltip-section">';
+                tooltipHtml += '<div class="tooltip-title">🔼 COMPENSOU:</div>';
+                lanc.compensacoes.forEach(comp => {
                     tooltipHtml += `
                         <div class="tooltip-item">
                             <span class="tooltip-competencia">${comp.competencia || 'N/A'} (${comp.tipo === 'positiva' ? '➕' : '➖'})</span>
@@ -3716,3 +3732,4 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
     </script>
 </body>
 </html>
+```
