@@ -1979,13 +1979,18 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
 
         // ========== FUNÇÃO DE STATUS BASEADA NOS DIAS PARA VENCIMENTO ==========
         function calcularStatus(lanc) {
+            // Se quitado, prioridade máxima
             if (lanc.quitado) {
                 return { texto: 'Quitado em Folha', classe: 'badge-pago-folha' };
             }
-            if (lanc.saldoRestante === 0) {
+            
+            // Verifica se o saldo restante é zero (considerando tolerância para arredondamento)
+            const saldoZero = lanc.saldoRestante !== undefined && Math.abs(lanc.saldoRestante) < 0.0001;
+            if (saldoZero) {
                 return { texto: 'Compensada', classe: 'badge-compensada' };
             }
 
+            // Se não quitado e com saldo restante, calcula com base no vencimento
             const hoje = dataReferencia;
             const venc = getVencimentoDate(lanc.mes, lanc.ano);
             const diffTime = venc - hoje;
@@ -2043,10 +2048,16 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
 
         function decimalParaHora(decimal) {
             if (decimal === undefined || decimal === null) return '00:00';
+            // Se for um valor muito próximo de zero, considera zero
+            if (Math.abs(decimal) < 0.0001) return '00:00';
             const sinal = decimal < 0 ? '-' : '';
             const absDecimal = Math.abs(decimal);
             const horas = Math.floor(absDecimal);
             const minutos = Math.round((absDecimal - horas) * 60);
+            // Arredonda minutos para evitar 60
+            if (minutos === 60) {
+                return `${sinal}${(horas + 1).toString().padStart(2, '0')}:00`;
+            }
             return `${sinal}${horas.toString().padStart(2, '0')}:${minutos.toString().padStart(2, '0')}`;
         }
 
@@ -2460,12 +2471,18 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 const saldoAcumulado = saldosAcumulados[lanc.colaboradorId]?.get(lanc.id) || 0;
                 
                 // Para lançamentos quitados, a coluna "Falta Compensar" deve mostrar "Completo"
-                // Para não quitados, mostrar o saldo restante
-                const compensacoesText = lanc.quitado ? 
-                    '<span class="badge badge-success">Completo</span>' : 
-                    (lanc.saldoRestante > 0 ? 
-                        `<span class="badge badge-warning">Falta ${decimalParaHora(lanc.saldoRestante)}</span>` : 
-                        '<span class="badge badge-success">Completo</span>');
+                // Para não quitados, mostrar o saldo restante (se for zero, mostra "Completo" também)
+                let compensacoesText;
+                if (lanc.quitado) {
+                    compensacoesText = '<span class="badge badge-success">Completo</span>';
+                } else {
+                    const saldoZero = lanc.saldoRestante !== undefined && Math.abs(lanc.saldoRestante) < 0.0001;
+                    if (saldoZero) {
+                        compensacoesText = '<span class="badge badge-success">Completo</span>';
+                    } else {
+                        compensacoesText = `<span class="badge badge-warning">Falta ${decimalParaHora(lanc.saldoRestante)}</span>`;
+                    }
+                }
                 
                 const tooltipHtml = gerarTooltipCompensacoes(lanc);
                 
