@@ -1798,7 +1798,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             return diffDays > 0 ? diffDays : 0;
         }
 
-        // ========== NOVA LÓGICA DE COMPENSAÇÃO CORRIGIDA (inserção ordenada) ==========
+        // ========== LÓGICA DE COMPENSAÇÃO CORRIGIDA (atualiza saldo dos lançamentos originais) ==========
         function calcularCompensacoes() {
             console.log('Executando nova lógica de compensação (ordem cronológica com vencimento)...');
 
@@ -1869,17 +1869,10 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                                 saldoAtual -= qtd;
                                 pend.saldoRestante -= qtd;
 
-                                // Registra compensação: este positivo compensou a pendência negativa
-                                lanc.compensacoes.push({
-                                    lancamentoId: pend.id,
-                                    quantidade: qtd,
-                                    data: lanc.data,
-                                    tipo: 'negativa',
-                                    competencia: pend.competencia
-                                });
-                                // Na pendência, registra que foi compensada por este positivo
+                                // ATUALIZA O SALDO DO LANÇAMENTO ORIGINAL (PENDÊNCIA)
                                 const pendOriginal = lancamentos.find(l => l.id === pend.id);
                                 if (pendOriginal) {
+                                    pendOriginal.saldoRestante = pend.saldoRestante;
                                     pendOriginal.compensadoPor.push({
                                         lancamentoId: lanc.id,
                                         quantidade: qtd,
@@ -1888,6 +1881,15 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                                         competencia: formatarCompetencia(lanc.mes, lanc.ano)
                                     });
                                 }
+
+                                // Registra compensação: este positivo compensou a pendência negativa
+                                lanc.compensacoes.push({
+                                    lancamentoId: pend.id,
+                                    quantidade: qtd,
+                                    data: lanc.data,
+                                    tipo: 'negativa',
+                                    competencia: pend.competencia
+                                });
 
                                 // Se a pendência zerou, remove da fila; senão, apenas atualiza o saldo (continua na fila)
                                 if (pend.saldoRestante === 0) {
@@ -1921,16 +1923,10 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                                 saldoAtual -= qtd;
                                 pend.saldoRestante -= qtd;
 
-                                lanc.compensacoes.push({
-                                    lancamentoId: pend.id,
-                                    quantidade: qtd,
-                                    data: lanc.data,
-                                    tipo: 'positiva',
-                                    competencia: pend.competencia
-                                });
-
+                                // ATUALIZA O SALDO DO LANÇAMENTO ORIGINAL (PENDÊNCIA)
                                 const pendOriginal = lancamentos.find(l => l.id === pend.id);
                                 if (pendOriginal) {
+                                    pendOriginal.saldoRestante = pend.saldoRestante;
                                     pendOriginal.compensadoPor.push({
                                         lancamentoId: lanc.id,
                                         quantidade: qtd,
@@ -1939,6 +1935,14 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                                         competencia: formatarCompetencia(lanc.mes, lanc.ano)
                                     });
                                 }
+
+                                lanc.compensacoes.push({
+                                    lancamentoId: pend.id,
+                                    quantidade: qtd,
+                                    data: lanc.data,
+                                    tipo: 'positiva',
+                                    competencia: pend.competencia
+                                });
 
                                 if (pend.saldoRestante === 0) {
                                     filaPos.shift();
