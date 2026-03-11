@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Banco de Horas · Compensação por competência</title>
     <style>
-        /* ==================== CSS COMPLETO ==================== */
+        /* ==================== CSS COMPLETO (mantido igual) ==================== */
         * {
             margin: 0;
             padding: 0;
@@ -922,7 +922,7 @@
     </div>
 
     <div class="container">
-        <!-- Sidebar -->
+        <!-- Sidebar (idêntica) -->
         <div class="sidebar">
             <div class="sidebar-header">
                 <h2>⏰ Banco de Horas</h2>
@@ -946,7 +946,7 @@
             </ul>
         </div>
 
-        <!-- Main Content -->
+        <!-- Main Content (idêntico) -->
         <div class="main-content">
             <!-- Header -->
             <div class="page-header">
@@ -1006,7 +1006,7 @@
                 </div>
             </div>
 
-            <!-- Colaboradores Tab -->
+            <!-- Colaboradores Tab (idêntico) -->
             <div id="colaboradores" class="tab-content">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
                     <h2 style="color: #0f172a;">👥 Colaboradores</h2>
@@ -1182,7 +1182,7 @@
                 </div>
             </div>
 
-            <!-- QUITAÇÕES TAB -->
+            <!-- QUITAÇÕES TAB (idêntico) -->
             <div id="quitacoes" class="tab-content">
                 <!-- Header com ações -->
                 <div class="header-with-actions">
@@ -1254,7 +1254,7 @@
                     <span class="valor" id="totalHorasPendentes">00:00</span>
                 </div>
 
-                <!-- Tabela de Horas Pendentes (todas com saldo restante > 0 e não quitadas) -->
+                <!-- Tabela de Horas Pendentes -->
                 <div class="table-container" id="horasPendentesContainer">
                     <div class="header-with-refresh">
                         <h3 style="margin-bottom: 0;">⚠️ Horas Pendentes (Aguardando Quitação)</h3>
@@ -1316,7 +1316,7 @@
                 </div>
             </div>
 
-            <!-- Configurações Tab -->
+            <!-- Configurações Tab (idêntico) -->
             <div id="configuracoes" class="tab-content">
                 <h2 style="color: #0f172a; margin-bottom: 24px;">⚙️ Configurações</h2>
                 
@@ -1361,7 +1361,7 @@
         </div>
     </div>
 
-    <!-- MODAIS -->
+    <!-- MODAIS (idênticos) -->
     <!-- Modal de Novo Lançamento -->
     <div id="novoLancamentoModal" class="modal">
         <div class="modal-content">
@@ -1418,7 +1418,7 @@
         </div>
     </div>
 
-    <!-- Modal de Nova Quitação -->
+    <!-- Modal de Nova Quitação (idêntico) -->
     <div id="novaQuitacaoModal" class="modal">
         <div class="modal-content" style="max-width: 900px;">
             <h2>💰 Nova Quitação de Horas Pendentes</h2>
@@ -1518,7 +1518,7 @@
         </div>
     </div>
 
-    <!-- Modal de Visualização de Quitação -->
+    <!-- Modal de Visualização de Quitação (idêntico) -->
     <div id="visualizarQuitacaoModal" class="modal">
         <div class="modal-content" style="max-width: 700px;">
             <h2>Detalhes da Quitação</h2>
@@ -1534,7 +1534,7 @@
         </div>
     </div>
 
-    <!-- Modal de Visualização de Compensações -->
+    <!-- Modal de Visualização de Compensações (idêntico) -->
     <div id="visualizarCompensacoesModal" class="modal">
         <div class="modal-content" style="max-width: 700px;">
             <h2>Detalhes das Compensações</h2>
@@ -1547,7 +1547,7 @@
         </div>
     </div>
 
-    <!-- Modal de Edição de Lançamento -->
+    <!-- Modal de Edição de Lançamento (idêntico) -->
     <div id="editLancamentoModal" class="modal">
         <div class="modal-content">
             <h2>Editar Lançamento</h2>
@@ -1600,7 +1600,7 @@
         </div>
     </div>
 
-    <!-- Modal de Colaborador -->
+    <!-- Modal de Colaborador (idêntico) -->
     <div id="colaboradorModal" class="modal">
         <div class="modal-content">
             <h2 id="colaboradorModalTitle">Novo Colaborador</h2>
@@ -1638,7 +1638,7 @@
         </div>
     </div>
 
-    <!-- Modal de Empresa -->
+    <!-- Modal de Empresa (idêntico) -->
     <div id="empresaModal" class="modal">
         <div class="modal-content">
             <h2 id="empresaModalTitle">Nova Empresa</h2>
@@ -1657,7 +1657,7 @@
         </div>
     </div>
 
-    <!-- Modal de Departamento -->
+    <!-- Modal de Departamento (idêntico) -->
     <div id="departamentoModal" class="modal">
         <div class="modal-content">
             <h2 id="departamentoModalTitle">Novo Departamento</h2>
@@ -1676,7 +1676,7 @@
         </div>
     </div>
 
-    <!-- Modal de Importação -->
+    <!-- Modal de Importação (idêntico) -->
     <div id="importModal" class="modal">
         <div class="modal-content">
             <h2>Importar Planilha</h2>
@@ -1813,9 +1813,9 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             });
         }
 
-        // ========== SIMULAÇÃO DE COMPENSAÇÃO (apenas lançamentos não quitados) ==========
+        // ========== SIMULAÇÃO DE COMPENSAÇÃO CORRIGIDA ==========
         function simularCompensacoes() {
-            console.log('Simulando compensações com prazo de 1 ano');
+            console.log('Simulando compensações com lógica corrigida (compensação bidirecional)');
 
             // Resetar campos de simulação para não quitados
             lancamentos.forEach(l => {
@@ -1853,12 +1853,13 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                     const vencPos = getVencimentoDate(pos.mes, pos.ano);
                     const vencNeg = getVencimentoDate(neg.mes, neg.ano);
 
-                    // Regra: a hora compensadora deve existir antes do vencimento da hora compensada
+                    // Regra: positivo pode compensar negativo se dataPos <= vencNeg
+                    // Negativo pode compensar positivo se dataNeg <= vencPos
                     const posPodeCompensarNeg = dataPos <= vencNeg;
                     const negPodeCompensarPos = dataNeg <= vencPos;
 
-                    if (posPodeCompensarNeg && negPodeCompensarPos) {
-                        // Pode compensar
+                    if (posPodeCompensarNeg) {
+                        // Positivo compensa negativo
                         const quantidade = Math.min(pos.saldoRestante, neg.saldoRestante);
                         
                         pos.compensacoes.push({
@@ -1874,6 +1875,27 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                             data: new Date().toLocaleDateString('pt-BR'),
                             tipo: pos.tipo,
                             competencia: formatarCompetencia(pos.mes, pos.ano)
+                        });
+
+                        pos.saldoRestante -= quantidade;
+                        neg.saldoRestante -= quantidade;
+                    } else if (negPodeCompensarPos) {
+                        // Negativo compensa positivo
+                        const quantidade = Math.min(neg.saldoRestante, pos.saldoRestante);
+                        
+                        neg.compensacoes.push({
+                            lancamentoId: pos.id,
+                            quantidade: quantidade,
+                            data: new Date().toLocaleDateString('pt-BR'),
+                            tipo: pos.tipo,
+                            competencia: formatarCompetencia(pos.mes, pos.ano)
+                        });
+                        pos.compensadoPor.push({
+                            lancamentoId: neg.id,
+                            quantidade: quantidade,
+                            data: new Date().toLocaleDateString('pt-BR'),
+                            tipo: neg.tipo,
+                            competencia: formatarCompetencia(neg.mes, neg.ano)
                         });
 
                         pos.saldoRestante -= quantidade;
@@ -2232,7 +2254,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             }
             
             if (!tooltipHtml) {
-                // Mensagem mais clara para horas que não foram compensadas
                 tooltipHtml = '<div class="tooltip-section">Não foi compensado por nenhum lançamento</div>';
             }
             
