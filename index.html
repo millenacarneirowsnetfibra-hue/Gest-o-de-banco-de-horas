@@ -1797,7 +1797,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             return diffDays > 0 ? diffDays : 0;
         }
 
-        // ========== NOVA LÓGICA DE COMPENSAÇÃO CORRIGIDA ==========
+        // ========== NOVA LÓGICA DE COMPENSAÇÃO CORRIGIDA (inserção ordenada) ==========
         function calcularCompensacoes() {
             console.log('Executando nova lógica de compensação (ordem cronológica com vencimento)...');
 
@@ -1826,9 +1826,18 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                     .filter(l => l.colaboradorId === colabId && !l.quitado)
                     .sort((a, b) => parseData(a.data) - parseData(b.data));
 
-                // Filas de pendências (cada item: { id, saldoRestante, dataObj, vencimentoObj, competencia })
+                // Filas de pendência (cada item: { id, saldoRestante, dataObj, vencimentoObj, competencia })
                 const filaPos = [];
                 const filaNeg = [];
+
+                // Função auxiliar para inserir item na fila mantendo a ordem crescente por dataObj
+                function inserirOrdenado(fila, item) {
+                    let i = 0;
+                    while (i < fila.length && fila[i].dataObj < item.dataObj) {
+                        i++;
+                    }
+                    fila.splice(i, 0, item);
+                }
 
                 lancsColab.forEach(lanc => {
                     // Data do lançamento atual como objeto Date
@@ -1889,9 +1898,9 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                             }
                         }
 
-                        // Após compensações, se ainda restar saldo, adiciona à fila de positivos
+                        // Após compensações, se ainda restar saldo, adiciona à fila de positivos (de forma ordenada)
                         if (saldoAtual > 0) {
-                            filaPos.push({
+                            inserirOrdenado(filaPos, {
                                 id: lanc.id,
                                 saldoRestante: saldoAtual,
                                 dataObj: dataLanc,
@@ -1939,7 +1948,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                         }
 
                         if (saldoAtual > 0) {
-                            filaNeg.push({
+                            inserirOrdenado(filaNeg, {
                                 id: lanc.id,
                                 saldoRestante: saldoAtual,
                                 dataObj: dataLanc,
