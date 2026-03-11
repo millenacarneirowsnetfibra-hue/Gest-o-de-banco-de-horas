@@ -1759,7 +1759,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             ano: ''
         };
 
-        // Data de referência para cálculo de vencimento
+        // Data de referência para cálculo de vencimento (hoje)
         let dataReferencia = new Date();
         dataReferencia.setHours(0, 0, 0, 0);
 
@@ -1797,58 +1797,42 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             return diffDays > 0 ? diffDays : 0;
         }
 
-        // ========== FUNÇÃO PARA VERIFICAR HORAS PENDENTES ==========
-        function verificarHorasPendentes() {
-            console.log('Verificando horas pendentes com prazo de 1 ano');
-            
-            // Para cada lançamento não quitado e com saldo restante, verifica se venceu
-            lancamentos.forEach(l => {
-                if (!l.quitado && l.saldoRestante > 0) {
-                    const venc = getVencimentoDate(l.mes, l.ano);
-                    // Se a data de vencimento já passou, considera pendente para quitação
-                    l.pendenteQuitacao = (venc < dataReferencia);
-                } else {
-                    l.pendenteQuitacao = false;
-                }
-            });
-        }
+        // ========== NOVA LÓGICA DE COMPENSAÇÃO ==========
+        // Função principal que recalcula todas as compensações com base nas regras:
+        // - Apenas lançamentos não quitados participam
+        // - Ordem cronológica (mais antigo primeiro)
+        // - Compensação apenas entre sinais opostos
+        // - Respeita o prazo de 1 ano: para que A compense B, a data de A deve estar entre a data de B e o vencimento de B, e vice-versa
+        function calcularCompensacoes() {
+            console.log('Executando nova lógica de compensação...');
 
-        // ========== SIMULAÇÃO DE COMPENSAÇÃO (apenas lançamentos não vencidos) ==========
-        function simularCompensacoes() {
-            console.log('Simulando compensações apenas para horas dentro do prazo e respeitando o período de validade');
-
-            // Resetar campos de simulação para não quitados
+            // Inicializa saldos e estruturas de compensação para não quitados
             lancamentos.forEach(l => {
                 if (!l.quitado) {
                     l.saldoRestante = l.horas;
                     l.compensacoes = [];
                     l.compensadoPor = [];
-                    l.pendenteQuitacao = false;
+                    l.pendenteQuitacao = false; // será atualizado depois
                 }
             });
 
-            // Agrupar por colaborador apenas os não quitados
+            // Agrupa por colaborador
             const colaboradoresIds = [...new Set(lancamentos.filter(l => !l.quitado).map(l => l.colaboradorId))];
 
             colaboradoresIds.forEach(colabId => {
-                // Pegar lançamentos não quitados
-                const lancamentosColab = lancamentos.filter(l => l.colaboradorId === colabId && !l.quitado);
+                // Obtém lançamentos não quitados do colaborador
+                const lancs = lancamentos.filter(l => l.colaboradorId === colabId && !l.quitado);
                 
-                // Separar positivos e negativos que ainda estão dentro do prazo (vencimento >= hoje)
-                // Apenas esses podem participar da compensação
-                const positivos = lancamentosColab
-                    .filter(l => l.tipo === 'positiva' && getVencimentoDate(l.mes, l.ano) >= dataReferencia)
-                    .sort((a, b) => dataParaObjeto(a.data) - dataParaObjeto(b.data));
-                const negativos = lancamentosColab
-                    .filter(l => l.tipo === 'negativa' && getVencimentoDate(l.mes, l.ano) >= dataReferencia)
-                    .sort((a, b) => dataParaObjeto(a.data) - dataParaObjeto(b.data));
+                // Separa positivos e negativos, ordenados por data (ascendente)
+                const positivos = lancs.filter(l => l.tipo === 'positiva').sort((a, b) => dataParaObjeto(a.data) - dataParaObjeto(b.data));
+                const negativos = lancs.filter(l => l.tipo === 'negativa').sort((a, b) => dataParaObjeto(a.data) - dataParaObjeto(b.data));
 
                 let iPos = 0, iNeg = 0;
 
                 while (iPos < positivos.length && iNeg < negativos.length) {
                     const pos = positivos[iPos];
                     const neg = negativos[iNeg];
-                    
+
                     if (pos.saldoRestante <= 0) { iPos++; continue; }
                     if (neg.saldoRestante <= 0) { iNeg++; continue; }
 
@@ -1857,15 +1841,15 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                     const vencPos = getVencimentoDate(pos.mes, pos.ano);
                     const vencNeg = getVencimentoDate(neg.mes, neg.ano);
 
-                    // Regra corrigida: a positiva só pode compensar a negativa se estiver dentro do período da negativa (dataPos >= dataNeg e dataPos <= vencNeg)
-                    // E a negativa só pode compensar a positiva se estiver dentro do período da positiva (dataNeg >= dataPos e dataNeg <= vencPos)
+                    // Verifica se podem se compensar mutuamente (ambos dentro do período um do outro)
                     const posPodeCompensarNeg = dataPos >= dataNeg && dataPos <= vencNeg;
                     const negPodeCompensarPos = dataNeg >= dataPos && dataNeg <= vencPos;
 
                     if (posPodeCompensarNeg && negPodeCompensarPos) {
-                        // Pode compensar
+                        // Compensação possível
                         const quantidade = Math.min(pos.saldoRestante, neg.saldoRestante);
-                        
+
+                        // Registra as compensações
                         pos.compensacoes.push({
                             lancamentoId: neg.id,
                             quantidade: quantidade,
@@ -1883,21 +1867,25 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
 
                         pos.saldoRestante -= quantidade;
                         neg.saldoRestante -= quantidade;
+
+                        // Não avançamos os índices, pois ainda pode haver saldo em algum dos dois para continuar compensando com o próximo do outro lado
                     } else {
-                        // Não podem compensar: avança o mais antigo
-                        if (dataPos <= dataNeg) iPos++; else iNeg++;
+                        // Não podem compensar: avança o de data mais antiga
+                        if (dataPos < dataNeg) {
+                            iPos++;
+                        } else {
+                            iNeg++;
+                        }
                     }
                 }
             });
 
-            // Após simular compensações, verificar quais horas ainda estão pendentes (vencidas)
+            // Após compensações, atualiza pendências (horas vencidas com saldo restante)
             verificarHorasPendentes();
         }
 
-        // ========== FUNÇÃO PARA VERIFICAR PENDÊNCIAS APÓS NOVO LANÇAMENTO ==========
-        function verificarPendenciasAposNovoLancamento(novoMes, novoAno) {
-            const dataNovoLancamento = new Date(parseInt(novoAno), parseInt(novoMes) - 1, 1);
-            
+        // ========== FUNÇÃO PARA VERIFICAR HORAS PENDENTES (vencidas) ==========
+        function verificarHorasPendentes() {
             lancamentos.forEach(l => {
                 if (!l.quitado && l.saldoRestante > 0) {
                     const venc = getVencimentoDate(l.mes, l.ano);
@@ -1906,6 +1894,31 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                     l.pendenteQuitacao = false;
                 }
             });
+        }
+
+        // ========== FUNÇÃO DE STATUS BASEADA NOS DIAS PARA VENCIMENTO ==========
+        function calcularStatus(lanc) {
+            if (lanc.quitado) {
+                return { texto: 'Quitado em Folha', classe: 'badge-pago-folha' };
+            }
+            if (lanc.saldoRestante === 0) {
+                return { texto: 'Compensada', classe: 'badge-compensada' };
+            }
+
+            const hoje = dataReferencia;
+            const venc = getVencimentoDate(lanc.mes, lanc.ano);
+            const diffTime = venc - hoje;
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+            if (diffDays < 0) {
+                return { texto: 'A quitar', classe: 'badge-pendente' };
+            } else if (diffDays <= 30) {
+                return { texto: 'À vencer em 30 dias', classe: 'badge-warning' };
+            } else if (diffDays <= 60) {
+                return { texto: 'À vencer em 60 dias', classe: 'badge-info' };
+            } else {
+                return { texto: 'Em dia', classe: 'badge-success' };
+            }
         }
 
         // ========== FUNÇÕES AUXILIARES ==========
@@ -2042,20 +2055,18 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                         quitadoEm: data.quitadoEm || null,
                         quitacaoId: data.quitacaoId || null,
                         valorQuitacao: data.valorQuitacaoTotal || null,
-                        // Histórico de compensações para quitados
                         historicoCompensacoes: data.historicoCompensacoes || [],
                         historicoCompensadoPor: data.historicoCompensadoPor || []
                     };
-                    // Se quitado, já usar o histórico
+                    // Se quitado, restaura o histórico
                     if (lanc.quitado) {
                         lanc.compensacoes = lanc.historicoCompensacoes;
                         lanc.compensadoPor = lanc.historicoCompensadoPor;
-                        lanc.saldoRestante = 0; // quitado não tem saldo restante
+                        lanc.saldoRestante = 0;
                     } else {
-                        // Inicializar vazio para não quitados
                         lanc.compensacoes = [];
                         lanc.compensadoPor = [];
-                        lanc.saldoRestante = lanc.horas; // será atualizado na simulação
+                        lanc.saldoRestante = lanc.horas; // será atualizado na compensação
                     }
                     return lanc;
                 });
@@ -2064,13 +2075,13 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 quitacoes = quitacoesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 quitacoes.sort((a, b) => new Date(b.dataQuitacao) - new Date(a.dataQuitacao));
 
-                // Ordenar lançamentos por data (mais antigos primeiro) para simulação
+                // Ordena lançamentos por data para consistência
                 lancamentos.sort((a, b) => dataParaObjeto(a.data) - dataParaObjeto(b.data));
 
-                // Executa simulação de compensação apenas para lançamentos não quitados e dentro do prazo
-                simularCompensacoes();
+                // Executa a nova lógica de compensação
+                calcularCompensacoes();
 
-                // Atualizar todas as telas
+                // Atualiza todas as telas
                 updateAllTables();
                 
             } catch (error) {
@@ -2183,13 +2194,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                     </div>
                 `;
             }).join('');
-        }
-
-        function calcularStatus(lancamento) {
-            if (lancamento.quitado) return { texto: 'PAGO EM FOLHA', classe: 'badge-pago-folha' };
-            if (lancamento.saldoRestante === 0) return { texto: 'Compensada', classe: 'badge-compensada' };
-            if (lancamento.pendenteQuitacao) return { texto: 'A quitar', classe: 'badge-pendente' };
-            return { texto: 'A compensar', classe: 'badge-info' };
         }
 
         // Tooltip mostrando apenas FOI COMPENSADO POR e QUITADO EM FOLHA
@@ -2740,11 +2744,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 
                 hideModal('novoLancamentoModal');
                 
-                // Após carregar os dados, verificar pendências novamente
-                verificarHorasPendentes();
-                simularCompensacoes();
-                updateAllTables();
-                
+                // Reaplica filtros
                 document.getElementById('filtroColaborador').value = filtrosAtuais.colaboradorId || '';
                 document.getElementById('filtroDepartamento').value = filtrosAtuais.departamento || '';
                 document.getElementById('filtroStatus').value = filtrosAtuais.status || 'ativos';
@@ -3003,10 +3003,8 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
         }
 
         function renderizarHorasPendentes() {
-            // Verificar pendências antes de renderizar
             verificarHorasPendentes();
             
-            // Agora filtra todas as horas não quitadas com saldo restante > 0 e pendenteQuitacao = true (vencidas)
             const horasPendentes = lancamentos.filter(l => 
                 !l.quitado && 
                 l.saldoRestante > 0 && 
@@ -3122,10 +3120,8 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 document.getElementById('quitacaoDepartamento').value = colaborador.departamento || '';
             }
 
-            // Verificar pendências antes de carregar
             verificarHorasPendentes();
 
-            // Filtrar lançamentos do colaborador que estão pendentes (não quitados, com saldo restante e vencidos)
             const lancamentosColab = lancamentos.filter(l => 
                 l.colaboradorId === colaboradorId && 
                 !l.quitado && 
@@ -3271,15 +3267,13 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 const quitacaoRef = await db.collection('quitacoes').add(quitacaoData);
 
                 for (const lanc of lancamentosSelecionados) {
-                    // Buscar o lançamento original para obter as compensações atuais
                     const lancOriginal = lancamentos.find(l => l.id === lanc.id);
                     if (lancOriginal) {
                         await db.collection('lancamentos').doc(lanc.id).update({
                             quitado: true,
                             quitadoEm: dataQuitacao,
                             quitacaoId: quitacaoRef.id,
-                            valorQuitacaoTotal: lanc.horas * (valorTotalHoras / totalHoras), // rateio do valor por hora
-                            // Salva o histórico de compensações antes de quitar
+                            valorQuitacaoTotal: lanc.horas * (valorTotalHoras / totalHoras), // rateio
                             historicoCompensacoes: lancOriginal.compensacoes || [],
                             historicoCompensadoPor: lancOriginal.compensadoPor || []
                         });
@@ -3377,7 +3371,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                         quitadoEm: null,
                         quitacaoId: null,
                         valorQuitacaoTotal: null,
-                        historicoCompensacoes: [], // Limpa o histórico ao reverter
+                        historicoCompensacoes: [],
                         historicoCompensadoPor: []
                     });
                 }
