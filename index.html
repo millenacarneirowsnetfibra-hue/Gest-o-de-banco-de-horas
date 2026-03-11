@@ -3084,8 +3084,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
         }
 
         function renderizarHorasPendentes() {
-            verificarHorasPendentes();
-            
+            // Não há mais chamada a verificarHorasPendentes, pois a lógica já está em calcularCompensacoes
             const horasPendentes = lancamentos.filter(l => 
                 !l.quitado && 
                 l.saldoRestante > 0 && 
@@ -3200,8 +3199,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             if (colaborador) {
                 document.getElementById('quitacaoDepartamento').value = colaborador.departamento || '';
             }
-
-            verificarHorasPendentes();
 
             const lancamentosColab = lancamentos.filter(l => 
                 l.colaboradorId === colaboradorId && 
