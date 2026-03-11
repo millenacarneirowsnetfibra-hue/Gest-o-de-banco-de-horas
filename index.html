@@ -523,7 +523,7 @@
             100% { opacity: 1; }
         }
 
-        /* Tooltip melhorado - AGORA MOSTRA APENAS QUEM COMPENSOU O LANÇAMENTO (FOI COMPENSADO POR) */
+        /* Tooltip melhorado - mostrando apenas FOI COMPENSADO POR e QUITADO EM FOLHA */
         .status-tooltip {
             position: relative;
             cursor: help;
@@ -2295,11 +2295,11 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             }).join('');
         }
 
-        // Tooltip modificado: agora mostra apenas QUEM COMPENSOU o lançamento (FOI COMPENSADO POR) e quitado em folha
+        // Tooltip mostrando apenas FOI COMPENSADO POR e QUITADO EM FOLHA
         function gerarTooltipCompensacoes(lanc) {
             let tooltipHtml = '';
             
-            // Seção FOI COMPENSADO POR (quem compensou este lançamento)
+            // Seção FOI COMPENSADO POR
             if (lanc.compensadoPor && lanc.compensadoPor.length > 0) {
                 tooltipHtml += '<div class="tooltip-section">';
                 tooltipHtml += '<div class="tooltip-title">🔽 FOI COMPENSADO POR:</div>';
