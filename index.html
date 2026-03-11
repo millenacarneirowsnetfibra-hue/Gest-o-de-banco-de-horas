@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Banco de Horas · Compensação por competência</title>
     <style>
-        /* ==================== CSS COMPLETO (mantido igual) ==================== */
+        /* ==================== CSS COMPLETO (inalterado) ==================== */
         * {
             margin: 0;
             padding: 0;
@@ -922,7 +922,7 @@
     </div>
 
     <div class="container">
-        <!-- Sidebar (idêntica) -->
+        <!-- Sidebar -->
         <div class="sidebar">
             <div class="sidebar-header">
                 <h2>⏰ Banco de Horas</h2>
@@ -946,7 +946,7 @@
             </ul>
         </div>
 
-        <!-- Main Content (idêntico) -->
+        <!-- Main Content -->
         <div class="main-content">
             <!-- Header -->
             <div class="page-header">
@@ -1006,7 +1006,7 @@
                 </div>
             </div>
 
-            <!-- Colaboradores Tab (idêntico) -->
+            <!-- Colaboradores Tab -->
             <div id="colaboradores" class="tab-content">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
                     <h2 style="color: #0f172a;">👥 Colaboradores</h2>
@@ -1182,7 +1182,7 @@
                 </div>
             </div>
 
-            <!-- QUITAÇÕES TAB (idêntico) -->
+            <!-- QUITAÇÕES TAB -->
             <div id="quitacoes" class="tab-content">
                 <!-- Header com ações -->
                 <div class="header-with-actions">
@@ -1254,10 +1254,10 @@
                     <span class="valor" id="totalHorasPendentes">00:00</span>
                 </div>
 
-                <!-- Tabela de Horas Pendentes -->
+                <!-- Tabela de Horas Pendentes (todas com saldo restante > 0 e vencidas) -->
                 <div class="table-container" id="horasPendentesContainer">
                     <div class="header-with-refresh">
-                        <h3 style="margin-bottom: 0;">⚠️ Horas Pendentes (Aguardando Quitação)</h3>
+                        <h3 style="margin-bottom: 0;">⚠️ Horas Pendentes (Vencidas)</h3>
                         <span id="contadorPendentes" style="color: #64748b;">0 horas pendentes</span>
                     </div>
                     
@@ -1316,7 +1316,7 @@
                 </div>
             </div>
 
-            <!-- Configurações Tab (idêntico) -->
+            <!-- Configurações Tab -->
             <div id="configuracoes" class="tab-content">
                 <h2 style="color: #0f172a; margin-bottom: 24px;">⚙️ Configurações</h2>
                 
@@ -1361,7 +1361,7 @@
         </div>
     </div>
 
-    <!-- MODAIS (idênticos) -->
+    <!-- MODAIS -->
     <!-- Modal de Novo Lançamento -->
     <div id="novoLancamentoModal" class="modal">
         <div class="modal-content">
@@ -1418,7 +1418,7 @@
         </div>
     </div>
 
-    <!-- Modal de Nova Quitação (idêntico) -->
+    <!-- Modal de Nova Quitação -->
     <div id="novaQuitacaoModal" class="modal">
         <div class="modal-content" style="max-width: 900px;">
             <h2>💰 Nova Quitação de Horas Pendentes</h2>
@@ -1518,7 +1518,7 @@
         </div>
     </div>
 
-    <!-- Modal de Visualização de Quitação (idêntico) -->
+    <!-- Modal de Visualização de Quitação -->
     <div id="visualizarQuitacaoModal" class="modal">
         <div class="modal-content" style="max-width: 700px;">
             <h2>Detalhes da Quitação</h2>
@@ -1534,7 +1534,7 @@
         </div>
     </div>
 
-    <!-- Modal de Visualização de Compensações (idêntico) -->
+    <!-- Modal de Visualização de Compensações -->
     <div id="visualizarCompensacoesModal" class="modal">
         <div class="modal-content" style="max-width: 700px;">
             <h2>Detalhes das Compensações</h2>
@@ -1547,7 +1547,7 @@
         </div>
     </div>
 
-    <!-- Modal de Edição de Lançamento (idêntico) -->
+    <!-- Modal de Edição de Lançamento -->
     <div id="editLancamentoModal" class="modal">
         <div class="modal-content">
             <h2>Editar Lançamento</h2>
@@ -1600,7 +1600,7 @@
         </div>
     </div>
 
-    <!-- Modal de Colaborador (idêntico) -->
+    <!-- Modal de Colaborador -->
     <div id="colaboradorModal" class="modal">
         <div class="modal-content">
             <h2 id="colaboradorModalTitle">Novo Colaborador</h2>
@@ -1638,7 +1638,7 @@
         </div>
     </div>
 
-    <!-- Modal de Empresa (idêntico) -->
+    <!-- Modal de Empresa -->
     <div id="empresaModal" class="modal">
         <div class="modal-content">
             <h2 id="empresaModalTitle">Nova Empresa</h2>
@@ -1657,7 +1657,7 @@
         </div>
     </div>
 
-    <!-- Modal de Departamento (idêntico) -->
+    <!-- Modal de Departamento -->
     <div id="departamentoModal" class="modal">
         <div class="modal-content">
             <h2 id="departamentoModalTitle">Novo Departamento</h2>
@@ -1676,7 +1676,7 @@
         </div>
     </div>
 
-    <!-- Modal de Importação (idêntico) -->
+    <!-- Modal de Importação -->
     <div id="importModal" class="modal">
         <div class="modal-content">
             <h2>Importar Planilha</h2>
@@ -1813,9 +1813,9 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             });
         }
 
-        // ========== SIMULAÇÃO DE COMPENSAÇÃO CORRIGIDA ==========
+        // ========== SIMULAÇÃO DE COMPENSAÇÃO (apenas lançamentos não vencidos) ==========
         function simularCompensacoes() {
-            console.log('Simulando compensações com lógica corrigida (compensação bidirecional)');
+            console.log('Simulando compensações apenas para horas dentro do prazo e respeitando o período de validade');
 
             // Resetar campos de simulação para não quitados
             lancamentos.forEach(l => {
@@ -1834,9 +1834,14 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 // Pegar lançamentos não quitados
                 const lancamentosColab = lancamentos.filter(l => l.colaboradorId === colabId && !l.quitado);
                 
-                // Separar positivos e negativos, ordenados por data
-                let positivos = lancamentosColab.filter(l => l.tipo === 'positiva').sort((a, b) => dataParaObjeto(a.data) - dataParaObjeto(b.data));
-                let negativos = lancamentosColab.filter(l => l.tipo === 'negativa').sort((a, b) => dataParaObjeto(a.data) - dataParaObjeto(b.data));
+                // Separar positivos e negativos que ainda estão dentro do prazo (vencimento >= hoje)
+                // Apenas esses podem participar da compensação
+                const positivos = lancamentosColab
+                    .filter(l => l.tipo === 'positiva' && getVencimentoDate(l.mes, l.ano) >= dataReferencia)
+                    .sort((a, b) => dataParaObjeto(a.data) - dataParaObjeto(b.data));
+                const negativos = lancamentosColab
+                    .filter(l => l.tipo === 'negativa' && getVencimentoDate(l.mes, l.ano) >= dataReferencia)
+                    .sort((a, b) => dataParaObjeto(a.data) - dataParaObjeto(b.data));
 
                 let iPos = 0, iNeg = 0;
 
@@ -1847,19 +1852,18 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                     if (pos.saldoRestante <= 0) { iPos++; continue; }
                     if (neg.saldoRestante <= 0) { iNeg++; continue; }
 
-                    // Verificar se a compensação é permitida dentro do prazo de 1 ano
                     const dataPos = dataParaObjeto(pos.data);
                     const dataNeg = dataParaObjeto(neg.data);
                     const vencPos = getVencimentoDate(pos.mes, pos.ano);
                     const vencNeg = getVencimentoDate(neg.mes, neg.ano);
 
-                    // Regra: positivo pode compensar negativo se dataPos <= vencNeg
-                    // Negativo pode compensar positivo se dataNeg <= vencPos
-                    const posPodeCompensarNeg = dataPos <= vencNeg;
-                    const negPodeCompensarPos = dataNeg <= vencPos;
+                    // Regra corrigida: a positiva só pode compensar a negativa se estiver dentro do período da negativa (dataPos >= dataNeg e dataPos <= vencNeg)
+                    // E a negativa só pode compensar a positiva se estiver dentro do período da positiva (dataNeg >= dataPos e dataNeg <= vencPos)
+                    const posPodeCompensarNeg = dataPos >= dataNeg && dataPos <= vencNeg;
+                    const negPodeCompensarPos = dataNeg >= dataPos && dataNeg <= vencPos;
 
-                    if (posPodeCompensarNeg) {
-                        // Positivo compensa negativo
+                    if (posPodeCompensarNeg && negPodeCompensarPos) {
+                        // Pode compensar
                         const quantidade = Math.min(pos.saldoRestante, neg.saldoRestante);
                         
                         pos.compensacoes.push({
@@ -1875,27 +1879,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                             data: new Date().toLocaleDateString('pt-BR'),
                             tipo: pos.tipo,
                             competencia: formatarCompetencia(pos.mes, pos.ano)
-                        });
-
-                        pos.saldoRestante -= quantidade;
-                        neg.saldoRestante -= quantidade;
-                    } else if (negPodeCompensarPos) {
-                        // Negativo compensa positivo
-                        const quantidade = Math.min(neg.saldoRestante, pos.saldoRestante);
-                        
-                        neg.compensacoes.push({
-                            lancamentoId: pos.id,
-                            quantidade: quantidade,
-                            data: new Date().toLocaleDateString('pt-BR'),
-                            tipo: pos.tipo,
-                            competencia: formatarCompetencia(pos.mes, pos.ano)
-                        });
-                        pos.compensadoPor.push({
-                            lancamentoId: neg.id,
-                            quantidade: quantidade,
-                            data: new Date().toLocaleDateString('pt-BR'),
-                            tipo: neg.tipo,
-                            competencia: formatarCompetencia(neg.mes, neg.ano)
                         });
 
                         pos.saldoRestante -= quantidade;
@@ -2084,11 +2067,8 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 // Ordenar lançamentos por data (mais antigos primeiro) para simulação
                 lancamentos.sort((a, b) => dataParaObjeto(a.data) - dataParaObjeto(b.data));
 
-                // Primeiro executa simulação de compensação apenas para não quitados
+                // Executa simulação de compensação apenas para lançamentos não quitados e dentro do prazo
                 simularCompensacoes();
-
-                // Verificar pendências
-                verificarHorasPendentes();
 
                 // Atualizar todas as telas
                 updateAllTables();
@@ -2254,7 +2234,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             }
             
             if (!tooltipHtml) {
-                tooltipHtml = '<div class="tooltip-section">Não foi compensado por nenhum lançamento</div>';
+                tooltipHtml = '<div class="tooltip-section">Nenhuma informação disponível</div>';
             }
             
             return tooltipHtml;
