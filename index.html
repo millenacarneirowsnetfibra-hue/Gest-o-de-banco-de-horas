@@ -1,3 +1,4 @@
+html
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
@@ -5,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Banco de Horas · Compensação por competência</title>
     <style>
-        /* ==================== CSS COMPLETO (inalterado) ==================== */
+        /* ==================== CSS COMPLETO ==================== */
         * {
             margin: 0;
             padding: 0;
@@ -1797,7 +1798,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             return diffDays > 0 ? diffDays : 0;
         }
 
-        // ========== NOVA LÓGICA DE COMPENSAÇÃO ==========
+        // ========== NOVA LÓGICA DE COMPENSAÇÃO (reescrita do zero) ==========
         function calcularCompensacoes() {
             console.log('Executando nova lógica de compensação (ordem cronológica com prazo de 1 ano)...');
 
@@ -1829,42 +1830,29 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                         return dataA - dataB;
                     });
 
-                // Filas de pendências disponíveis para compensação, ordenadas por data
-                // Cada item: { id, saldoRestante, data, vencimento, tipo }
+                // Filas de pendências disponíveis para compensação, ordenadas por data (já estão em ordem pela inserção)
                 let filaPos = []; // horas positivas disponíveis para compensar negativas
                 let filaNeg = []; // horas negativas disponíveis para compensar positivas
-
-                // Função para inserir ordenado por data
-                function inserirOrdenado(fila, item) {
-                    let i = 0;
-                    while (i < fila.length && fila[i].data < item.data) i++;
-                    fila.splice(i, 0, item);
-                }
 
                 lancsColab.forEach(lanc => {
                     const dataLanc = getDataLancamento(lanc.mes, lanc.ano);
                     const vencLanc = getVencimentoDate(lanc.mes, lanc.ano);
                     let saldoAtual = lanc.horas;
 
-                    // Remover das filas pendências cujo vencimento já passou da data deste lançamento
-                    // (não podem ser usadas depois de vencidas)
+                    // Remover das filas pendências que já expiraram antes deste lançamento
                     filaPos = filaPos.filter(p => p.vencimento >= dataLanc);
                     filaNeg = filaNeg.filter(p => p.vencimento >= dataLanc);
 
                     if (lanc.tipo === 'positiva') {
                         // Tenta compensar com horas negativas disponíveis (mais antigas primeiro)
-                        let i = 0;
-                        while (saldoAtual > 0 && i < filaNeg.length) {
-                            const pend = filaNeg[i];
-                            // Verifica se a data deste lançamento está dentro do prazo da pendência (dataLanc <= vencimento da pendência)
-                            // Como já filtramos pendências com vencimento >= dataLanc, todas são elegíveis.
+                        while (saldoAtual > 0 && filaNeg.length > 0) {
+                            const pend = filaNeg[0];
                             const qtd = Math.min(saldoAtual, pend.saldoRestante);
                             if (qtd > 0) {
-                                // Reduz saldos
                                 saldoAtual -= qtd;
                                 pend.saldoRestante -= qtd;
 
-                                // Registra compensação nos dois sentidos
+                                // Registra compensação: este positivo compensou pend (negativo)
                                 lanc.compensacoes.push({
                                     lancamentoId: pend.id,
                                     quantidade: qtd,
@@ -1873,6 +1861,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                                     competencia: formatarCompetencia(pend.mes, pend.ano)
                                 });
 
+                                // Registra no pend que foi compensado por este positivo
                                 const pendOriginal = lancamentos.find(l => l.id === pend.id);
                                 if (pendOriginal) {
                                     pendOriginal.compensadoPor.push({
@@ -1884,20 +1873,19 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                                     });
                                 }
 
-                                // Se a pendência zerou, remove da fila
                                 if (pend.saldoRestante === 0) {
-                                    filaNeg.splice(i, 1);
-                                } else {
-                                    i++; // avança para próxima pendência
+                                    filaNeg.shift(); // remove da fila
                                 }
+                                // Se pend ainda tem saldo, permanece na fila (continuamos usando o mesmo pend)
                             } else {
-                                i++;
+                                // qtd = 0 não deveria acontecer, mas por segurança
+                                filaNeg.shift();
                             }
                         }
 
                         // Se ainda restou saldo, adiciona à fila de positivos
                         if (saldoAtual > 0) {
-                            inserirOrdenado(filaPos, {
+                            filaPos.push({
                                 id: lanc.id,
                                 saldoRestante: saldoAtual,
                                 data: dataLanc,
@@ -1911,9 +1899,8 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
 
                     } else { // tipo === 'negativa'
                         // Tenta compensar com horas positivas disponíveis
-                        let i = 0;
-                        while (saldoAtual > 0 && i < filaPos.length) {
-                            const pend = filaPos[i];
+                        while (saldoAtual > 0 && filaPos.length > 0) {
+                            const pend = filaPos[0];
                             const qtd = Math.min(saldoAtual, pend.saldoRestante);
                             if (qtd > 0) {
                                 saldoAtual -= qtd;
@@ -1939,17 +1926,15 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                                 }
 
                                 if (pend.saldoRestante === 0) {
-                                    filaPos.splice(i, 1);
-                                } else {
-                                    i++;
+                                    filaPos.shift();
                                 }
                             } else {
-                                i++;
+                                filaPos.shift();
                             }
                         }
 
                         if (saldoAtual > 0) {
-                            inserirOrdenado(filaNeg, {
+                            filaNeg.push({
                                 id: lanc.id,
                                 saldoRestante: saldoAtual,
                                 data: dataLanc,
@@ -1963,7 +1948,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                     }
                 });
 
-                // Após processar todos, não há mais necessidade de limpeza
+                // Após processar todos, não há necessidade de limpar as filas; os saldos restantes já estão nos objetos.
             });
 
             // Define pendenteQuitacao (vencido e com saldo > 0)
@@ -1979,7 +1964,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             console.log('Compensações recalculadas.');
         }
 
-        // ========== FUNÇÃO DE STATUS CORRIGIDA ==========
+        // ========== FUNÇÃO DE STATUS ==========
         function calcularStatus(lanc) {
             // 1. Prioridade máxima: quitado em folha
             if (lanc.quitado) {
@@ -2009,11 +1994,11 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             }
         }
 
-        // ========== TOOLTIP ==========
+        // ========== TOOLTIP (apenas "FOI COMPENSADO POR") ==========
         function gerarTooltipCompensacoes(lanc) {
             let tooltipHtml = '';
             
-            // Seção FOI COMPENSADO POR (quem usou este lançamento)
+            // Seção FOI COMPENSADO POR
             if (lanc.compensadoPor && lanc.compensadoPor.length > 0) {
                 tooltipHtml += '<div class="tooltip-section">';
                 tooltipHtml += '<div class="tooltip-title">🔽 FOI COMPENSADO POR:</div>';
@@ -2027,31 +2012,9 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 });
                 tooltipHtml += '</div>';
             }
-
-            // Seção QUITADO EM FOLHA (se quitado)
-            if (lanc.quitado) {
-                let totalCompensado = 0;
-                if (lanc.compensacoes) totalCompensado += lanc.compensacoes.reduce((sum, c) => sum + c.quantidade, 0);
-                if (lanc.compensadoPor) totalCompensado += lanc.compensadoPor.reduce((sum, c) => sum + c.quantidade, 0);
-                const horasPagas = lanc.horas - totalCompensado;
-                
-                tooltipHtml += '<div class="tooltip-section">';
-                tooltipHtml += '<div class="tooltip-title">💰 QUITADO EM FOLHA:</div>';
-                tooltipHtml += `<div class="tooltip-item"><span>Total horas:</span><span>${decimalParaHora(lanc.horas)}</span></div>`;
-                tooltipHtml += `<div class="tooltip-item"><span>Compensado:</span><span>${decimalParaHora(totalCompensado)}</span></div>`;
-                tooltipHtml += `<div class="tooltip-item"><span>Horas pagas:</span><span class="tooltip-quantidade">${decimalParaHora(horasPagas)}</span></div>`;
-                if (lanc.quitadoEm) {
-                    const quitacaoDate = new Date(lanc.quitadoEm).toLocaleDateString('pt-BR');
-                    tooltipHtml += `<div class="tooltip-item"><span>Data quitação:</span><span>${quitacaoDate}</span></div>`;
-                }
-                if (lanc.valorQuitacao) {
-                    tooltipHtml += `<div class="tooltip-item"><span>Valor pago:</span><span class="tooltip-valor">R$ ${lanc.valorQuitacao.toFixed(2)}</span></div>`;
-                }
-                tooltipHtml += '</div>';
-            }
             
             if (!tooltipHtml) {
-                tooltipHtml = '<div class="tooltip-section">Nenhuma informação disponível</div>';
+                tooltipHtml = '<div class="tooltip-section">Nenhuma compensação registrada</div>';
             }
             
             return tooltipHtml;
