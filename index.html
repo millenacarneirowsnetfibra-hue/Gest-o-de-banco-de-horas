@@ -1,4 +1,3 @@
-```html
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
@@ -523,7 +522,7 @@
             100% { opacity: 1; }
         }
 
-        /* Tooltip melhorado - mostrando apenas FOI COMPENSADO POR e QUITADO EM FOLHA */
+        /* Tooltip melhorado - AGORA MOSTRA APENAS QUEM COMPENSOU O LANÇAMENTO (FOI COMPENSADO POR) */
         .status-tooltip {
             position: relative;
             cursor: help;
@@ -1798,157 +1797,154 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             return diffDays > 0 ? diffDays : 0;
         }
 
-        // ========== LÓGICA DE COMPENSAÇÃO CORRIGIDA (atualiza saldo dos lançamentos originais) ==========
+        // ========== NOVA LÓGICA DE COMPENSAÇÃO ==========
         function calcularCompensacoes() {
-            console.log('Executando nova lógica de compensação (ordem cronológica com vencimento)...');
+            console.log('Executando nova lógica de compensação (ordem cronológica com prazo de 1 ano)...');
 
-            // Inicializa saldos e estruturas de compensação para todos os lançamentos não quitados
+            // Inicializa estruturas para todos os lançamentos não quitados
             lancamentos.forEach(l => {
                 if (!l.quitado) {
                     l.saldoRestante = l.horas;
-                    l.compensacoes = [];
-                    l.compensadoPor = [];
-                    l.pendenteQuitacao = false; // será atualizado depois
+                    l.compensacoes = [];    // lançamentos que este compensou
+                    l.compensadoPor = [];    // lançamentos que compensaram este
+                    l.pendenteQuitacao = false;
                 }
             });
 
-            // Função auxiliar para converter string "01/mm/aaaa" em objeto Date (considerando primeiro dia do mês)
-            function parseData(dataStr) {
-                const [dia, mes, ano] = dataStr.split('/').map(Number);
-                return new Date(ano, mes - 1, dia);
+            // Função auxiliar para obter data do lançamento (primeiro dia do mês)
+            function getDataLancamento(mes, ano) {
+                return new Date(parseInt(ano), parseInt(mes) - 1, 1);
             }
 
-            // Agrupa lançamentos não quitados por colaborador
+            // Agrupa por colaborador
             const colaboradoresIds = [...new Set(lancamentos.filter(l => !l.quitado).map(l => l.colaboradorId))];
 
             colaboradoresIds.forEach(colabId => {
-                // Obtém lançamentos do colaborador não quitados, ordenados por data (crescente)
+                // Lançamentos não quitados do colaborador, ordenados por data crescente
                 const lancsColab = lancamentos
                     .filter(l => l.colaboradorId === colabId && !l.quitado)
-                    .sort((a, b) => parseData(a.data) - parseData(b.data));
+                    .sort((a, b) => {
+                        const dataA = getDataLancamento(a.mes, a.ano);
+                        const dataB = getDataLancamento(b.mes, b.ano);
+                        return dataA - dataB;
+                    });
 
-                // Filas de pendência (cada item: { id, saldoRestante, dataObj, vencimentoObj, competencia })
-                const filaPos = [];
-                const filaNeg = [];
+                // Filas de pendências disponíveis para compensação, ordenadas por data
+                // Cada item: { id, saldoRestante, data, vencimento, tipo }
+                let filaPos = []; // horas positivas disponíveis para compensar negativas
+                let filaNeg = []; // horas negativas disponíveis para compensar positivas
 
-                // Função auxiliar para inserir item na fila mantendo a ordem crescente por dataObj
+                // Função para inserir ordenado por data
                 function inserirOrdenado(fila, item) {
                     let i = 0;
-                    while (i < fila.length && fila[i].dataObj < item.dataObj) {
-                        i++;
-                    }
+                    while (i < fila.length && fila[i].data < item.data) i++;
                     fila.splice(i, 0, item);
                 }
 
                 lancsColab.forEach(lanc => {
-                    // Data do lançamento atual como objeto Date
-                    const dataLanc = parseData(lanc.data);
+                    const dataLanc = getDataLancamento(lanc.mes, lanc.ano);
                     const vencLanc = getVencimentoDate(lanc.mes, lanc.ano);
-
-                    // --- Etapa 1: Remover das filas as pendências que já expiraram antes deste lançamento ---
-                    // Pendências cujo vencimento é anterior à data do lançamento atual não podem mais ser usadas
-                    while (filaPos.length > 0 && filaPos[0].vencimentoObj < dataLanc) {
-                        filaPos.shift(); // remove da fila, mas o saldo restante já está no objeto original
-                    }
-                    while (filaNeg.length > 0 && filaNeg[0].vencimentoObj < dataLanc) {
-                        filaNeg.shift();
-                    }
-
-                    // Inicializa saldo restante do lançamento atual
                     let saldoAtual = lanc.horas;
 
+                    // Remover das filas pendências cujo vencimento já passou da data deste lançamento
+                    // (não podem ser usadas depois de vencidas)
+                    filaPos = filaPos.filter(p => p.vencimento >= dataLanc);
+                    filaNeg = filaNeg.filter(p => p.vencimento >= dataLanc);
+
                     if (lanc.tipo === 'positiva') {
-                        // Tenta compensar com pendências negativas (mais antigas primeiro)
-                        while (saldoAtual > 0 && filaNeg.length > 0) {
-                            const pend = filaNeg[0];
-                            // Verifica se este lançamento positivo pode compensar a pendência negativa:
-                            // A data do lançamento atual deve ser <= vencimento da pendência (já que pend.data <= lanc.data)
-                            if (dataLanc <= pend.vencimentoObj) {
-                                const qtd = Math.min(saldoAtual, pend.saldoRestante);
+                        // Tenta compensar com horas negativas disponíveis (mais antigas primeiro)
+                        let i = 0;
+                        while (saldoAtual > 0 && i < filaNeg.length) {
+                            const pend = filaNeg[i];
+                            // Verifica se a data deste lançamento está dentro do prazo da pendência (dataLanc <= vencimento da pendência)
+                            // Como já filtramos pendências com vencimento >= dataLanc, todas são elegíveis.
+                            const qtd = Math.min(saldoAtual, pend.saldoRestante);
+                            if (qtd > 0) {
                                 // Reduz saldos
                                 saldoAtual -= qtd;
                                 pend.saldoRestante -= qtd;
 
-                                // ATUALIZA O SALDO DO LANÇAMENTO ORIGINAL (PENDÊNCIA)
+                                // Registra compensação nos dois sentidos
+                                lanc.compensacoes.push({
+                                    lancamentoId: pend.id,
+                                    quantidade: qtd,
+                                    data: pend.data,
+                                    tipo: 'negativa',
+                                    competencia: formatarCompetencia(pend.mes, pend.ano)
+                                });
+
                                 const pendOriginal = lancamentos.find(l => l.id === pend.id);
                                 if (pendOriginal) {
-                                    pendOriginal.saldoRestante = pend.saldoRestante;
                                     pendOriginal.compensadoPor.push({
                                         lancamentoId: lanc.id,
                                         quantidade: qtd,
-                                        data: lanc.data,
+                                        data: dataLanc,
                                         tipo: 'positiva',
                                         competencia: formatarCompetencia(lanc.mes, lanc.ano)
                                     });
                                 }
 
-                                // Registra compensação: este positivo compensou a pendência negativa
-                                lanc.compensacoes.push({
-                                    lancamentoId: pend.id,
-                                    quantidade: qtd,
-                                    data: lanc.data,
-                                    tipo: 'negativa',
-                                    competencia: pend.competencia
-                                });
-
-                                // Se a pendência zerou, remove da fila; senão, apenas atualiza o saldo (continua na fila)
+                                // Se a pendência zerou, remove da fila
                                 if (pend.saldoRestante === 0) {
-                                    filaNeg.shift();
+                                    filaNeg.splice(i, 1);
+                                } else {
+                                    i++; // avança para próxima pendência
                                 }
                             } else {
-                                // A pendência expirou antes deste lançamento, então não pode compensar; remove da fila
-                                filaNeg.shift();
+                                i++;
                             }
                         }
 
-                        // Após compensações, se ainda restar saldo, adiciona à fila de positivos (de forma ordenada)
+                        // Se ainda restou saldo, adiciona à fila de positivos
                         if (saldoAtual > 0) {
                             inserirOrdenado(filaPos, {
                                 id: lanc.id,
                                 saldoRestante: saldoAtual,
-                                dataObj: dataLanc,
-                                vencimentoObj: vencLanc,
-                                competencia: formatarCompetencia(lanc.mes, lanc.ano)
+                                data: dataLanc,
+                                vencimento: vencLanc,
+                                mes: lanc.mes,
+                                ano: lanc.ano,
+                                tipo: lanc.tipo
                             });
                         }
-                        // Atualiza o saldo restante no objeto original
                         lanc.saldoRestante = saldoAtual;
 
                     } else { // tipo === 'negativa'
-                        // Tenta compensar com pendências positivas
-                        while (saldoAtual > 0 && filaPos.length > 0) {
-                            const pend = filaPos[0];
-                            if (dataLanc <= pend.vencimentoObj) {
-                                const qtd = Math.min(saldoAtual, pend.saldoRestante);
+                        // Tenta compensar com horas positivas disponíveis
+                        let i = 0;
+                        while (saldoAtual > 0 && i < filaPos.length) {
+                            const pend = filaPos[i];
+                            const qtd = Math.min(saldoAtual, pend.saldoRestante);
+                            if (qtd > 0) {
                                 saldoAtual -= qtd;
                                 pend.saldoRestante -= qtd;
 
-                                // ATUALIZA O SALDO DO LANÇAMENTO ORIGINAL (PENDÊNCIA)
+                                lanc.compensacoes.push({
+                                    lancamentoId: pend.id,
+                                    quantidade: qtd,
+                                    data: pend.data,
+                                    tipo: 'positiva',
+                                    competencia: formatarCompetencia(pend.mes, pend.ano)
+                                });
+
                                 const pendOriginal = lancamentos.find(l => l.id === pend.id);
                                 if (pendOriginal) {
-                                    pendOriginal.saldoRestante = pend.saldoRestante;
                                     pendOriginal.compensadoPor.push({
                                         lancamentoId: lanc.id,
                                         quantidade: qtd,
-                                        data: lanc.data,
+                                        data: dataLanc,
                                         tipo: 'negativa',
                                         competencia: formatarCompetencia(lanc.mes, lanc.ano)
                                     });
                                 }
 
-                                lanc.compensacoes.push({
-                                    lancamentoId: pend.id,
-                                    quantidade: qtd,
-                                    data: lanc.data,
-                                    tipo: 'positiva',
-                                    competencia: pend.competencia
-                                });
-
                                 if (pend.saldoRestante === 0) {
-                                    filaPos.shift();
+                                    filaPos.splice(i, 1);
+                                } else {
+                                    i++;
                                 }
                             } else {
-                                filaPos.shift();
+                                i++;
                             }
                         }
 
@@ -1956,24 +1952,25 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                             inserirOrdenado(filaNeg, {
                                 id: lanc.id,
                                 saldoRestante: saldoAtual,
-                                dataObj: dataLanc,
-                                vencimentoObj: vencLanc,
-                                competencia: formatarCompetencia(lanc.mes, lanc.ano)
+                                data: dataLanc,
+                                vencimento: vencLanc,
+                                mes: lanc.mes,
+                                ano: lanc.ano,
+                                tipo: lanc.tipo
                             });
                         }
                         lanc.saldoRestante = saldoAtual;
                     }
                 });
 
-                // Após processar todos os lançamentos do colaborador, não precisamos fazer mais nada.
-                // As pendências que sobraram nas filas (não expiradas) estão ativas para o futuro.
+                // Após processar todos, não há mais necessidade de limpeza
             });
 
-            // Por fim, atualiza a flag de pendenteQuitacao para lançamentos vencidos com saldo > 0
+            // Define pendenteQuitacao (vencido e com saldo > 0)
             lancamentos.forEach(l => {
                 if (!l.quitado && l.saldoRestante > 0) {
                     const venc = getVencimentoDate(l.mes, l.ano);
-                    l.pendenteQuitacao = (venc < dataReferencia);
+                    l.pendenteQuitacao = venc < dataReferencia;
                 } else {
                     l.pendenteQuitacao = false;
                 }
@@ -1982,16 +1979,14 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             console.log('Compensações recalculadas.');
         }
 
-        // ========== FUNÇÃO DE STATUS CORRIGIDA - PRIORIDADE: QUITADO > SALDO ZERO > VENCIMENTO ==========
+        // ========== FUNÇÃO DE STATUS CORRIGIDA ==========
         function calcularStatus(lanc) {
             // 1. Prioridade máxima: quitado em folha
             if (lanc.quitado) {
                 return { texto: 'Quitado em Folha', classe: 'badge-pago-folha' };
             }
             
-            // 2. Verifica se o saldo restante é zero (considerando tolerância para arredondamento)
-            //    Isso garante que competências totalmente compensadas apareçam como COMPENSADA,
-            //    independentemente da data de vencimento.
+            // 2. Verifica se o saldo restante é zero
             const saldoZero = lanc.saldoRestante !== undefined && Math.abs(lanc.saldoRestante) < 0.0001;
             if (saldoZero) {
                 return { texto: 'Compensada', classe: 'badge-compensada' };
@@ -2012,6 +2007,54 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             } else {
                 return { texto: 'Em dia', classe: 'badge-success' };
             }
+        }
+
+        // ========== TOOLTIP ==========
+        function gerarTooltipCompensacoes(lanc) {
+            let tooltipHtml = '';
+            
+            // Seção FOI COMPENSADO POR (quem usou este lançamento)
+            if (lanc.compensadoPor && lanc.compensadoPor.length > 0) {
+                tooltipHtml += '<div class="tooltip-section">';
+                tooltipHtml += '<div class="tooltip-title">🔽 FOI COMPENSADO POR:</div>';
+                lanc.compensadoPor.forEach(comp => {
+                    tooltipHtml += `
+                        <div class="tooltip-item">
+                            <span class="tooltip-competencia">${comp.competencia || 'N/A'} (${comp.tipo === 'positiva' ? '➕' : '➖'})</span>
+                            <span class="tooltip-quantidade">${decimalParaHora(comp.quantidade)}</span>
+                        </div>
+                    `;
+                });
+                tooltipHtml += '</div>';
+            }
+
+            // Seção QUITADO EM FOLHA (se quitado)
+            if (lanc.quitado) {
+                let totalCompensado = 0;
+                if (lanc.compensacoes) totalCompensado += lanc.compensacoes.reduce((sum, c) => sum + c.quantidade, 0);
+                if (lanc.compensadoPor) totalCompensado += lanc.compensadoPor.reduce((sum, c) => sum + c.quantidade, 0);
+                const horasPagas = lanc.horas - totalCompensado;
+                
+                tooltipHtml += '<div class="tooltip-section">';
+                tooltipHtml += '<div class="tooltip-title">💰 QUITADO EM FOLHA:</div>';
+                tooltipHtml += `<div class="tooltip-item"><span>Total horas:</span><span>${decimalParaHora(lanc.horas)}</span></div>`;
+                tooltipHtml += `<div class="tooltip-item"><span>Compensado:</span><span>${decimalParaHora(totalCompensado)}</span></div>`;
+                tooltipHtml += `<div class="tooltip-item"><span>Horas pagas:</span><span class="tooltip-quantidade">${decimalParaHora(horasPagas)}</span></div>`;
+                if (lanc.quitadoEm) {
+                    const quitacaoDate = new Date(lanc.quitadoEm).toLocaleDateString('pt-BR');
+                    tooltipHtml += `<div class="tooltip-item"><span>Data quitação:</span><span>${quitacaoDate}</span></div>`;
+                }
+                if (lanc.valorQuitacao) {
+                    tooltipHtml += `<div class="tooltip-item"><span>Valor pago:</span><span class="tooltip-valor">R$ ${lanc.valorQuitacao.toFixed(2)}</span></div>`;
+                }
+                tooltipHtml += '</div>';
+            }
+            
+            if (!tooltipHtml) {
+                tooltipHtml = '<div class="tooltip-section">Nenhuma informação disponível</div>';
+            }
+            
+            return tooltipHtml;
         }
 
         // ========== FUNÇÕES AUXILIARES ==========
@@ -2055,13 +2098,11 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
 
         function decimalParaHora(decimal) {
             if (decimal === undefined || decimal === null) return '00:00';
-            // Se for um valor muito próximo de zero, considera zero
             if (Math.abs(decimal) < 0.0001) return '00:00';
             const sinal = decimal < 0 ? '-' : '';
             const absDecimal = Math.abs(decimal);
             const horas = Math.floor(absDecimal);
             const minutos = Math.round((absDecimal - horas) * 60);
-            // Arredonda minutos para evitar 60
             if (minutos === 60) {
                 return `${sinal}${(horas + 1).toString().padStart(2, '0')}:00`;
             }
@@ -2165,7 +2206,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                     } else {
                         lanc.compensacoes = [];
                         lanc.compensadoPor = [];
-                        lanc.saldoRestante = lanc.horas; // será atualizado na compensação
+                        lanc.saldoRestante = lanc.horas;
                     }
                     return lanc;
                 });
@@ -2177,7 +2218,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 // Ordena lançamentos por data para consistência
                 lancamentos.sort((a, b) => dataParaObjeto(a.data) - dataParaObjeto(b.data));
 
-                // Executa a nova lógica de compensação corrigida
+                // Executa a nova lógica de compensação
                 calcularCompensacoes();
 
                 // Atualiza todas as telas
@@ -2293,54 +2334,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                     </div>
                 `;
             }).join('');
-        }
-
-        // Tooltip mostrando apenas FOI COMPENSADO POR e QUITADO EM FOLHA
-        function gerarTooltipCompensacoes(lanc) {
-            let tooltipHtml = '';
-            
-            // Seção FOI COMPENSADO POR
-            if (lanc.compensadoPor && lanc.compensadoPor.length > 0) {
-                tooltipHtml += '<div class="tooltip-section">';
-                tooltipHtml += '<div class="tooltip-title">🔽 FOI COMPENSADO POR:</div>';
-                lanc.compensadoPor.forEach(comp => {
-                    tooltipHtml += `
-                        <div class="tooltip-item">
-                            <span class="tooltip-competencia">${comp.competencia || 'N/A'} (${comp.tipo === 'positiva' ? '➕' : '➖'})</span>
-                            <span class="tooltip-quantidade">${decimalParaHora(comp.quantidade)}</span>
-                        </div>
-                    `;
-                });
-                tooltipHtml += '</div>';
-            }
-
-            // Seção QUITADO EM FOLHA (se quitado)
-            if (lanc.quitado) {
-                let totalCompensado = 0;
-                if (lanc.compensacoes) totalCompensado += lanc.compensacoes.reduce((sum, c) => sum + c.quantidade, 0);
-                if (lanc.compensadoPor) totalCompensado += lanc.compensadoPor.reduce((sum, c) => sum + c.quantidade, 0);
-                const horasPagas = lanc.horas - totalCompensado;
-                
-                tooltipHtml += '<div class="tooltip-section">';
-                tooltipHtml += '<div class="tooltip-title">💰 QUITADO EM FOLHA:</div>';
-                tooltipHtml += `<div class="tooltip-item"><span>Total horas:</span><span>${decimalParaHora(lanc.horas)}</span></div>`;
-                tooltipHtml += `<div class="tooltip-item"><span>Compensado:</span><span>${decimalParaHora(totalCompensado)}</span></div>`;
-                tooltipHtml += `<div class="tooltip-item"><span>Horas pagas:</span><span class="tooltip-quantidade">${decimalParaHora(horasPagas)}</span></div>`;
-                if (lanc.quitadoEm) {
-                    const quitacaoDate = new Date(lanc.quitadoEm).toLocaleDateString('pt-BR');
-                    tooltipHtml += `<div class="tooltip-item"><span>Data quitação:</span><span>${quitacaoDate}</span></div>`;
-                }
-                if (lanc.valorQuitacao) {
-                    tooltipHtml += `<div class="tooltip-item"><span>Valor pago:</span><span class="tooltip-valor">R$ ${lanc.valorQuitacao.toFixed(2)}</span></div>`;
-                }
-                tooltipHtml += '</div>';
-            }
-            
-            if (!tooltipHtml) {
-                tooltipHtml = '<div class="tooltip-section">Nenhuma informação disponível</div>';
-            }
-            
-            return tooltipHtml;
         }
 
         // ========== FUNÇÕES DE FILTRO E RENDER DE LANÇAMENTOS ==========
@@ -2477,7 +2470,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 
                 const saldoAcumulado = saldosAcumulados[lanc.colaboradorId]?.get(lanc.id) || 0;
                 
-                // Para lançamentos quitados ou com saldo restante zero, a coluna "Falta Compensar" deve mostrar "Completo"
                 let compensacoesText;
                 if (lanc.quitado) {
                     compensacoesText = '<span class="badge badge-success">Completo</span>';
@@ -3107,7 +3099,6 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
         }
 
         function renderizarHorasPendentes() {
-            // Não há mais chamada a verificarHorasPendentes, pois a lógica já está em calcularCompensacoes
             const horasPendentes = lancamentos.filter(l => 
                 !l.quitado && 
                 l.saldoRestante > 0 && 
