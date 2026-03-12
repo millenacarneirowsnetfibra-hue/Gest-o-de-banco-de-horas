@@ -1,4 +1,3 @@
-html
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
@@ -1766,13 +1765,15 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
 
         // ================= FUNÇÕES DE VENCIMENTO (1 ano após competência) =================
         function getVencimentoDate(mes, ano) {
-            // Retorna o último dia do mês no ano seguinte
             const anoNum = parseInt(ano);
-            const mesNum = parseInt(mes) - 1; // 0-11
-            // Primeiro dia do mês seguinte ao ano seguinte e subtrai 1 dia
+            const mesNum = parseInt(mes) - 1;
             let dataVencimento = new Date(anoNum + 1, mesNum + 1, 1);
             dataVencimento.setDate(dataVencimento.getDate() - 1);
             return dataVencimento;
+        }
+
+        function getDataCompetencia(mes, ano) {
+            return new Date(parseInt(ano), parseInt(mes) - 1, 1);
         }
 
         function dataParaObjeto(dataStr) {
@@ -1798,9 +1799,9 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             return diffDays > 0 ? diffDays : 0;
         }
 
-        // ========== NOVA LÓGICA DE COMPENSAÇÃO (reescrita do zero) ==========
+        // ========== NOVA LÓGICA DE COMPENSAÇÃO CORRIGIDA ==========
         function calcularCompensacoes() {
-            console.log('Executando nova lógica de compensação (ordem cronológica com prazo de 1 ano)...');
+            console.log('Executando nova lógica de compensação corrigida...');
 
             // Inicializa estruturas para todos os lançamentos não quitados
             lancamentos.forEach(l => {
@@ -1812,143 +1813,88 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 }
             });
 
-            // Função auxiliar para obter data do lançamento (primeiro dia do mês)
-            function getDataLancamento(mes, ano) {
-                return new Date(parseInt(ano), parseInt(mes) - 1, 1);
-            }
-
             // Agrupa por colaborador
             const colaboradoresIds = [...new Set(lancamentos.filter(l => !l.quitado).map(l => l.colaboradorId))];
 
             colaboradoresIds.forEach(colabId => {
-                // Lançamentos não quitados do colaborador, ordenados por data crescente
+                // Pega todos os lançamentos NÃO QUITADOS do colaborador
                 const lancsColab = lancamentos
                     .filter(l => l.colaboradorId === colabId && !l.quitado)
-                    .sort((a, b) => {
-                        const dataA = getDataLancamento(a.mes, a.ano);
-                        const dataB = getDataLancamento(b.mes, b.ano);
-                        return dataA - dataB;
-                    });
+                    .map(l => ({
+                        ...l,
+                        dataObj: getDataCompetencia(l.mes, l.ano),
+                        vencObj: getVencimentoDate(l.mes, l.ano)
+                    }))
+                    .sort((a, b) => a.dataObj - b.dataObj); // Ordena por competência (mais antiga primeiro)
 
-                // Filas de pendências disponíveis para compensação, ordenadas por data (já estão em ordem pela inserção)
-                let filaPos = []; // horas positivas disponíveis para compensar negativas
-                let filaNeg = []; // horas negativas disponíveis para compensar positivas
+                // Para cada lançamento na ordem cronológica
+                for (let i = 0; i < lancsColab.length; i++) {
+                    const lanc = lancsColab[i];
+                    
+                    // Se já está totalmente compensado, pula
+                    if (lanc.saldoRestante <= 0) continue;
 
-                lancsColab.forEach(lanc => {
-                    const dataLanc = getDataLancamento(lanc.mes, lanc.ano);
-                    const vencLanc = getVencimentoDate(lanc.mes, lanc.ano);
-                    let saldoAtual = lanc.horas;
+                    // Tipo oposto que pode compensar este lançamento
+                    const tipoOposto = lanc.tipo === 'positiva' ? 'negativa' : 'positiva';
+                    
+                    // Busca lançamentos do tipo oposto que podem compensar este
+                    // A regra: a data da outra hora deve estar entre a competência e o vencimento desta hora
+                    const candidatos = lancsColab.filter(c => 
+                        c.id !== lanc.id && 
+                        c.tipo === tipoOposto &&
+                        c.saldoRestante > 0 &&
+                        c.dataObj >= lanc.dataObj &&   // Não anterior à competência
+                        c.dataObj <= lanc.vencObj      // Não posterior ao vencimento
+                    ).sort((a, b) => a.dataObj - b.dataObj); // Mais antigos primeiro
 
-                    // Remover das filas pendências que já expiraram antes deste lançamento
-                    filaPos = filaPos.filter(p => p.vencimento >= dataLanc);
-                    filaNeg = filaNeg.filter(p => p.vencimento >= dataLanc);
+                    let saldoRestanteLanc = lanc.saldoRestante;
 
-                    if (lanc.tipo === 'positiva') {
-                        // Tenta compensar com horas negativas disponíveis (mais antigas primeiro)
-                        while (saldoAtual > 0 && filaNeg.length > 0) {
-                            const pend = filaNeg[0];
-                            const qtd = Math.min(saldoAtual, pend.saldoRestante);
-                            if (qtd > 0) {
-                                saldoAtual -= qtd;
-                                pend.saldoRestante -= qtd;
+                    // Tenta compensar com cada candidato
+                    for (const candidato of candidatos) {
+                        if (saldoRestanteLanc <= 0) break;
 
-                                // Registra compensação: este positivo compensou pend (negativo)
-                                lanc.compensacoes.push({
-                                    lancamentoId: pend.id,
-                                    quantidade: qtd,
-                                    data: pend.data,
-                                    tipo: 'negativa',
-                                    competencia: formatarCompetencia(pend.mes, pend.ano)
-                                });
+                        // Quantidade que pode ser compensada (mínimo entre saldos)
+                        const qtdCompensar = Math.min(saldoRestanteLanc, candidato.saldoRestante);
+                        
+                        if (qtdCompensar <= 0) continue;
 
-                                // Registra no pend que foi compensado por este positivo
-                                const pendOriginal = lancamentos.find(l => l.id === pend.id);
-                                if (pendOriginal) {
-                                    pendOriginal.compensadoPor.push({
-                                        lancamentoId: lanc.id,
-                                        quantidade: qtd,
-                                        data: dataLanc,
-                                        tipo: 'positiva',
-                                        competencia: formatarCompetencia(lanc.mes, lanc.ano)
-                                    });
-                                }
+                        // ATUALIZA OS SALDOS (esta é a parte que estava faltando!)
+                        saldoRestanteLanc -= qtdCompensar;
+                        candidato.saldoRestante -= qtdCompensar;
 
-                                if (pend.saldoRestante === 0) {
-                                    filaNeg.shift(); // remove da fila
-                                }
-                                // Se pend ainda tem saldo, permanece na fila (continuamos usando o mesmo pend)
-                            } else {
-                                // qtd = 0 não deveria acontecer, mas por segurança
-                                filaNeg.shift();
-                            }
-                        }
+                        // Encontra os objetos originais no array principal
+                        const lancOriginal = lancamentos.find(l => l.id === lanc.id);
+                        const candOriginal = lancamentos.find(l => l.id === candidato.id);
 
-                        // Se ainda restou saldo, adiciona à fila de positivos
-                        if (saldoAtual > 0) {
-                            filaPos.push({
-                                id: lanc.id,
-                                saldoRestante: saldoAtual,
-                                data: dataLanc,
-                                vencimento: vencLanc,
-                                mes: lanc.mes,
-                                ano: lanc.ano,
-                                tipo: lanc.tipo
+                        if (lancOriginal && candOriginal) {
+                            // Registra que este lançamento (lanc) compensou o candidato
+                            lancOriginal.compensacoes.push({
+                                lancamentoId: candidato.id,
+                                quantidade: qtdCompensar,
+                                data: candidato.data,
+                                tipo: candidato.tipo,
+                                competencia: formatarCompetencia(candidato.mes, candidato.ano)
                             });
-                        }
-                        lanc.saldoRestante = saldoAtual;
 
-                    } else { // tipo === 'negativa'
-                        // Tenta compensar com horas positivas disponíveis
-                        while (saldoAtual > 0 && filaPos.length > 0) {
-                            const pend = filaPos[0];
-                            const qtd = Math.min(saldoAtual, pend.saldoRestante);
-                            if (qtd > 0) {
-                                saldoAtual -= qtd;
-                                pend.saldoRestante -= qtd;
-
-                                lanc.compensacoes.push({
-                                    lancamentoId: pend.id,
-                                    quantidade: qtd,
-                                    data: pend.data,
-                                    tipo: 'positiva',
-                                    competencia: formatarCompetencia(pend.mes, pend.ano)
-                                });
-
-                                const pendOriginal = lancamentos.find(l => l.id === pend.id);
-                                if (pendOriginal) {
-                                    pendOriginal.compensadoPor.push({
-                                        lancamentoId: lanc.id,
-                                        quantidade: qtd,
-                                        data: dataLanc,
-                                        tipo: 'negativa',
-                                        competencia: formatarCompetencia(lanc.mes, lanc.ano)
-                                    });
-                                }
-
-                                if (pend.saldoRestante === 0) {
-                                    filaPos.shift();
-                                }
-                            } else {
-                                filaPos.shift();
-                            }
-                        }
-
-                        if (saldoAtual > 0) {
-                            filaNeg.push({
-                                id: lanc.id,
-                                saldoRestante: saldoAtual,
-                                data: dataLanc,
-                                vencimento: vencLanc,
-                                mes: lanc.mes,
-                                ano: lanc.ano,
-                                tipo: lanc.tipo
+                            // Registra que o candidato foi compensado por este lançamento
+                            candOriginal.compensadoPor.push({
+                                lancamentoId: lanc.id,
+                                quantidade: qtdCompensar,
+                                data: lanc.data,
+                                tipo: lanc.tipo,
+                                competencia: formatarCompetencia(lanc.mes, lanc.ano)
                             });
+
+                            // Atualiza saldo restante no objeto original
+                            lancOriginal.saldoRestante = saldoRestanteLanc;
+                            candOriginal.saldoRestante = candidato.saldoRestante;
                         }
-                        lanc.saldoRestante = saldoAtual;
+
+                        // Atualiza o saldo no objeto da lista auxiliar também
+                        lanc.saldoRestante = saldoRestanteLanc;
+                        candidato.saldoRestante = candidato.saldoRestante;
                     }
-                });
-
-                // Após processar todos, não há necessidade de limpar as filas; os saldos restantes já estão nos objetos.
+                }
             });
 
             // Define pendenteQuitacao (vencido e com saldo > 0)
@@ -1966,18 +1912,15 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
 
         // ========== FUNÇÃO DE STATUS ==========
         function calcularStatus(lanc) {
-            // 1. Prioridade máxima: quitado em folha
             if (lanc.quitado) {
                 return { texto: 'Quitado em Folha', classe: 'badge-pago-folha' };
             }
             
-            // 2. Verifica se o saldo restante é zero
             const saldoZero = lanc.saldoRestante !== undefined && Math.abs(lanc.saldoRestante) < 0.0001;
             if (saldoZero) {
                 return { texto: 'Compensada', classe: 'badge-compensada' };
             }
 
-            // 3. Se há saldo restante, avalia o vencimento
             const hoje = dataReferencia;
             const venc = getVencimentoDate(lanc.mes, lanc.ano);
             const diffTime = venc - hoje;
@@ -1994,18 +1937,19 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             }
         }
 
-        // ========== TOOLTIP (apenas "FOI COMPENSADO POR") ==========
+        // ========== TOOLTIP (agora mostra apenas quem compensou esta hora) ==========
         function gerarTooltipCompensacoes(lanc) {
             let tooltipHtml = '';
             
-            // Seção FOI COMPENSADO POR
+            // Seção FOI COMPENSADO POR - mostra quem compensou esta hora
             if (lanc.compensadoPor && lanc.compensadoPor.length > 0) {
                 tooltipHtml += '<div class="tooltip-section">';
                 tooltipHtml += '<div class="tooltip-title">🔽 FOI COMPENSADO POR:</div>';
                 lanc.compensadoPor.forEach(comp => {
+                    const tipoIcon = comp.tipo === 'positiva' ? '➕' : '➖';
                     tooltipHtml += `
                         <div class="tooltip-item">
-                            <span class="tooltip-competencia">${comp.competencia || 'N/A'} (${comp.tipo === 'positiva' ? '➕' : '➖'})</span>
+                            <span class="tooltip-competencia">${comp.competencia || 'N/A'} (${tipoIcon})</span>
                             <span class="tooltip-quantidade">${decimalParaHora(comp.quantidade)}</span>
                         </div>
                     `;
@@ -2144,7 +2088,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 const lancamentosSnapshot = await db.collection('lancamentos').get();
                 lancamentos = lancamentosSnapshot.docs.map(doc => {
                     const data = doc.data();
-                    const lanc = {
+                    return {
                         id: doc.id,
                         colaboradorId: data.colaboradorId || '',
                         colaboradorNome: data.colaboradorNome || '',
@@ -2161,25 +2105,27 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                         historicoCompensacoes: data.historicoCompensacoes || [],
                         historicoCompensadoPor: data.historicoCompensadoPor || []
                     };
-                    // Se quitado, restaura o histórico
-                    if (lanc.quitado) {
-                        lanc.compensacoes = lanc.historicoCompensacoes;
-                        lanc.compensadoPor = lanc.historicoCompensadoPor;
-                        lanc.saldoRestante = 0;
-                    } else {
-                        lanc.compensacoes = [];
-                        lanc.compensadoPor = [];
-                        lanc.saldoRestante = lanc.horas;
-                    }
-                    return lanc;
                 });
 
                 const quitacoesSnapshot = await db.collection('quitacoes').get();
                 quitacoes = quitacoesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 quitacoes.sort((a, b) => new Date(b.dataQuitacao) - new Date(a.dataQuitacao));
 
-                // Ordena lançamentos por data para consistência
+                // Ordena lançamentos por data
                 lancamentos.sort((a, b) => dataParaObjeto(a.data) - dataParaObjeto(b.data));
+
+                // Para lançamentos quitados, restaura histórico
+                lancamentos.forEach(l => {
+                    if (l.quitado) {
+                        l.compensacoes = l.historicoCompensacoes;
+                        l.compensadoPor = l.historicoCompensadoPor;
+                        l.saldoRestante = 0;
+                    } else {
+                        l.compensacoes = [];
+                        l.compensadoPor = [];
+                        l.saldoRestante = l.horas;
+                    }
+                });
 
                 // Executa a nova lógica de compensação
                 calcularCompensacoes();
@@ -2433,9 +2379,10 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 
                 const saldoAcumulado = saldosAcumulados[lanc.colaboradorId]?.get(lanc.id) || 0;
                 
+                // Mostra o saldo restante corretamente na coluna "Falta Compensar"
                 let compensacoesText;
                 if (lanc.quitado) {
-                    compensacoesText = '<span class="badge badge-success">Completo</span>';
+                    compensacoesText = '<span class="badge badge-success">Quitado</span>';
                 } else {
                     const saldoZero = lanc.saldoRestante !== undefined && Math.abs(lanc.saldoRestante) < 0.0001;
                     if (saldoZero) {
@@ -2482,7 +2429,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             });
         }
 
-        // ========== FUNÇÕES DE COLABORADORES ==========
+        // ========== FUNÇÕES DE COLABORADORES (mantidas) ==========
         function loadSelects() {
             const deptoSelect = document.getElementById('colaboradorDepartamento');
             const empresaSelect = document.getElementById('colaboradorEmpresa');
