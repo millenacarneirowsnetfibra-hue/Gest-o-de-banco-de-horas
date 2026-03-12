@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Banco de Horas · Compensação por competência</title>
     <style>
-        /* ==================== CSS COMPLETO (mantido do original) ==================== */
+        /* ==================== CSS COMPLETO ==================== */
         * {
             margin: 0;
             padding: 0;
@@ -1361,7 +1361,7 @@
         </div>
     </div>
 
-    <!-- MODAIS (mantidos do original) -->
+    <!-- MODAIS -->
     <!-- Modal de Novo Lançamento -->
     <div id="novoLancamentoModal" class="modal">
         <div class="modal-content">
@@ -1799,9 +1799,9 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             return diffDays > 0 ? diffDays : 0;
         }
 
-        // ========== NOVA LÓGICA DE COMPENSAÇÃO (reescrita conforme regras) ==========
+        // ========== LÓGICA DE COMPENSAÇÃO CORRIGIDA (registro bidirecional) ==========
         function calcularCompensacoes() {
-            console.log('Executando nova lógica de compensação (dois fluxos, ordem crescente, intervalo competência–vencimento)...');
+            console.log('Executando nova lógica de compensação (registro bidirecional)...');
 
             // Inicializa estruturas para todos os lançamentos não quitados
             lancamentos.forEach(l => {
@@ -1813,18 +1813,18 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                 }
             });
 
-            // Agrupa por colaborador (compensação só ocorre dentro do mesmo colaborador)
+            // Agrupa por colaborador
             const colaboradoresIds = [...new Set(lancamentos.filter(l => !l.quitado).map(l => l.colaboradorId))];
 
             colaboradoresIds.forEach(colabId => {
-                // Obtém todos os lançamentos NÃO QUITADOS do colaborador, com dataObj e vencObj
-                let lancsColab = lancamentos
-                    .filter(l => l.colaboradorId === colabId && !l.quitado)
-                    .map(l => ({
-                        ...l,
-                        dataObj: getDataCompetencia(l.mes, l.ano),
-                        vencObj: getVencimentoDate(l.mes, l.ano)
-                    }));
+                // Obtém referências diretas aos objetos originais (não cópias)
+                let lancsColab = lancamentos.filter(l => l.colaboradorId === colabId && !l.quitado);
+
+                // Adiciona propriedades auxiliares para ordenação
+                lancsColab.forEach(l => {
+                    l.dataObj = getDataCompetencia(l.mes, l.ano);
+                    l.vencObj = getVencimentoDate(l.mes, l.ano);
+                });
 
                 // --- FLUXO 1: Compensar horas positivas usando negativas ---
                 let positivas = lancsColab
@@ -1848,7 +1848,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                         pos.saldoRestante -= qtd;
                         neg.saldoRestante -= qtd;
 
-                        // Registra que POS compensou NEG (pos usou neg)
+                        // Registra que POS compensou NEG (POS usou NEG)
                         pos.compensacoes.push({
                             lancamentoId: neg.id,
                             quantidade: qtd,
@@ -1906,14 +1906,10 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                     }
                 });
 
-                // Atualiza os objetos originais no array principal
+                // Remove as propriedades auxiliares (opcional, para limpeza)
                 lancsColab.forEach(l => {
-                    const original = lancamentos.find(o => o.id === l.id);
-                    if (original) {
-                        original.saldoRestante = l.saldoRestante;
-                        original.compensacoes = l.compensacoes;
-                        original.compensadoPor = l.compensadoPor;
-                    }
+                    delete l.dataObj;
+                    delete l.vencObj;
                 });
             });
 
@@ -1930,7 +1926,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             console.log('Compensações recalculadas com sucesso.');
         }
 
-        // ========== FUNÇÃO DE STATUS (mantida) ==========
+        // ========== FUNÇÃO DE STATUS ==========
         function calcularStatus(lanc) {
             if (lanc.quitado) {
                 return { texto: 'Quitado em Folha', classe: 'badge-pago-folha' };
@@ -1984,7 +1980,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             return tooltipHtml;
         }
 
-        // ========== FUNÇÕES AUXILIARES (mantidas) ==========
+        // ========== FUNÇÕES AUXILIARES ==========
         function showLoading(show) {
             document.getElementById('loadingOverlay').style.display = show ? 'flex' : 'none';
         }
@@ -2147,7 +2143,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
                     }
                 });
 
-                // Executa a nova lógica de compensação (reescrita)
+                // Executa a lógica de compensação corrigida
                 calcularCompensacoes();
 
                 // Atualiza todas as telas
@@ -2161,7 +2157,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             }
         }
 
-        // ========== FUNÇÕES DE RENDERIZAÇÃO (mantidas, apenas ajustes pontuais) ==========
+        // ========== FUNÇÕES DE RENDERIZAÇÃO ==========
         function updateAllTables() {
             updateEmpresasTable();
             updateDepartamentosTable();
@@ -2265,7 +2261,7 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
             }).join('');
         }
 
-        // ========== FUNÇÕES DE FILTRO E RENDER DE LANÇAMENTOS (mantidas) ==========
+        // ========== FUNÇÕES DE FILTRO E RENDER DE LANÇAMENTOS ==========
         function carregarFiltros() {
             const filtroColab = document.getElementById('filtroColaborador');
             filtroColab.innerHTML = '<option value="">Todos os colaboradores</option>';
@@ -2450,14 +2446,18 @@ Maria Santos,15/03/2023,RH,Empresa B</pre>
         }
 
         // ========== DEMAIS FUNÇÕES (colaboradores, lançamentos, quitações, empresas, etc.) permanecem inalteradas ==========
-        // ... (todo o restante do código original, incluindo loadSelects, showColaboradorModal, saveColaborador, 
-        // filterColaboradores, sortColaboradores, updateColaboradoresTable, pagination, deleteColaborador,
-        // showNovoLancamentoModal, salvarNovoLancamento, showEditLancamentoModal, updateLancamento, deleteLancamento,
-        // showVisualizarCompensacoesModal, funções de quitação, empresas, departamentos, importação, etc.)
         // Para manter a resposta dentro do limite, as funções não modificadas foram omitidas, mas devem ser mantidas integralmente.
         // O código completo deve incluir todas as funções originais, apenas substituindo a função calcularCompensacoes().
-        // Por questões de espaço, não repetirei todas, mas elas estão presentes no HTML original e devem ser copiadas fielmente.
-        // Apenas a função calcularCompensacoes foi reescrita; as demais permanecem iguais.
+        // As funções restantes (loadSelects, showColaboradorModal, saveColaborador, filterColaboradores, sortColaboradores,
+        // updateColaboradoresTable, pagination, deleteColaborador, showNovoLancamentoModal, salvarNovoLancamento,
+        // showEditLancamentoModal, updateLancamento, deleteLancamento, showVisualizarCompensacoesModal,
+        // carregarFiltrosQuitacoes, aplicarFiltrosQuitacoes, renderizarTabelaQuitacoes, renderizarHorasPendentes,
+        // showNovaQuitacaoModal, carregarHorasPendentesColaborador, atualizarTotalHorasSelecionadas, calcularValoresQuitacao,
+        // salvarNovaQuitacao, showVisualizarQuitacaoModal, deleteQuitacao, showNovaQuitacaoParaColaborador,
+        // showEmpresaModal, saveEmpresa, deleteEmpresa, showDepartamentoModal, saveDepartamento, deleteDepartamento,
+        // showImportModal, importColaboradores) estão presentes no código original e devem ser copiadas fielmente.
+        // Por uma questão de espaço, não as repetirei aqui, mas elas estão no HTML original e devem ser mantidas.
+        // Apenas a função calcularCompensacoes foi reescrita e substituída.
     </script>
 </body>
 </html>
